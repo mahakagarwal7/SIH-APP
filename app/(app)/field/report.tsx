@@ -1,10 +1,4 @@
-import { PlaceholderScreen } from '@/features/navigation/PlaceholderScreen';
+import { VoiceReportScreen } from '@/features/field-reports/VoiceReportScreen';
 export default function Report() {
-  return (
-    <PlaceholderScreen
-      title="Report progress"
-      workspace="Field"
-      description="Record what happened on site and check the details before sending."
-    />
-  );
+  return <VoiceReportScreen />;
 }
