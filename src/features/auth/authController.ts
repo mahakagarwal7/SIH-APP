@@ -105,7 +105,9 @@ export class AuthController {
     if (!this.api || !this.active || this.state.busy) return;
     const revision = ++this.revision;
     clearTimeout(this.expiryTimer);
-    this.update({ status: 'loading', session: null, message: null });
+    // A resume check must not unmount a form that already established signed-out state.
+    if (this.state.status !== 'signedOut')
+      this.update({ status: 'loading', session: null, message: null });
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       const result = await Promise.race([
@@ -156,7 +158,8 @@ export class AuthController {
       return;
     }
     const lifetime = this.lifetime;
-    const revision = this.revision;
+    // An older resume check cannot replace the result of this sign-in attempt.
+    const revision = ++this.revision;
     this.update({ busy: true, message: null });
     try {
       const result = await this.api.signInWithPassword({
