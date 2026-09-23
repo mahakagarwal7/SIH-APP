@@ -1,0 +1,10 @@
+node_modules/
+.expo/
+dist/
+coverage/
+.playwright-mcp/
+test-results/
+package-lock.json
+*.pdf
+.env
+.env.*

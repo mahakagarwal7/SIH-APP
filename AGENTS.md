@@ -1,3 +1,13 @@
+> Workflow update — 23 September 2026: the owner explicitly authorized signed
+> commits, pushes and PRs in this mobile repository, major features through PRs,
+> and small fixes/features directly to main where repository rules permit.
+> This supersedes conflicting historical remote-action rules below. Use the
+> owner's GPG signature and no assistant co-author trailers. Do not merge PRs
+> or decide unresolved product/architecture questions without the owner's input.
+> Work remains incremental; automatic continuation between slices is pending.
+> See [the development workflow](docs/DEVELOPMENT_WORKFLOW.md) and
+> [the project review](docs/PROJECT_REVIEW.md).
+
 # AGENTS.md — Nirmaan Mobile (Codex Agent Instructions)
 
 This file is read by the coding agent (Codex Astra) before any work in this repo.
@@ -5,6 +15,7 @@ Follow it exactly. Session-specific instructions from the human can override a
 single task, but the defaults below always apply otherwise.
 
 ## 0. What you're building
+
 Nirmaan Mobile is the React Native (Expo) companion to the existing Nirmaan web
 app (Next.js + Supabase). It targets the two personas already defined in the
 Nirmaan design book:
@@ -14,13 +25,14 @@ Nirmaan design book:
 - **Planners/managers** — review pending decisions, check project health,
   verify claims, view execution history, on the go.
 
-Read `CODEX.md` for product + data-model context and `docs/ARCHITECTURE.md`
-for the system diagrams **before writing any code**. Read `docs/FEATURES.md`
-and `docs/ROADMAP.md` before starting any feature slice.
+Read `CODEX.md` for product + data-model context and `ARCHITECTURE.md`
+for the system diagrams **before writing any code**. Read `FEATURES.md`
+and `ROADMAP.md` before starting any feature slice.
 
 ## 1. Non-negotiable operating rules
+
 1. **One step per session.** Never scaffold the whole app in one pass. Build
-   only the single roadmap step named in the prompt (see `docs/ROADMAP.md`).
+   only the single roadmap step named in the prompt (see `ROADMAP.md`).
    Stop when that slice is done, tested, and documented — do not continue to
    the next step unprompted.
 2. **Never `git push`. Never open a PR, issue, or touch a remote branch.**
@@ -45,6 +57,7 @@ and `docs/ROADMAP.md` before starting any feature slice.
    assumption in the commit message and proceed.
 
 ## 2. Stack
+
 - Expo (managed workflow) + TypeScript + Expo Router
 - `@supabase/supabase-js` — same Supabase project as the web app
 - `@tanstack/react-query` for all server state/caching
@@ -58,6 +71,7 @@ and `docs/ROADMAP.md` before starting any feature slice.
 - Lint/format: ESLint + Prettier
 
 ## 3. Repo layout (target shape — build it incrementally, don't front-load)
+
 ```
 app/                   # Expo Router routes (screens)
 src/
@@ -82,10 +96,12 @@ AGENTS.md
 CODEX.md
 RULES.md
 ```
+
 Don't create files outside this shape without a one-line reason in the commit
 message.
 
 ## 4. Definition of done for any slice
+
 - [ ] `npm run typecheck` clean
 - [ ] `npm run lint` clean
 - [ ] New logic has tests, `npm test` passes
@@ -98,10 +114,11 @@ message.
       what was assumed, what's left, manual test steps for the human
 
 ## 5. What NOT to do
+
 - Don't add a UI library or design system without checking the design book
   first — the visual language (navy, serif headings, restrained styling) is
   already defined.
-- Don't build the schedule *import* UI on mobile (Feature 1) — that stays a
+- Don't build the schedule _import_ UI on mobile (Feature 1) — that stays a
   desktop task; mobile only gets a read-only schedule view.
 - Don't build push notifications or the Alerts screen until the human
   confirms scope (see `CODEX.md` §7).

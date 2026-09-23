@@ -6,6 +6,7 @@ the **same backend** — nothing here changes; mobile just adds another arrow
 into the same Supabase project.
 
 ## 1. Entity relationships
+
 ```mermaid
 erDiagram
   PROJECTS ||--o{ PROJECT_MEMBERS : has
@@ -28,6 +29,7 @@ erDiagram
 ```
 
 ## 2. Auth / read flow (mobile must replicate this exactly)
+
 ```mermaid
 sequenceDiagram
   participant U as User (mobile)
@@ -43,6 +45,7 @@ sequenceDiagram
 ```
 
 ## 3. Write flow (report submission, claim decisions, exports)
+
 ```mermaid
 sequenceDiagram
   participant App as Expo App
@@ -56,12 +59,14 @@ sequenceDiagram
   DB-->>W: job queue / media completion / accepted events
   W-->>DB: update media_results / claim states
 ```
+
 Mobile never talks to the worker directly. It writes through Supabase, the
 worker picks up queued jobs (`media_jobs`) asynchronously, and mobile learns
 the outcome by re-reading `media_results` / report status (poll or Realtime
 subscription — see `CODEX.md` §5 open questions).
 
 ## 4. Deployment (reference only — mobile doesn't run any of this)
+
 ```mermaid
 flowchart LR
   Browser --> WebContainer[web container]
@@ -71,14 +76,16 @@ flowchart LR
   WorkerContainer --> AI[External AI providers]
   Supabase --> Evidence[(Storage bucket: evidence)]
 ```
+
 Web + worker run in Docker. Mobile is an additional client of the same
 Supabase project — it uploads evidence to the same `evidence` bucket and is
 subject to the same RLS policies as the web app; there is no separate mobile
 backend to build.
 
 ## 5. What this means for the mobile build
+
 - Every mobile screen maps to an existing table/RPC/API route — see
-  `CODEX.md` §3 and `docs/FEATURES.md`. If a screen needs something not
+  `CODEX.md` §3 and `FEATURES.md`. If a screen needs something not
   listed there, stop and ask before inventing a backend contract.
 - Auth must produce the same JWT / `auth.uid()` that RLS policies check —
   use Supabase Auth's mobile SDK flow, not a custom auth scheme.
