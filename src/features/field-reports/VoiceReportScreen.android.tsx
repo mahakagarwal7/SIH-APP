@@ -1,9 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  createAudioPlayer,
   requestRecordingPermissionsAsync,
-  useAudioPlayer,
-  useAudioPlayerStatus,
 } from 'expo-audio';
 import { randomUUID } from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
@@ -77,6 +76,10 @@ function CapturePanel({
     draft: VoiceDraft;
   } | null>(null);
   const controller = useRef<VoiceCapture | null>(null);
+  const currentProjectName = useRef(projectName);
+  useEffect(() => {
+    currentProjectName.current = projectName;
+  }, [projectName]);
   useEffect(() => {
     mounted.current = true;
     const capture = new VoiceCapture({
@@ -99,7 +102,7 @@ function CapturePanel({
               id: randomUUID(),
               userId,
               projectId,
-              projectName,
+              projectName: currentProjectName.current,
               createdAt: new Date().toISOString(),
               duration: recording.duration,
               sampleRate: recording.sampleRate,
@@ -127,7 +130,7 @@ function CapturePanel({
       capture.dispose();
       onBusy(false);
     };
-  }, [client, onBusy, projectId, projectName, userId]);
+  }, [client, onBusy, projectId, userId]);
   useFocusEffect(useCallback(() => () => controller.current?.interrupt(), []));
   const busy = ['permission', 'recording', 'saving'].includes(state.phase);
 
@@ -238,12 +241,12 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
   const client = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [playing, setPlaying] = useState<string | null>(null);
+  const [loadingPlayback, setLoadingPlayback] = useState(false);
   const [error, setError] = useState('');
   const [discarding, setDiscarding] = useState<string | null>(null);
   const playbackAttempt = useRef(0);
   const mounted = useRef(true);
-  const player = useAudioPlayer(null);
-  const status = useAudioPlayerStatus(player);
+  const releasePlayback = useRef<(() => void) | null>(null);
   const drafts = useQuery({
     queryKey: ['voice-drafts', userId],
     networkMode: 'always',
@@ -255,13 +258,16 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
       : null;
   const stopPlayback = useCallback(() => {
     ++playbackAttempt.current;
+    const release = releasePlayback.current;
+    releasePlayback.current = null;
     try {
-      player.pause();
+      release?.();
     } catch {
-      /* The native player may already be released on unmount. */
+      /* Cleanup still clears the session if native disposal reports an error. */
     }
     setPlaying(null);
-  }, [player]);
+    setLoadingPlayback(false);
+  }, []);
   const captureBusy = useCallback(
     (next: boolean) => {
       if (next) stopPlayback();
@@ -277,6 +283,7 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
     return () => {
       mounted.current = false;
       listener.remove();
+      stopPlayback();
     };
   }, [stopPlayback]);
   useFocusEffect(
@@ -285,8 +292,6 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
       return stopPlayback;
     }, [client, userId, stopPlayback]),
   );
-  const activePlaying = !status.didJustFinish && !status.error ? playing : null;
-
   async function play(id: string) {
     stopPlayback();
     setError('');
@@ -294,14 +299,50 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
     try {
       const uri = await (await getVoiceDraftStore()).playbackUri(userId, id);
       if (!mounted.current || attempt !== playbackAttempt.current) return;
-      player.replace({ uri });
-      player.play();
+      if (AppState.currentState !== 'active') return;
+      const player = createAudioPlayer({ uri });
+      // Android can resume paused players on foreground. Unregister this
+      // session as well as releasing its native resources when it stops.
+      const release = () => {
+        try {
+          player.remove();
+        } finally {
+          player.release();
+        }
+      };
+      releasePlayback.current = release;
       setPlaying(id);
+      setLoadingPlayback(!player.isLoaded);
+      const subscription = player.addListener(
+        'playbackStatusUpdate',
+        (status) => {
+          if (!mounted.current || attempt !== playbackAttempt.current) return;
+          if (status.error || status.didJustFinish) {
+            stopPlayback();
+            if (status.error)
+              setError(
+                'This recording could not be played. Try listening again.',
+              );
+          } else {
+            setLoadingPlayback(!status.isLoaded);
+          }
+        },
+      );
+      releasePlayback.current = () => {
+        try {
+          subscription.remove();
+        } finally {
+          release();
+        }
+      };
+      player.play();
     } catch {
-      if (attempt === playbackAttempt.current)
+      if (mounted.current && attempt === playbackAttempt.current) {
+        stopPlayback();
         setError(
           'This recording could not be played. Retry or check device storage.',
         );
+      }
     }
   }
   async function discard(id: string) {
@@ -389,12 +430,7 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
           {error}
         </Text>
       )}
-      {playing && status.error && (
-        <Text accessibilityRole="alert" style={styles.error}>
-          This recording could not be played. Try listening again.
-        </Text>
-      )}
-      {playing && !status.isLoaded && !status.error && (
+      {playing && loadingPlayback && (
         <Text style={styles.detail}>Loading recording…</Text>
       )}
       {drafts.isPending ? (
@@ -423,12 +459,10 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
             <Text style={styles.detail}>Not sent for review</Text>
             <View style={styles.actions}>
               <Action
-                label={activePlaying === draft.id ? 'Stop playback' : 'Listen'}
+                label={playing === draft.id ? 'Stop playback' : 'Listen'}
                 disabled={!draft.available || busy || !!discarding}
                 onPress={() =>
-                  activePlaying === draft.id
-                    ? stopPlayback()
-                    : void play(draft.id)
+                  playing === draft.id ? stopPlayback() : void play(draft.id)
                 }
               />
               <Action
@@ -468,7 +502,7 @@ export function VoiceReportScreen() {
 const styles = StyleSheet.create({
   steps: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 18 },
   mode: { color: '#266b8c', fontWeight: '700', fontSize: 13, lineHeight: 21 },
-  detail: { color: '#627786', fontSize: 13, lineHeight: 21 },
+  detail: { color: '#586c7a', fontSize: 13, lineHeight: 21 },
   capture: {
     backgroundColor: '#fff',
     borderWidth: 1,
@@ -504,5 +538,5 @@ const styles = StyleSheet.create({
   },
   savedHeader: { marginTop: 30, gap: 4 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
-  empty: { color: '#627786', paddingVertical: 28, fontSize: 16 },
+  empty: { color: '#586c7a', paddingVertical: 28, fontSize: 16 },
 });

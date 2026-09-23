@@ -23,6 +23,8 @@ Expo SDK 57's `expo-audio@57.0.5` exposes a raw PCM stream in addition to its co
 
 Each attempt owns a separate native stream and listener. Stop releases the microphone, removes listeners, and waits for a pending native start before final native disposal. Permission refusal, duplicate taps, app backgrounding, navigation, session changes, a stalled stream, invalid audio and failed storage have explicit handling. Background recording/playback services are disabled.
 
+A project-name refresh preserves the capture controller for the same account/project ID. A new draft snapshots the current name when first saved; failed-save retries retain the same metadata, identifier and audio bytes. Playback owns a new native player for each attempt. Stop, background, navigation, account unmount, recording, completion and playback error unregister and release that player. This prevents Android's native foreground handler from resuming an obsolete paused session. Late URI lookups and status events cannot restart stopped playback.
+
 The web stream implementation is a stub, and the iOS converter fallback has not been validated for this contract. These platforms show an unavailable state. Expo Go and physical-phone compatibility are not inferred from JavaScript tests or bundling.
 
 ## Local persistence and ownership
