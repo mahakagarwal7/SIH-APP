@@ -1,9 +1,9 @@
-import { Slot } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '@/features/auth/AuthProvider';
+import { RootNavigator } from '@/features/navigation/RootNavigator';
 
 export default function RootLayout() {
   return (
@@ -11,7 +11,7 @@ export default function RootLayout() {
       <SafeAreaView style={styles.screen}>
         <StatusBar style="dark" />
         <AuthProvider>
-          <Slot />
+          <RootNavigator />
         </AuthProvider>
       </SafeAreaView>
     </SafeAreaProvider>
