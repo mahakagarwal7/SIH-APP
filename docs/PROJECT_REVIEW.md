@@ -1,6 +1,6 @@
 # Mobile project discovery
 
-Reviewed 23 September 2026. Discovery and roadmap 0.1 are complete; roadmap 0.2 adds email/password authentication, SecureStore persistence, session restore and sign-out. The owner confirmed the Nirmaan mobile name and production backend. See [the foundation draft](pr-drafts/0.1-project-foundation.md) and [auth draft](pr-drafts/0.2-auth-session.md) for separate validation evidence and limitations. Production login and physical-device persistence remain unverified. Other product and architecture decisions remain open. No APK has been built.
+Reviewed 23 September 2026. Roadmap 0.3 adds the approved Field/Manager navigation shell, protected routes, shared auth lifecycle and project-selection placeholder to the foundation and auth slices. The owner confirmed Nirmaan branding, the production backend and this slice's navigation. See the [navigation draft](pr-drafts/0.3-navigation-shell.md), [auth draft](pr-drafts/0.2-auth-session.md) and [foundation draft](pr-drafts/0.1-project-foundation.md) for separate validation evidence and limitations. Production login and physical-device behavior remain unverified. Other product and architecture decisions remain open. No APK has been built.
 
 ## Sources inspected
 
@@ -63,7 +63,7 @@ Recent report outcome
 Home | Report | My work | My reports
 ```
 
-Pages 8–11 show these four field tabs. ROADMAP step 0.3 instead names Home / Report / Tasks / Alerts / Profile from the secondary reference. Confirm the four-tab proposal before implementation. Manager navigation needs a separate compact proposal before its slice.
+On 23 September 2026, the owner approved these four field tabs and the compact Manager tabs Overview / Review / Schedule / History, with account/project controls in the header and Alerts deferred for step 0.3. [The approved proposal](NAVIGATION_PROPOSAL.md) records the shell scope. ROADMAP 0.3 now reflects that decision; languages, v1 Alerts/push scope and business transport remain open.
 
 Map the manager view to pages 2–7: pending decisions first, original evidence and candidate explanations, exact proposed changes, accepted records and a read-only schedule. A task hierarchy follows actual parent relationships, not invented fixed L5/L6 levels. No aggregate percentage or health score without a defined supported basis.
 
@@ -150,8 +150,8 @@ Realtime is enabled in the local Supabase configuration, but the reviewed migrat
 | --- | ----------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | D1  | APK brand                           | Nirmaan                                                                            | Confirmed by owner, 23 September 2026                           |
 | D2  | Target backend                      | Existing production web app and Supabase project; local `.env.local` configuration | Confirmed by owner, 23 September 2026; publishable key pending  |
-| D3  | Field navigation                    | Primary PDF's four tabs                                                            | Asked                                                           |
-| D4  | Languages and Alerts                | English + Hindi; Alerts/push outside v1                                            | Asked                                                           |
+| D3  | Field and Manager navigation        | Approved tabs and shared header in `NAVIGATION_PROPOSAL.md`                        | Confirmed by owner, 23 September 2026                           |
+| D4  | Languages and Alerts                | English + Hindi; v1 Alerts/push scope still open                                   | Alerts deferred for 0.3 by owner; remaining scope unanswered    |
 | D5  | Native transport                    | Existing authenticated Supabase RPCs                                               | Asked                                                           |
 | D6  | Android audio                       | Evaluate native WAV with a development build                                       | Asked                                                           |
 | D7  | Offline voice confirmation          | Auto-upload, then explicit transcript confirmation                                 | Asked                                                           |

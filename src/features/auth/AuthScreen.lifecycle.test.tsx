@@ -10,6 +10,7 @@ import { AppState } from 'react-native';
 
 import { getSupabase } from '@/lib/supabase';
 
+import { AuthProvider } from './AuthProvider';
 import AuthScreen from './AuthScreen';
 
 import type { AppStateStatus } from 'react-native';
@@ -45,7 +46,11 @@ it('retains entered credentials while returning from another app rechecks the se
   jest
     .mocked(useNetworkState)
     .mockReturnValue({ isConnected: true, isInternetReachable: true });
-  await render(<AuthScreen />);
+  await render(
+    <AuthProvider>
+      <AuthScreen />
+    </AuthProvider>,
+  );
   await waitFor(() => expect(screen.getByLabelText('Email')).toBeVisible());
   await fireEvent.changeText(
     screen.getByLabelText('Email'),

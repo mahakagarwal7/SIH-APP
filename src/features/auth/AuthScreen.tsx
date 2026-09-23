@@ -11,9 +11,9 @@ import {
   View,
 } from 'react-native';
 
-import { useAuth } from './useAuth';
+import { useAuth } from './AuthProvider';
 
-import type { AuthViewState } from './useAuth';
+import type { AuthViewState } from './AuthProvider';
 
 export default function AuthScreen() {
   const auth = useAuth();
@@ -79,29 +79,7 @@ export function AuthView({ auth }: { auth: AuthViewState }) {
               />
             </>
           ) : auth.status === 'signedIn' ? (
-            <>
-              <Text accessibilityRole="header" style={styles.heading}>
-                Your account
-              </Text>
-              <View style={styles.record}>
-                <Text style={styles.label}>SIGNED IN AS</Text>
-                <Text selectable style={styles.account}>
-                  {auth.session?.user.email ?? 'Email not recorded'}
-                </Text>
-              </View>
-              {auth.message && (
-                <Text accessibilityRole="alert" style={styles.error}>
-                  {auth.message}
-                </Text>
-              )}
-              <Action
-                label={auth.busy ? 'Signing out…' : 'Sign out'}
-                disabled={auth.busy}
-                onPress={() => {
-                  void auth.signOut();
-                }}
-              />
-            </>
+            <AuthAccount auth={auth} />
           ) : (
             <>
               <Text style={styles.eyebrow}>FROM THE FIELD TO THE PLAN</Text>
@@ -114,14 +92,49 @@ export function AuthView({ auth }: { auth: AuthViewState }) {
               <SignInForm auth={auth} />
             </>
           )}
-          {!auth.persistent && (
+          {!auth.persistent && auth.status !== 'signedIn' && (
             <Text style={styles.preview}>
-              Browser preview: sign-in lasts until this page closes.
+              Browser preview: sign-in is cleared when you reload or close this
+              page.
             </Text>
           )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+export function AuthAccount({ auth }: { auth: AuthViewState }) {
+  return (
+    <>
+      <Text accessibilityRole="header" style={styles.heading}>
+        Your account
+      </Text>
+      <View style={styles.record}>
+        <Text style={styles.label}>SIGNED IN AS</Text>
+        <Text selectable style={styles.account}>
+          {auth.session?.user.email ?? 'Email not recorded'}
+        </Text>
+      </View>
+      {auth.message && (
+        <Text accessibilityRole="alert" style={styles.error}>
+          {auth.message}
+        </Text>
+      )}
+      <Action
+        label={auth.busy ? 'Signing out…' : 'Sign out'}
+        disabled={auth.busy}
+        onPress={() => {
+          void auth.signOut();
+        }}
+      />
+      {!auth.persistent && (
+        <Text style={styles.preview}>
+          Browser preview: sign-in is cleared when you reload or close this
+          page.
+        </Text>
+      )}
+    </>
   );
 }
 

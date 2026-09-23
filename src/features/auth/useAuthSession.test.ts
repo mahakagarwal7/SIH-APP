@@ -4,7 +4,7 @@ import { AppState } from 'react-native';
 
 import { getSupabase } from '@/lib/supabase';
 
-import { useAuth } from './useAuth';
+import { useAuthSession } from './useAuthSession';
 
 import type { AppStateStatus } from 'react-native';
 
@@ -43,7 +43,7 @@ describe('auth hook', () => {
     jest
       .mocked(useNetworkState)
       .mockReturnValue({ isConnected: true, isInternetReachable: true });
-    const rendered = await renderHook(() => useAuth());
+    const rendered = await renderHook(() => useAuthSession());
     await waitFor(() =>
       expect(rendered.result.current.status).toBe('signedOut'),
     );

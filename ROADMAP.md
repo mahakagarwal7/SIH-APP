@@ -34,9 +34,11 @@ Suggested prompt shape for each step:
   launch — matching the auth flow in `ARCHITECTURE.md` §2. No feature
   screens yet.
 - **0.3** Add the navigation shell (Expo Router): two persona entry points
-  (Field / Manager) and a project-switcher stub, bottom tabs matching the
-  reference pattern (Home / Report / Tasks / Alerts / Profile). Screens can
-  be empty placeholders.
+  (Field / Manager) and a project-switcher stub. Owner-approved tabs on
+  23 September 2026: Field — Home / Report / My work / My reports; Manager —
+  Overview / Review / Schedule / History. Account and project controls sit
+  in the header. Alerts is deferred for this slice. Screens are explicit
+  unavailable placeholders; see `docs/NAVIGATION_PROPOSAL.md` for the approved scope.
 
 ## Phase 1 — Feature 2: Field reporting with media (build first)
 
