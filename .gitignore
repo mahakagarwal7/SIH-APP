@@ -1,0 +1,37 @@
+# Dependencies and generated Expo/native output
+node_modules/
+.expo/
+dist/
+web-build/
+android/
+ios/
+coverage/
+test-results/
+.playwright-mcp/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local configuration; only the intentionally reviewed example is trackable
+.env
+.env.*
+!.env.example
+.expo-shared/
+.cache/
+
+# Private credentials and distributable artifacts
+*.key
+*.pem
+*.p12
+*.pfx
+*.keystore
+*.jks
+credentials.json
+*.apk
+*.aab
+
+# Local editor/OS files
+.DS_Store
+Thumbs.db
+.idea/

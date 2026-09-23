@@ -2,17 +2,19 @@
 
 Each feature below mirrors a backend feature already defined for the web app
 (see `CODEX.md` §3). This file defines what "done" looks like on mobile
-specifically. Build in the order given in `docs/ROADMAP.md`, not the order
+specifically. Build in the order given in `ROADMAP.md`, not the order
 listed here (Feature 2 ships first — it's the core mobile use case).
 
 ---
 
 ## Feature 2 — Field reporting with media
+
 **Persona:** field worker/supervisor
 **Screens:** Home (current work card), Report (voice/text/photo tabs),
 Confirmation ("is this correct?"), My Reports (delivery-state list)
 
 **User flow:**
+
 1. Worker opens the app, sees today's assigned activity on Home.
 2. Taps "Speak a progress report" (or Text / Photo) → records/enters →
    reviews a confirmation screen showing transcript, work date, suggested
@@ -23,6 +25,7 @@ Confirmation ("is this correct?"), My Reports (delivery-state list)
    review → Accepted/Rejected**, always as three distinct states.
 
 **Acceptance criteria:**
+
 - [ ] Works fully offline for capture + local save; queued reports upload
       automatically on reconnect (or via explicit "sync now")
 - [ ] Never shows a report as "sent" if it's still only saved locally
@@ -36,11 +39,13 @@ Confirmation ("is this correct?"), My Reports (delivery-state list)
 ---
 
 ## Feature 5 — Assignment & project overview
+
 **Persona:** both
 **Screens:** Project switcher, Home (current work), Task Hierarchy
 drill-down
 
 **User flow:**
+
 1. User picks their active project (if a member of more than one).
 2. Home shows their current assignment(s) for today, sourced from
    `project_members` + `activities`.
@@ -48,6 +53,7 @@ drill-down
    → activity → field task, matching the web app's activity record panel.
 
 **Acceptance criteria:**
+
 - [ ] Project list only shows projects where the user is a `project_member`
 - [ ] Hierarchy view is read-only on mobile (editing stays on web)
 - [ ] Empty state ("no assignment today") is explicit, not a blank screen
@@ -55,10 +61,12 @@ drill-down
 ---
 
 ## Feature 3 — Claim review & verification
+
 **Persona:** planner/manager
 **Screens:** Review queue (list), Decision screen (accept/reject + reason)
 
 **User flow:**
+
 1. Manager opens Review Queue, sees pending claims with the same
    ambiguity/candidate-match context the web review screen shows (original
    report text, suggested activity, why it's flagged).
@@ -67,6 +75,7 @@ drill-down
    a decision.
 
 **Acceptance criteria:**
+
 - [ ] Decision screen shows the original field-report text verbatim and the
       candidate activity matches with their match reason (mirrors the web
       "Explain the match" panel)
@@ -80,15 +89,18 @@ drill-down
 ---
 
 ## Feature 1 — Schedule (read-only on mobile)
+
 **Persona:** planner/manager (view), field worker (their own activities only)
 **Screens:** Schedule list/Gantt-lite, revision status banner
 
 **User flow:**
-1. User opens Schedule, sees the currently *activated* revision's activities
+
+1. User opens Schedule, sees the currently _activated_ revision's activities
    grouped by discipline, with baseline vs. actual where available.
 2. No import, no activation controls on mobile — those stay desktop-only.
 
 **Acceptance criteria:**
+
 - [ ] Shows only the active schedule revision (`activate_schedule_revision`
       result), never a stale/inactive one
 - [ ] No write actions on this screen at all
@@ -97,14 +109,17 @@ drill-down
 ---
 
 ## Feature 4 — Planner export generation (lowest priority)
+
 **Persona:** planner/manager
 **Screens:** Export trigger + status
 
 **User flow:**
+
 1. Manager taps "Export" on a project, sees a status card (queued →
    generating → ready) and a link/share sheet once ready.
 
 **Acceptance criteria:**
+
 - [ ] Triggers `/api/v1/projects/[projectId]/exports`, does not attempt to
       generate the package client-side
 - [ ] Shows manifest/integrity info if the API returns it; otherwise a
@@ -113,6 +128,7 @@ drill-down
 ---
 
 ## Cross-feature UI requirements (apply to every screen above)
+
 - Loading, empty, and error states are all explicitly designed — no bare
   spinners with no explanation, no silent failures
 - All dates respect the "Not recorded" rule from `CODEX.md` §2
