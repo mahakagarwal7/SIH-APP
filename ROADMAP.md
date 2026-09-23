@@ -42,6 +42,10 @@ Suggested prompt shape for each step:
 
 ## Phase 1 — Feature 2: Field reporting with media (build first)
 
+The owner approved the researched delivery order in `docs/DELIVERY_PLAN.md` on
+24 September 2026. Media processing must precede voice confirmation, so 1.5 is
+implemented before 1.4. Each numbered item remains its own tested PR.
+
 - **1.1** Read-only "My work" task list for the signed-in field user, using
   the existing authenticated Supabase reads/RPCs approved on 23 September 2026.
   Use the web's default active project until the full switcher in 2.1. See
@@ -51,11 +55,16 @@ Suggested prompt shape for each step:
   after logout and same-account access. See `docs/VOICE_CAPTURE.md` for native
   evaluation evidence, platform limits and physical-device checks.
 - **1.3** Text and photo report capture screens, same local-save pattern.
-- **1.4** Confirmation ("is this correct?") screen: transcript/caption, work
-  date, suggested activity match, explicit partial-work flag.
+  Normalize actual photo bytes to the production JPEG boundary, retain up to
+  three private photos with captions, and recover Android picker results after
+  activity recreation. No upload or submit.
 - **1.5** Offline outbox + "My Reports" screen: Saved on device / Awaiting
   review / Accepted states; sync-on-reconnect via `reserve_field_capture` →
   `finalize_field_media` → `submit_field_capture`.
+- **1.4** Confirmation ("is this correct?") screen after uploaded media is
+  ready: original transcript, editable wording, work date, authorized activity
+  selection and explicit unfinished-work wording. Voice requires confirmation
+  before submission.
 - **1.6** Status polling/subscription so report state updates once
   `media_results` changes after the worker finishes processing.
 

@@ -24,6 +24,7 @@ import { useDefaultProject } from '@/features/projects/useMyWork';
 
 import { androidMicrophone } from './androidMicrophone';
 import { getVoiceDraftStore } from './nativeDraftStore';
+import { ReportMethodLinks } from './ReportMethodLinks';
 import { VoiceCapture } from './voiceCapture';
 
 import type { VoiceDraft } from './draftStore';
@@ -325,6 +326,7 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
         <Text style={styles.detail}>2 Check</Text>
         <Text style={styles.detail}>3 Send</Text>
       </View>
+      <ReportMethodLinks active="voice" />
       <Text style={shellStyles.body}>
         Speak a short update and save it on this device.
       </Text>
@@ -367,7 +369,7 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
         </View>
       )}
       <Text style={styles.detail}>
-        Check and Send are coming later. Text and photo capture are coming next.
+        Check and Send are implemented in later approved slices.
       </Text>
       <View style={styles.savedHeader}>
         <Text accessibilityRole="header" style={shellStyles.cardTitle}>

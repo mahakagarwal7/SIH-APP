@@ -22,6 +22,14 @@
           "enableBackgroundRecording": false,
           "enableBackgroundPlayback": false
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Nirmaan to choose photos for your progress report.",
+          "cameraPermission": "Allow Nirmaan to take photos for your progress report.",
+          "microphonePermission": "Allow Nirmaan to record your spoken progress report."
+        }
       ]
     ],
     "experiments": {
