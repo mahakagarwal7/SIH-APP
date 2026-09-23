@@ -177,6 +177,37 @@ it('reads the existing RPC and complete assignment pages then rechecks membershi
 });
 
 it.each([
+  'Civil',
+  'Piping',
+  'Electrical',
+  'General',
+  'HSE',
+  'Quality',
+  'Structural',
+  'Mechanical',
+  'Instrumentation',
+])('loads assignments for the supported %s discipline', async (discipline) => {
+  const { client } = harness({
+    snapshot: { ...snapshot, activities: [{ ...activity, discipline }] },
+  });
+  await expect(loadMyWork(client, context, signal())).resolves.toMatchObject({
+    snapshot: { activities: [{ discipline }] },
+  });
+});
+
+it('rejects a discipline outside the backend contract', async () => {
+  const { client } = harness({
+    snapshot: {
+      ...snapshot,
+      activities: [{ ...activity, discipline: 'Unsupported' }],
+    },
+  });
+  await expect(loadMyWork(client, context, signal())).rejects.toMatchObject({
+    kind: 'unavailable',
+  });
+});
+
+it.each([
   { count: null },
   { count: 10001 },
   { count: 2, assignments: [assignment] },
