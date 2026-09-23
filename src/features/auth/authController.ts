@@ -104,8 +104,13 @@ export class AuthController {
   async restore() {
     if (!this.api || !this.active || this.state.busy) return;
     const revision = ++this.revision;
-    clearTimeout(this.expiryTimer);
-    this.update({ status: 'loading', session: null, message: null });
+    const hasValidSession =
+      this.state.status === 'signedIn' &&
+      (this.state.session?.expires_at ?? 0) * 1000 > Date.now();
+    if (!hasValidSession) {
+      clearTimeout(this.expiryTimer);
+      this.update({ status: 'loading', session: null, message: null });
+    }
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       const result = await Promise.race([
@@ -121,7 +126,8 @@ export class AuthController {
       if (result.error) throw result.error;
       this.accept(result.data.session);
     } catch (error) {
-      if (revision === this.revision)
+      if (revision === this.revision) {
+        clearTimeout(this.expiryTimer);
         this.update({
           status: 'error',
           session: null,
@@ -130,6 +136,7 @@ export class AuthController {
             'Could not restore your session. Check your connection and try again.',
           ),
         });
+      }
     } finally {
       clearTimeout(timeout);
     }

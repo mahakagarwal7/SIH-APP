@@ -56,6 +56,55 @@ describe('auth lifecycle', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
 
+  it('keeps a valid session during resume checks so navigation is not reset', async () => {
+    const { api, controller, emit, stop } = setup();
+    emit('SIGNED_IN', savedSession);
+    let finish!: (value: {
+      data: { session: Session | null };
+      error: null;
+    }) => void;
+    api.getSession.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const pending = controller.restore();
+    expect(controller.getSnapshot()).toMatchObject({
+      status: 'signedIn',
+      session: savedSession,
+    });
+    finish({ data: { session: null }, error: null });
+    await pending;
+    expect(controller.getSnapshot()).toMatchObject({
+      status: 'signedOut',
+      session: null,
+    });
+    stop();
+  });
+
+  it('still expires during a pending resume check and ignores that stale result', async () => {
+    const { api, controller, emit, stop } = setup();
+    emit('SIGNED_IN', {
+      ...savedSession,
+      expires_at: Math.floor(Date.now() / 1000) + 1,
+    });
+    let finish!: (value: { data: { session: Session }; error: null }) => void;
+    api.getSession.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const pending = controller.restore();
+    await jest.advanceTimersByTimeAsync(1100);
+    expect(controller.getSnapshot().status).toBe('signedOut');
+    finish({ data: { session: savedSession }, error: null });
+    await pending;
+    expect(controller.getSnapshot().status).toBe('signedOut');
+    stop();
+  });
+
   it('restores an existing session and expires it without leaving an authenticated screen open', async () => {
     const { api, controller, stop } = setup();
     api.getSession.mockResolvedValue({

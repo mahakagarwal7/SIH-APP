@@ -6,7 +6,7 @@ import { getSupabase } from '@/lib/supabase';
 
 import { AuthController } from './authController';
 
-export function useAuth() {
+export function useAuthSession() {
   const [controller] = useState(
     () => new AuthController(getSupabase()?.auth ?? null),
   );
@@ -50,4 +50,4 @@ export function useAuth() {
   };
 }
 
-export type AuthViewState = ReturnType<typeof useAuth>;
+export type AuthViewState = ReturnType<typeof useAuthSession>;

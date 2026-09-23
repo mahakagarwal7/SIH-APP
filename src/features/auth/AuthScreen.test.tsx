@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { AuthView } from './AuthScreen';
 
-import type { AuthViewState } from './useAuth';
+import type { AuthViewState } from './AuthProvider';
 
 function state(overrides: Partial<AuthViewState> = {}): AuthViewState {
   return {
