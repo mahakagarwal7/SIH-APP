@@ -49,6 +49,8 @@ There is no reserve, upload, transcription, submission, sync or status polling h
 - Compared the native recording screen with page 9 of the supplied Nirmaan design book: navy/serif hierarchy, Report/Check/Send context, central microphone control, restrained cards and explicit local delivery state. Later confirmation/transcription UI is not simulated.
 - Physical-phone microphone quality, hardware sample-rate fallback and interruption behavior remain manual checks.
 
+Review playback verification, 24 September 2026: the same isolated API 36 debug probe compared the original screen with code commit `e394370`, using a generated 25-second WAV and the real Expo audio player and local store. After Home/return, the original native player reported `playing: true` and advancing time while the UI showed Listen with no Stop control. The fixed screen released the native player, returned to Listen and did not resume it. Replay after returning, explicit Stop, a subsequent new playback and natural 25-second completion also passed; completion released the player and restored Listen. Native status samples and UI dumps were checked together. The emulator used a read-only AVD overlay with host microphone input disabled; no production session was used.
+
 The Field Report route is connected after the recorded-byte gate passed. Local proof files and screenshots are ignored under `test-results/voice-evaluation/`; synthetic probe auth is never part of the application route or committed configuration.
 
 ## Local Android build
