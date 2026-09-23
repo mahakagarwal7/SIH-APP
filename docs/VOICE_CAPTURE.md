@@ -31,7 +31,7 @@ The web stream implementation is a stub, and the iOS converter fallback has not 
 
 Saving inserts metadata in `saving` state, writes the durable audio file, checks its size and marks metadata `saved`. SQLite uses WAL and synchronous FULL. Only then does the UI say **Saved on device. Not sent for review.** A failed or interrupted write stays incomplete; a stopped recording remains in memory for retry while the screen remains open. Retry uses the same draft ID. A crash between file write and metadata completion cannot produce a false saved state.
 
-Explicit discard first marks the row `deleting`, removes its file, then removes its metadata. A failed deletion remains visible for retry. Missing media cannot be played and is labeled incomplete or missing. Logout clears visible account state while preserving unsent files and metadata. Android backup is disabled for this app; clearing app data or uninstalling removes local drafts.
+Explicit discard first marks the row `deleting`, removes its file, then removes its metadata. A failed deletion remains visible for retry. Missing media cannot be played and is labeled incomplete or missing. A discard confirmation left open after its account screen unmounts cannot delete that account's draft. Logout clears visible account state while preserving unsent files and metadata. Android backup is disabled for this app; clearing app data or uninstalling removes local drafts.
 
 The capture panel needs the signed-in user's loaded default project. Once loaded, capture and saving work without a network connection. After a cold offline launch, existing drafts can be listed, but new capture waits for project access to load; persistent server-query caching is not implemented in this slice. Local drafts do not establish current backend membership or permission to submit.
 
@@ -55,4 +55,4 @@ The Field Report route is connected after the recorded-byte gate passed. Local p
 
 The native probe and app debug builds are separate artifacts. The probe APK is 72,612,885 bytes, SHA-256 `8b048cb45255f8ecc65d7a074f8dfa3cc1de9e662aa927da382dca61a9f60ed2`. It loads the actual feature source through a separate ignored Metro harness, with synthetic account/project context. Probe code is not shipped in the app.
 
-The application build uses feature source commit `e4be36995f14cc203274fe53d080e72cdf0fc8c1`, following native configuration commit `0ac79d4`. Both local debug builds target x86_64 and require Metro; neither is a standalone release or an ARM phone APK. The app's final artifact checksum and launch result are recorded in the PR validation record.
+The application APK uses native configuration commit `0ac79d4`; its JavaScript loads from the checked-out feature source through Metro. Both local debug builds target x86_64 and require Metro; neither is a standalone release or an ARM phone APK. The exact runtime source commit, app artifact checksum and launch result are recorded in the PR validation record.

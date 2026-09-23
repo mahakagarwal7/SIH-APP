@@ -65,6 +65,7 @@ function CapturePanel({
   const client = useQueryClient();
   const [discarding, setDiscarding] = useState(false);
   const discardPending = useRef(false);
+  const mounted = useRef(true);
   const [state, setState] = useState<CaptureState>({
     phase: 'idle',
     duration: 0,
@@ -77,6 +78,7 @@ function CapturePanel({
   } | null>(null);
   const controller = useRef<VoiceCapture | null>(null);
   useEffect(() => {
+    mounted.current = true;
     const capture = new VoiceCapture({
       permission: async () =>
         (await requestRecordingPermissionsAsync()).granted,
@@ -120,6 +122,7 @@ function CapturePanel({
       if (next !== 'active') capture.background();
     });
     return () => {
+      mounted.current = false;
       listener.remove();
       capture.dispose();
       onBusy(false);
@@ -129,7 +132,7 @@ function CapturePanel({
   const busy = ['permission', 'recording', 'saving'].includes(state.phase);
 
   async function discard() {
-    if (discardPending.current) return;
+    if (!mounted.current || discardPending.current) return;
     discardPending.current = true;
     setDiscarding(true);
     try {
@@ -302,6 +305,7 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
     }
   }
   async function discard(id: string) {
+    if (!mounted.current) return;
     stopPlayback();
     setDiscarding(id);
     setError('');

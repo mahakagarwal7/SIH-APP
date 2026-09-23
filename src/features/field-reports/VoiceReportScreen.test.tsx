@@ -222,3 +222,35 @@ it('hides stale project access and lists only the currently signed-in account', 
     screen.queryByRole('button', { name: 'Record voice report' }),
   ).toBeNull();
 });
+
+it('ignores a discard confirmation after its account screen unmounts', async () => {
+  list.mockResolvedValue([
+    {
+      id: 'previous-account-draft',
+      projectName: 'Site project',
+      createdAt: '2026-09-23T00:00:00Z',
+      duration: 1,
+      state: 'saved',
+      available: true,
+    },
+  ]);
+  const discard = jest.fn(async () => {});
+  jest.mocked(getVoiceDraftStore).mockResolvedValue({
+    save,
+    list,
+    discard,
+  } as unknown as VoiceDraftStore);
+  const alert = jest.spyOn(Alert, 'alert');
+  const view = await render(<App />);
+  await fireEvent.press(
+    await screen.findByRole('button', { name: 'Discard draft' }),
+  );
+  const confirm = alert.mock.calls
+    .at(-1)?.[2]
+    ?.find((button) => button.text === 'Discard');
+  expect(confirm).toBeDefined();
+  await view.unmount();
+  await act(() => confirm?.onPress?.());
+  expect(discard).not.toHaveBeenCalled();
+  alert.mockRestore();
+});
