@@ -18,8 +18,8 @@ export default function Projects() {
           Project selection is not available yet
         </Text>
         <Text style={shellStyles.body}>
-          Your project list has not been loaded. This does not mean you have no
-          project access.
+          My work uses your default active project. Choosing another project
+          will be available in a later update.
         </Text>
       </View>
     </ShellPage>

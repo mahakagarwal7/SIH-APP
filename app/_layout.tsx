@@ -4,6 +4,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { RootNavigator } from '@/features/navigation/RootNavigator';
+import { ServerStateProvider } from '@/lib/queryClient';
 
 export default function RootLayout() {
   return (
@@ -11,7 +12,9 @@ export default function RootLayout() {
       <SafeAreaView style={styles.screen}>
         <StatusBar style="dark" />
         <AuthProvider>
-          <RootNavigator />
+          <ServerStateProvider>
+            <RootNavigator />
+          </ServerStateProvider>
         </AuthProvider>
       </SafeAreaView>
     </SafeAreaProvider>

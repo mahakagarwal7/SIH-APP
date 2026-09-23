@@ -2,6 +2,8 @@
 
 Reviewed 23 September 2026. Roadmap 0.3 adds the approved Field/Manager navigation shell, protected routes, shared auth lifecycle and project-selection placeholder to the foundation and auth slices. The owner confirmed Nirmaan branding, the production backend and this slice's navigation. See the [navigation draft](pr-drafts/0.3-navigation-shell.md), [auth draft](pr-drafts/0.2-auth-session.md) and [foundation draft](pr-drafts/0.1-project-foundation.md) for separate validation evidence and limitations. Production login and physical-device behavior remain unverified. Other product and architecture decisions remain open. No APK has been built.
 
+Roadmap 1.1 adds read-only My work and the default authorized project context after owner approval of the existing authenticated Supabase reads/RPCs for this slice. See [the My work draft](pr-drafts/1.1-my-work.md) for its separate validation and limitations; the full project switcher remains 2.1.
+
 ## Sources inspected
 
 - All seven original Markdown files in this repository: AGENTS.md, CODEX.md, ARCHITECTURE.md, FEATURES.md, ROADMAP.md, RULES.md and README.md.
@@ -63,7 +65,7 @@ Recent report outcome
 Home | Report | My work | My reports
 ```
 
-On 23 September 2026, the owner approved these four field tabs and the compact Manager tabs Overview / Review / Schedule / History, with account/project controls in the header and Alerts deferred for step 0.3. [The approved proposal](NAVIGATION_PROPOSAL.md) records the shell scope. ROADMAP 0.3 now reflects that decision; languages, v1 Alerts/push scope and business transport remain open.
+On 23 September 2026, the owner approved these four field tabs and the compact Manager tabs Overview / Review / Schedule / History, with account/project controls in the header and Alerts deferred for step 0.3. [The approved proposal](NAVIGATION_PROPOSAL.md) records the shell scope. ROADMAP 0.3 now reflects that decision; languages and v1 Alerts/push scope remain open. Step 1.1 transport is recorded below.
 
 Map the manager view to pages 2–7: pending decisions first, original evidence and candidate explanations, exact proposed changes, accepted records and a read-only schedule. A task hierarchy follows actual parent relationships, not invented fixed L5/L6 levels. No aggregate percentage or health score without a defined supported basis.
 
@@ -88,11 +90,11 @@ Paths in this section refer to the pinned web source.
 | History                  | `execution_history(p_project)`                                                               | Accepted evidence stays inspectable.                                                                                                                        |
 | Export                   | `create_planner_export(p_project, p_command, p_revision, p_version)` plus web download route | Snapshot creation and web ZIP generation are separate; the current code does not expose the generic queued/generating workflow described by the mobile kit. |
 
-### Native API transport is an open decision
+### Native API transport approved for step 1.1
 
 The current web `apiSession(request)` checks same-origin for mutations and reads Supabase session cookies. It does not consume a native Bearer token. Copying those route URLs into the APK will not provide end-to-end authentication.
 
-Recommendation for approval: use already-granted authenticated Supabase reads/RPCs for the mobile core, preserving contract validation and database authority. Server-side export downloads need a separately coordinated authenticated web transport. Alternative: add tested Bearer-token support in the web project while retaining browser CSRF checks. No web code, auth policy or backend schema has been changed.
+On 23 September 2026, the owner approved existing authenticated Supabase queries/RPCs under RLS for step 1.1. [The My work contract](MY_WORK_CONTRACT.md) records the exact reads and web-parity rules. This approval covers the read-only assignment slice; server-side export downloads and any web API authentication changes still need separately coordinated transport. No web code, auth policy or backend schema has been changed.
 
 ### Audio is a real compatibility gate
 
@@ -134,7 +136,7 @@ The web status helper includes Partly accepted, Answer needed, Supervisor check,
 
 ### Production backend confirmed; connectivity verification pending
 
-On 23 September 2026, the owner selected the existing production backend: web app https://intelligrid-sih122.vercel.app and Supabase project `dgxflhdcthyborxjyfvv`. D2 is resolved; this choice does not resolve the separate native transport decision (D5).
+On 23 September 2026, the owner selected the existing production backend: web app https://intelligrid-sih122.vercel.app and Supabase project `dgxflhdcthyborxjyfvv`. D2 is resolved. The later explicit D5 approval covers existing authenticated reads/RPCs for step 1.1.
 
 For local web development, use the web checkout's ignored `apps/web/.env.local`, with `APP_ORIGIN=http://localhost:3000` and the exact variables `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. The Supabase URL is supplied locally in that file. The owner will supply the publishable/anon key locally from Supabase Dashboard > Project Settings > API; the provided message contained a placeholder, not a usable key. Do not put passwords, service-role keys, signing keys or other private secrets in this file or the mobile bundle.
 
@@ -146,20 +148,20 @@ Realtime is enabled in the local Supabase configuration, but the reviewed migrat
 
 ## Decision register
 
-| ID  | Decision                            | Proposed direction                                                                 | Status                                                          |
-| --- | ----------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| D1  | APK brand                           | Nirmaan                                                                            | Confirmed by owner, 23 September 2026                           |
-| D2  | Target backend                      | Existing production web app and Supabase project; local `.env.local` configuration | Confirmed by owner, 23 September 2026; publishable key pending  |
-| D3  | Field and Manager navigation        | Approved tabs and shared header in `NAVIGATION_PROPOSAL.md`                        | Confirmed by owner, 23 September 2026                           |
-| D4  | Languages and Alerts                | English + Hindi; v1 Alerts/push scope still open                                   | Alerts deferred for 0.3 by owner; remaining scope unanswered    |
-| D5  | Native transport                    | Existing authenticated Supabase RPCs                                               | Asked                                                           |
-| D6  | Android audio                       | Evaluate native WAV with a development build                                       | Asked                                                           |
-| D7  | Offline voice confirmation          | Auto-upload, then explicit transcript confirmation                                 | Asked                                                           |
-| D8  | Iteration cadence                   | Small tested slices; major-feature PRs; owner reviews merges                       | Asked                                                           |
-| D9  | Commit signing                      | Owner's configured GPG key ending in `831C481EF8506935`                            | Local key and signing configuration verified, 23 September 2026 |
-| D10 | Outbox storage and logout retention | SQLite + durable media; explicit unsent-work policy                                | Review before outbox slice                                      |
-| D11 | Status refresh                      | Foreground polling until Realtime is verified                                      | Review before status slice                                      |
-| D12 | Android identity/build ownership    | Package ID, Expo owner/build path and APK signing custody                          | Review before first distributable build                         |
+| ID  | Decision                            | Proposed direction                                                                 | Status                                                                        |
+| --- | ----------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| D1  | APK brand                           | Nirmaan                                                                            | Confirmed by owner, 23 September 2026                                         |
+| D2  | Target backend                      | Existing production web app and Supabase project; local `.env.local` configuration | Confirmed by owner, 23 September 2026; publishable key pending                |
+| D3  | Field and Manager navigation        | Approved tabs and shared header in `NAVIGATION_PROPOSAL.md`                        | Confirmed by owner, 23 September 2026                                         |
+| D4  | Languages and Alerts                | English + Hindi; v1 Alerts/push scope still open                                   | Alerts deferred for 0.3 by owner; remaining scope unanswered                  |
+| D5  | Native transport                    | Existing authenticated Supabase reads/RPCs under RLS for step 1.1                  | Confirmed by owner, 23 September 2026; later transport scope remains separate |
+| D6  | Android audio                       | Evaluate native WAV with a development build                                       | Asked                                                                         |
+| D7  | Offline voice confirmation          | Auto-upload, then explicit transcript confirmation                                 | Asked                                                                         |
+| D8  | Iteration cadence                   | Small tested slices; major-feature PRs; owner reviews merges                       | Asked                                                                         |
+| D9  | Commit signing                      | Owner's configured GPG key ending in `831C481EF8506935`                            | Local key and signing configuration verified, 23 September 2026               |
+| D10 | Outbox storage and logout retention | SQLite + durable media; explicit unsent-work policy                                | Review before outbox slice                                                    |
+| D11 | Status refresh                      | Foreground polling until Realtime is verified                                      | Review before status slice                                                    |
+| D12 | Android identity/build ownership    | Package ID, Expo owner/build path and APK signing custody                          | Review before first distributable build                                       |
 
 Unanswered questions are not approvals. Preparatory documentation can proceed; dependent implementation waits.
 

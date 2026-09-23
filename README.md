@@ -2,7 +2,7 @@
 
 The Expo companion to [IntelliGrid](https://intelligrid-sih122.vercel.app), using the existing production Supabase backend. The owner confirmed **Nirmaan** as the mobile name on 23 September 2026.
 
-Roadmap **0.3** adds the approved Field and Manager navigation shells on top of email/password sign-in, secure sessions and restore. Field tabs are Home / Report / My work / My reports; Manager tabs are Overview / Review / Schedule / History. Account and project controls are in the header. Project selection and feature screens are explicit placeholders; real project data, reporting, offline delivery and manager operations remain later slices.
+Roadmap **1.1** adds read-only My work to the approved Field and Manager navigation shells. It reads the signed-in user's assignments in their default active project, grouped into Today / Up next / Earlier assignments, with accepted quantities and explicit loading, empty, error and offline states. Project switching, Home, reporting, offline delivery and manager operations remain later slices.
 
 ## Run locally
 
@@ -57,7 +57,9 @@ The web checkout is `C:\Users\Mahak\SIH-122`. Its local file also has the owner-
 - `app/`: Expo Router entry and auth route.
 - `src/features/auth/`: sign-in/account screen, session controller and hook.
 - `src/features/navigation/`: protected route boundary, workspace tabs and shared shell UI.
-- `src/lib/`: Supabase client, secure storage and request timeout.
+- `src/features/projects/`: default-project access and read-only My work.
+- `src/types/`: scoped, read-only database contract.
+- `src/lib/`: Supabase client, secure storage, request timeout and session-scoped query cache.
 - `docs/`: decisions, workflow and PR drafts.
 - `.github/workflows/ci.yml`: required checks.
 
@@ -69,4 +71,4 @@ Read [AGENTS.md](AGENTS.md), [CODEX.md](CODEX.md), [RULES.md](RULES.md), [archit
 
 The [project review](docs/PROJECT_REVIEW.md) records verified backend contracts and unresolved decisions. The [development workflow](docs/DEVELOPMENT_WORKFLOW.md) supersedes the historical prohibitions on remote actions: signed commits, pushes and feature PRs are authorized; merges remain with the owner. Work stops after each requested slice.
 
-[Navigation PR draft](docs/pr-drafts/0.3-navigation-shell.md) records the latest validation and manual checks; [the approved navigation](docs/NAVIGATION_PROPOSAL.md), [auth draft](docs/pr-drafts/0.2-auth-session.md) and [foundation draft](docs/pr-drafts/0.1-project-foundation.md) record their respective scope. The supplied PDFs remain local design references: the Nirmaan book governs appearance; the SitePulse reference contributes interaction ideas only.
+[My work PR draft](docs/pr-drafts/1.1-my-work.md) records this slice's validation and manual checks; [its contract](docs/MY_WORK_CONTRACT.md) records approved transport and web parity. The [navigation draft](docs/pr-drafts/0.3-navigation-shell.md), [auth draft](docs/pr-drafts/0.2-auth-session.md) and [foundation draft](docs/pr-drafts/0.1-project-foundation.md) record their respective scope. The supplied PDFs remain local design references: the Nirmaan book governs appearance; the SitePulse reference contributes interaction ideas only.

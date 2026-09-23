@@ -42,7 +42,10 @@ Suggested prompt shape for each step:
 
 ## Phase 1 — Feature 2: Field reporting with media (build first)
 
-- **1.1** Read-only "My work" task list for the signed-in field user.
+- **1.1** Read-only "My work" task list for the signed-in field user, using
+  the existing authenticated Supabase reads/RPCs approved on 23 September 2026.
+  Use the web's default active project until the full switcher in 2.1. See
+  `docs/MY_WORK_CONTRACT.md` for assignment/version rules and state handling.
 - **1.2** Voice report capture screen (record → local save only, no submit).
 - **1.3** Text and photo report capture screens, same local-save pattern.
 - **1.4** Confirmation ("is this correct?") screen: transcript/caption, work
