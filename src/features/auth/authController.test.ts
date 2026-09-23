@@ -164,6 +164,28 @@ describe('auth lifecycle', () => {
     stop();
   });
 
+  it('does not let a resume check overwrite sign-in started while the form stays visible', async () => {
+    const { api, controller, stop } = setup();
+    await controller.restore();
+    let finish!: (result: { data: { session: null }; error: null }) => void;
+    api.getSession.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const restoring = controller.restore();
+    await controller.signIn('reporter@example.test', 'synthetic password');
+    finish({ data: { session: null }, error: null });
+    await restoring;
+    expect(controller.getSnapshot()).toMatchObject({
+      status: 'signedIn',
+      session: savedSession,
+      busy: false,
+    });
+    stop();
+  });
+
   it('ignores INITIAL_SESSION null after a restore error', async () => {
     const { api, controller, emit, stop } = setup();
     api.getSession.mockRejectedValueOnce(new SecureStorageError());
