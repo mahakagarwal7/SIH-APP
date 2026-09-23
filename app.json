@@ -5,7 +5,25 @@
     "version": "0.1.0",
     "scheme": "nirmaan",
     "userInterfaceStyle": "light",
-    "plugins": ["expo-router", "expo-secure-store", "expo-font"],
+    "android": {
+      "package": "com.mahakagarwal.nirmaan",
+      "allowBackup": false
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      "expo-sqlite",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Nirmaan to record your spoken progress report.",
+          "recordAudioAndroid": true,
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     },

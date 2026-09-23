@@ -4,6 +4,8 @@ dist/
 coverage/
 .playwright-mcp/
 test-results/
+android/
+ios/
 package-lock.json
 *.pdf
 .env
