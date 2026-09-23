@@ -25,6 +25,8 @@ import {
   syncNativeOutbox,
 } from './nativeOutbox';
 import { getReportDraftStore } from './nativeReportDraftStore';
+import { needsReportPolling } from './reportStatus';
+import { useReportStatusPolling } from './useReportStatusPolling';
 
 import type { Href } from 'expo-router';
 
@@ -84,6 +86,11 @@ function AccountReports({ userId }: { userId: string }) {
   });
   const localRefetch = local.refetch;
   const remoteRefetch = remote.refetch;
+  const pollingRequired = needsReportPolling(remote.data ?? []);
+  useReportStatusPolling({
+    enabled: !auth.offline && pollingRequired,
+    refetch: remoteRefetch,
+  });
   useFocusEffect(
     useCallback(() => {
       void localRefetch();
@@ -157,6 +164,17 @@ function AccountReports({ userId }: { userId: string }) {
       {!!message && (
         <Text accessibilityLiveRegion="polite" style={styles.message}>
           {message}
+        </Text>
+      )}
+      {!auth.offline && remote.isFetching && (
+        <Text accessibilityLiveRegion="polite" style={styles.message}>
+          Checking production report status…
+        </Text>
+      )}
+      {!auth.offline && !remote.isFetching && remote.dataUpdatedAt > 0 && (
+        <Text style={styles.checked}>
+          Last checked {new Date(remote.dataUpdatedAt).toLocaleTimeString()}
+          {pollingRequired ? ' · Automatic checks active' : ''}
         </Text>
       )}
       {local.data?.preparation.unavailable ? (
@@ -268,4 +286,5 @@ const styles = StyleSheet.create({
   status: { color: '#266b8c', fontWeight: '700', fontSize: 13, lineHeight: 21 },
   detail: { color: '#627786', fontSize: 13, lineHeight: 21 },
   retry: { color: '#76541d', fontSize: 14, lineHeight: 22, fontWeight: '600' },
+  checked: { color: '#627786', fontSize: 12, lineHeight: 20, marginBottom: 12 },
 });

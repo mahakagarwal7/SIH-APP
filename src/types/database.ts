@@ -70,6 +70,15 @@ export type MediaResultRow = {
   details: Json;
   created_at: string;
 };
+export type ReportJobRow = {
+  id: string;
+  report_id: string;
+  report_version: number;
+  status: 'queued' | 'running' | 'retry_wait' | 'succeeded' | 'failed';
+  attempts: number;
+  error_code: string | null;
+  created_at: string;
+};
 export type ClaimRow = {
   id: string;
   project_id: string;
@@ -81,6 +90,7 @@ export type ClaimRow = {
     | 'disputed'
     | 'accepted'
     | 'rejected'
+    | 'observed'
     | 'unplanned'
     | 'superseded'
     | 'withdrawn'
@@ -96,6 +106,7 @@ export type Database = {
       attachments: ReadTable<AttachmentRow>;
       media_jobs: ReadTable<MediaJobRow>;
       media_results: ReadTable<MediaResultRow>;
+      jobs: ReadTable<ReportJobRow>;
       claims: ReadTable<ClaimRow>;
     };
     Views: { [_ in never]: never };
