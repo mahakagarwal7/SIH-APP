@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     paddingVertical: 44,
   },
   eyebrow: {
-    color: '#627786',
+    color: '#586c7a',
     fontSize: 12,
     lineHeight: 20,
     letterSpacing: 1.1,
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   introduction: {
-    color: '#627786',
+    color: '#586c7a',
     fontSize: 17,
     lineHeight: 27,
   },
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     lineHeight: 26,
   },
   preview: {
-    color: '#627786',
+    color: '#586c7a',
     fontSize: 13,
     lineHeight: 21,
     marginTop: 28,
