@@ -21,6 +21,11 @@ const outbox: OutboxRecord = {
   manifest: { captureId, language: 'auto', files: [] },
   reportId,
   uploadedFiles: [],
+  originalTranscript: null,
+  confirmedPayload: null,
+  submissionState: 'unconfirmed',
+  submittedAt: null,
+  evidenceReleased: false,
   state: 'needs_confirmation',
   attemptCount: 1,
   lastErrorKind: null,
@@ -47,6 +52,16 @@ it('deduplicates local/outbox/server identity and prefers accepted server status
     reportId,
     status: 'Accepted',
     summary: 'Installed two supports',
+    canSync: false,
+    canConfirm: false,
+  });
+});
+
+it('opens confirmation only for a ready, still-unsubmitted outbox record', () => {
+  const [item] = mergeMyReports([], [], [outbox], []);
+  expect(item).toMatchObject({
+    status: 'Needs confirmation',
+    canConfirm: true,
     canSync: false,
   });
 });

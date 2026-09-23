@@ -9,9 +9,8 @@ const { DatabaseSync } = createRequire(__filename)(
   'node:sqlite',
 ) as typeof import('node:sqlite');
 
-it('persists the frozen manifest, upload progress and owner partition', async () => {
-  const sql = new DatabaseSync(':memory:');
-  const db = {
+function adapter(sql: InstanceType<typeof DatabaseSync>) {
+  return {
     execAsync: async (source: string) => sql.exec(source),
     getFirstAsync: async (
       source: string,
@@ -24,6 +23,11 @@ it('persists the frozen manifest, upload progress and owner partition', async ()
     runAsync: async (source: string, ...params: (string | number | null)[]) =>
       sql.prepare(source).run(...params),
   } as unknown as SQLiteDatabase;
+}
+
+it('persists the frozen manifest, upload progress and owner partition', async () => {
+  const sql = new DatabaseSync(':memory:');
+  const db = adapter(sql);
   try {
     const index = await createOutboxIndex(db);
     const row: OutboxRecord = {
@@ -51,6 +55,11 @@ it('persists the frozen manifest, upload progress and owner partition', async ()
       },
       reportId: null,
       uploadedFiles: [],
+      originalTranscript: null,
+      confirmedPayload: null,
+      submissionState: 'unconfirmed',
+      submittedAt: null,
+      evidenceReleased: false,
       state: 'queued',
       attemptCount: 0,
       lastErrorKind: null,
@@ -85,6 +94,47 @@ it('persists the frozen manifest, upload progress and owner partition', async ()
     await expect(
       (await createOutboxIndex(db)).list('alice'),
     ).resolves.toHaveLength(1);
+  } finally {
+    sql.close();
+  }
+});
+
+it('migrates an existing roadmap 1.5 outbox without replacing its rows', async () => {
+  const sql = new DatabaseSync(':memory:');
+  try {
+    sql.exec(`CREATE TABLE local_field_outbox (
+      captureId TEXT PRIMARY KEY NOT NULL,
+      userId TEXT NOT NULL,
+      projectId TEXT NOT NULL,
+      projectName TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      createdAt TEXT NOT NULL,
+      text TEXT NOT NULL,
+      manifest TEXT NOT NULL,
+      reportId TEXT,
+      uploadedFiles TEXT NOT NULL,
+      state TEXT NOT NULL,
+      attemptCount INTEGER NOT NULL,
+      lastErrorKind TEXT,
+      lastError TEXT,
+      updatedAt TEXT NOT NULL
+    );
+    INSERT INTO local_field_outbox VALUES (
+      '10000000-0000-4000-8000-000000000001','alice','project','Site project','report',
+      '2026-09-24T00:00:00Z','Progress recorded.',
+      '{"captureId":"10000000-0000-4000-8000-000000000001","language":"auto","files":[]}',
+      '30000000-0000-4000-8000-000000000003','[]','needs_confirmation',1,NULL,NULL,
+      '2026-09-24T00:01:00Z'
+    );`);
+    const index = await createOutboxIndex(adapter(sql));
+    await expect(
+      index.get('alice', '10000000-0000-4000-8000-000000000001'),
+    ).resolves.toMatchObject({
+      text: 'Progress recorded.',
+      submissionState: 'unconfirmed',
+      confirmedPayload: null,
+      evidenceReleased: false,
+    });
   } finally {
     sql.close();
   }

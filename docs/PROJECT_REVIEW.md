@@ -128,7 +128,7 @@ flowchart TD
   H --> I[Accepted / partly accepted / rejected / observed]
 ```
 
-Offline voice cannot show a server transcript that has not been produced. The approved implementation automatically resumes reserved upload after reconnect, then stops at explicit transcript/text confirmation. No outbox path submits a report for review. Roadmap 1.4 will persist and retry the exact confirmed payload before calling `submit_field_capture`.
+Offline voice cannot show a server transcript that has not been produced. The implementation automatically resumes reserved upload after reconnect, then stops at explicit transcript/text confirmation. Roadmap 1.4 now persists and retries the exact confirmed payload before calling `submit_field_capture`; unconfirmed captures still cannot enter review.
 
 Owner-approved storage for step 1.2: SQLite metadata and app-private durable media files, partitioned by user/project. Retain unsent drafts after logout and show them only to the same signed-in account. Roadmap 1.5 freezes capture/media IDs, byte counts, MIME types, captions and SHA-256 before reservation; retries cannot replace that manifest. Once a draft enters the outbox, capture screens retain its local evidence through confirmation. Persist before displaying “Saved on device”; a failed disk write must remain visible.
 

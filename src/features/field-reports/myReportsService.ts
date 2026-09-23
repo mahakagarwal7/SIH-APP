@@ -48,6 +48,7 @@ export type MyReportItem = {
   status: string;
   detail: string;
   canSync: boolean;
+  canConfirm: boolean;
 };
 
 export class ReportsReadError extends Error {
@@ -57,6 +58,13 @@ export class ReportsReadError extends Error {
 }
 
 function outboxStatus(record: OutboxRecord) {
+  if (record.submissionState === 'submitted')
+    return ['Awaiting review', 'Submitted to the production project.'] as const;
+  if (record.submissionState === 'pending')
+    return [
+      'Sending for review',
+      'Confirmed wording is locked until the server receipt is verified.',
+    ] as const;
   switch (record.state) {
     case 'queued':
     case 'reserving':
@@ -176,11 +184,19 @@ export function mergeMyReports(
       projectName: row.projectName,
       createdAt: row.createdAt,
       kind: row.kind,
-      summary: row.text.trim(),
+      summary: (row.confirmedPayload?.text ?? row.text).trim(),
       mediaCount: row.manifest.files.length,
       status,
       detail,
-      canSync: row.state === 'paused' || row.state === 'failed',
+      canSync:
+        row.submissionState === 'pending' ||
+        (row.submissionState === 'unconfirmed' &&
+          (row.state === 'paused' || row.state === 'failed')),
+      canConfirm:
+        (!server || server.lifecycle === 'draft') &&
+        row.state === 'needs_confirmation' &&
+        row.submissionState === 'unconfirmed' &&
+        (row.kind !== 'voice' || !!row.originalTranscript),
     });
     remoteByCapture.delete(row.captureId);
   }
@@ -200,6 +216,7 @@ export function mergeMyReports(
         ? 'Waiting to sync.'
         : 'Recording bytes are missing or incomplete.',
       canSync: row.available,
+      canConfirm: false,
     });
   }
   for (const row of reports) {
@@ -218,6 +235,7 @@ export function mergeMyReports(
         ? 'Waiting to sync.'
         : 'One or more saved photos are missing.',
       canSync: row.available,
+      canConfirm: false,
     });
   }
   for (const row of remoteByCapture.values())
@@ -236,6 +254,7 @@ export function mergeMyReports(
           ? 'Media may still be processing; continue on the device that created it.'
           : 'Submitted to the production project.',
       canSync: false,
+      canConfirm: false,
     });
   return items.sort(
     (left, right) =>

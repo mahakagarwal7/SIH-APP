@@ -13,6 +13,7 @@ export default function AppLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="workspaces" />
         <Stack.Screen name="field" />
+        <Stack.Screen name="field-confirm" />
         <Stack.Screen name="manager" />
         <Stack.Screen name="account" />
         <Stack.Screen name="projects" />

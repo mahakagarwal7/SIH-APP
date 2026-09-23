@@ -113,6 +113,15 @@ export type Database = {
         Args: { p_report: string };
         Returns: Json;
       };
+      submit_field_capture: {
+        Args: {
+          p_report: string;
+          p_text: string;
+          p_work_date: string | null;
+          p_activity: string | null;
+        };
+        Returns: string;
+      };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };

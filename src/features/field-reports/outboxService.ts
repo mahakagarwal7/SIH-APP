@@ -1,3 +1,4 @@
+import { normalizeConfirmation } from './confirmation';
 import { OutboxSyncError, sameFrozenCapture, validateManifest } from './outbox';
 
 import type {
@@ -6,6 +7,7 @@ import type {
   OutboxRecord,
   OutboxState,
   OutboxTransport,
+  ConfirmedPayload,
 } from './outbox';
 
 export type NewOutboxRecord = Pick<
@@ -36,6 +38,9 @@ export class OutboxService {
     private readonly transport: OutboxTransport,
     private readonly sha256: (bytes: Uint8Array) => Promise<string>,
     private readonly now: () => string = () => new Date().toISOString(),
+    private readonly releaseEvidence: (
+      record: OutboxRecord,
+    ) => Promise<void> = async () => {},
   ) {}
 
   list(userId: string) {
@@ -54,6 +59,11 @@ export class OutboxService {
       ...input,
       reportId: null,
       uploadedFiles: [],
+      originalTranscript: null,
+      confirmedPayload: null,
+      submissionState: 'unconfirmed',
+      submittedAt: null,
+      evidenceReleased: false,
       state: 'queued',
       attemptCount: 0,
       lastErrorKind: null,
@@ -91,6 +101,82 @@ export class OutboxService {
     });
   }
 
+  async confirm(
+    userId: string,
+    captureId: string,
+    input: ConfirmedPayload,
+  ): Promise<OutboxRecord> {
+    const record = await this.index.get(userId, captureId);
+    if (!record)
+      throw new OutboxSyncError(
+        'This report is unavailable for this account.',
+        'local',
+        false,
+      );
+    const payload = normalizeConfirmation(input);
+    if (record.confirmedPayload) {
+      if (JSON.stringify(record.confirmedPayload) !== JSON.stringify(payload))
+        throw new OutboxSyncError(
+          'The confirmed wording is locked while its receipt is pending.',
+          'local',
+          false,
+        );
+      return record;
+    }
+    if (record.state !== 'needs_confirmation' || !record.reportId)
+      throw new OutboxSyncError(
+        'This report is not ready for confirmation.',
+        'local',
+        false,
+      );
+    if (record.kind === 'voice' && !record.originalTranscript?.trim())
+      throw new OutboxSyncError(
+        'The verified voice transcript is not available yet.',
+        'server',
+        true,
+      );
+    return this.save(record, {
+      confirmedPayload: payload,
+      submissionState: 'pending',
+      lastError: null,
+      lastErrorKind: null,
+    });
+  }
+
+  private async release(record: OutboxRecord): Promise<OutboxRecord> {
+    if (record.evidenceReleased) return record;
+    try {
+      await this.releaseEvidence(record);
+      return this.save(record, { evidenceReleased: true });
+    } catch {
+      return record;
+    }
+  }
+
+  private async submit(record: OutboxRecord): Promise<OutboxRecord> {
+    const payload = record.confirmedPayload;
+    if (!payload || !record.reportId)
+      throw new OutboxSyncError(
+        'Confirmed submission details are incomplete.',
+        'local',
+        false,
+      );
+    const returned = await this.transport.submit(record.reportId, payload);
+    if (returned !== record.reportId)
+      throw new OutboxSyncError(
+        'The server returned an invalid submission receipt.',
+        'server',
+        true,
+      );
+    const submitted = await this.save(record, {
+      submissionState: 'submitted',
+      submittedAt: this.now(),
+      lastError: null,
+      lastErrorKind: null,
+    });
+    return this.release(submitted);
+  }
+
   async sync(
     userId: string,
     captureId: string,
@@ -103,7 +189,7 @@ export class OutboxService {
         'local',
         false,
       );
-    if (record.state === 'needs_confirmation') return record;
+    if (record.submissionState === 'submitted') return this.release(record);
     if (record.state === 'paused' && !options.includePaused) return record;
     if (
       record.state === 'failed' &&
@@ -118,11 +204,33 @@ export class OutboxService {
     });
     try {
       await this.transport.ensureAccess(record);
+      if (record.submissionState === 'pending')
+        return await this.submit(record);
+      if (record.state === 'needs_confirmation') {
+        if (record.kind !== 'voice' || record.originalTranscript) return record;
+        const result = await this.transport.inspect(record.reportId!);
+        if (result.status === 'ready')
+          return this.save(record, {
+            originalTranscript: result.originalTranscript,
+            lastError: null,
+            lastErrorKind: null,
+          });
+        if (result.status === 'failed')
+          throw new OutboxSyncError(result.message, 'server', false);
+        if (result.status === 'retryable')
+          throw new OutboxSyncError(result.message, 'server', true);
+        return record;
+      }
       if (record.reportId && record.state === 'processing') {
         const reportId = record.reportId;
         const result = await this.transport.inspect(reportId);
         if (result.status === 'ready')
-          return this.phase(record, 'needs_confirmation');
+          return this.save(record, {
+            state: 'needs_confirmation',
+            originalTranscript: result.originalTranscript,
+            lastError: null,
+            lastErrorKind: null,
+          });
         if (result.status === 'processing') return record;
         if (result.status === 'failed')
           throw new OutboxSyncError(result.message, 'server', false);
@@ -173,7 +281,12 @@ export class OutboxService {
       record = await this.phase(record, 'processing');
       const result = await this.transport.inspect(record.reportId!);
       if (result.status === 'ready')
-        return this.phase(record, 'needs_confirmation');
+        return this.save(record, {
+          state: 'needs_confirmation',
+          originalTranscript: result.originalTranscript,
+          lastError: null,
+          lastErrorKind: null,
+        });
       if (result.status === 'failed')
         throw new OutboxSyncError(result.message, 'server', false);
       if (result.status === 'retryable')
@@ -199,7 +312,11 @@ export class OutboxService {
     const rows = await this.index.list(userId);
     const results: OutboxRecord[] = [];
     for (const row of rows) {
-      if (row.state === 'needs_confirmation') {
+      if (
+        row.state === 'needs_confirmation' &&
+        row.submissionState === 'unconfirmed' &&
+        (row.kind !== 'voice' || !!row.originalTranscript)
+      ) {
         results.push(row);
         continue;
       }

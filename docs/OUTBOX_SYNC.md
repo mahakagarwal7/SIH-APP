@@ -1,6 +1,6 @@
 # Outbox and My reports contract
 
-Roadmap 1.5 connects durable local capture to the existing production media contract. It does not submit a report for review. The next slice owns transcript/text confirmation and the only mobile call to `submit_field_capture`.
+Roadmap 1.5 connects durable local capture to the existing production media contract. Roadmap 1.4 adds the separate confirmation boundary and the only mobile call to `submit_field_capture`; see [the confirmation contract](CONFIRMATION_SUBMISSION.md).
 
 ## Frozen local identity
 
@@ -32,10 +32,11 @@ My reports merges account-scoped local drafts, outbox rows and the signed-in aut
 - **Saved on device**: durable locally, not yet reserved.
 - **Syncing / Processing evidence**: reserved upload or server media work remains.
 - **Needs confirmation**: server media is ready, but nothing has been submitted.
+- **Sending for review**: the exact confirmed payload is saved locally and locked while its server receipt is pending.
 - **Awaiting review / Accepted / Partly accepted**: derived from an existing submitted report and its readable claims.
 - **Answer needed / Supervisor check / Needs planner attention / Rejected / Kept as unplanned / Withdrawn**: preserved rather than collapsed into success.
 
-The last loaded server data can remain visible offline, clearly labeled stale by the offline banner. Local drafts survive logout but stay hidden from other accounts. Capture screens block local deletion after an item enters the outbox so retry/confirmation cannot lose its evidence.
+The last loaded server data can remain visible offline, clearly labeled stale by the offline banner. Local drafts survive logout but stay hidden from other accounts. Capture screens block local deletion after an item enters the outbox so retry/confirmation cannot lose its evidence. Private evidence is removed only after the submission receipt is stored locally.
 
 ## Evidence limits
 

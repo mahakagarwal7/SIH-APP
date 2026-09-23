@@ -2,7 +2,7 @@
 
 The Expo companion to [IntelliGrid](https://intelligrid-sih122.vercel.app), using the existing production Supabase backend. The owner confirmed **Nirmaan** as the mobile name on 23 September 2026.
 
-Roadmap **1.5** adds a durable account-scoped outbox and the real My reports screen. Saved voice/text/photo drafts receive one frozen capture manifest, upload only to production-reserved Storage paths, survive interruption, finalize media processing and stop at **Needs confirmation**. No draft is submitted for review before roadmap 1.4 adds explicit confirmation. Project switching and manager operations remain later slices.
+Roadmap **1.4** adds the native Check → Send screen after the durable 1.5 outbox. Workers compare the verified voice transcript with editable wording, record an optional work date and authorized activity, explicitly check unfinished work, and persist one immutable payload before `submit_field_capture`. Offline confirmations send on reconnect without collapsing Awaiting review into Accepted. Project switching and manager operations remain later slices.
 
 ## Run locally
 
@@ -13,7 +13,7 @@ npm ci
 npm start
 ```
 
-Use `npm run android` to generate/build/install a local Android debug app with a compatible JDK, Android SDK and emulator/device. The approved package ID is `com.mahakagarwal.nirmaan`; debug signing is separate from release signing. Voice capture and outbox delivery require the native build. Web shows an unavailable state for native capture/sync. See [voice capture and build evidence](docs/VOICE_CAPTURE.md), the [text/photo persistence contract](docs/TEXT_PHOTO_CAPTURE.md) and the [outbox contract](docs/OUTBOX_SYNC.md).
+Use `npm run android` to generate/build/install a local Android debug app with a compatible JDK, Android SDK and emulator/device. The approved package ID is `com.mahakagarwal.nirmaan`; debug signing is separate from release signing. Voice capture, outbox delivery and confirmation require the native build. Web shows an unavailable state for native capture/sync. See [voice capture and build evidence](docs/VOICE_CAPTURE.md), the [text/photo persistence contract](docs/TEXT_PHOTO_CAPTURE.md), the [outbox contract](docs/OUTBOX_SYNC.md) and the [confirmation contract](docs/CONFIRMATION_SUBMISSION.md).
 
 Configure the public connection below to sign in with an existing account. Without both values, the app displays an incomplete-setup message. Browser and Metro export checks do not prove installation or operation on a physical device.
 
@@ -74,4 +74,4 @@ Read [AGENTS.md](AGENTS.md), [CODEX.md](CODEX.md), [RULES.md](RULES.md), [archit
 
 The [project review](docs/PROJECT_REVIEW.md) records verified backend contracts and unresolved decisions. The [development workflow](docs/DEVELOPMENT_WORKFLOW.md) supersedes the historical prohibitions on remote actions: signed commits, pushes and feature PRs are authorized; merges remain with the owner. Work stops after each requested slice.
 
-[Outbox/My reports PR draft](docs/pr-drafts/1.5-outbox-my-reports.md) records this slice's validation and manual checks. The [text/photo draft](docs/pr-drafts/1.3-text-photo-capture.md), [voice draft](docs/pr-drafts/1.2-voice-capture.md), [My work draft](docs/pr-drafts/1.1-my-work.md) and [contract](docs/MY_WORK_CONTRACT.md), [navigation draft](docs/pr-drafts/0.3-navigation-shell.md), [auth draft](docs/pr-drafts/0.2-auth-session.md) and [foundation draft](docs/pr-drafts/0.1-project-foundation.md) record their respective scope. The supplied PDFs remain local design references: the Nirmaan book governs appearance; the SitePulse reference contributes interaction ideas only.
+[Confirmation/submission PR draft](docs/pr-drafts/1.4-confirmation-submission.md) records this slice's validation and manual checks. The [outbox/My reports draft](docs/pr-drafts/1.5-outbox-my-reports.md), [text/photo draft](docs/pr-drafts/1.3-text-photo-capture.md), [voice draft](docs/pr-drafts/1.2-voice-capture.md), [My work draft](docs/pr-drafts/1.1-my-work.md) and [contract](docs/MY_WORK_CONTRACT.md), [navigation draft](docs/pr-drafts/0.3-navigation-shell.md), [auth draft](docs/pr-drafts/0.2-auth-session.md) and [foundation draft](docs/pr-drafts/0.1-project-foundation.md) record their respective scope. The supplied PDFs remain local design references: the Nirmaan book governs appearance; the SitePulse reference contributes interaction ideas only.

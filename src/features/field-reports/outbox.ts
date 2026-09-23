@@ -27,6 +27,13 @@ export type CaptureManifest = {
   files: CaptureFile[];
 };
 
+export type ConfirmedPayload = {
+  text: string;
+  workDate: string | null;
+  activityId: string | null;
+};
+export type SubmissionState = 'unconfirmed' | 'pending' | 'submitted';
+
 export type OutboxRecord = {
   captureId: string;
   userId: string;
@@ -38,6 +45,11 @@ export type OutboxRecord = {
   manifest: CaptureManifest;
   reportId: string | null;
   uploadedFiles: string[];
+  originalTranscript: string | null;
+  confirmedPayload: ConfirmedPayload | null;
+  submissionState: SubmissionState;
+  submittedAt: string | null;
+  evidenceReleased: boolean;
   state: OutboxState;
   attemptCount: number;
   lastErrorKind: OutboxErrorKind | null;
@@ -57,7 +69,7 @@ export type OutboxFileReader = {
 
 export type RemoteMediaState =
   | { status: 'processing' }
-  | { status: 'ready' }
+  | { status: 'ready'; originalTranscript: string | null }
   | { status: 'retryable'; message: string }
   | { status: 'failed'; message: string };
 
@@ -67,6 +79,7 @@ export type OutboxTransport = {
   upload(path: string, file: CaptureFile, bytes: Uint8Array): Promise<void>;
   finalize(reportId: string): Promise<void>;
   inspect(reportId: string): Promise<RemoteMediaState>;
+  submit(reportId: string, payload: ConfirmedPayload): Promise<string>;
 };
 
 export class OutboxSyncError extends Error {
