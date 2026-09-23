@@ -33,6 +33,9 @@ export function getReportDraftStore(): Promise<ReportDraftStore> {
             directory.create({ intermediates: true, idempotent: true });
             file.write(bytes);
           },
+          async read(draft, photo) {
+            return privatePhoto(draft, photo).file.bytes();
+          },
           async size(draft, photo) {
             const { file } = privatePhoto(draft, photo);
             return file.exists ? file.size : null;

@@ -44,6 +44,7 @@ export type ReportDraftFiles = {
     photo: SavedPhoto,
     bytes: Uint8Array,
   ): Promise<void>;
+  read(draft: ReportDraft, photo: SavedPhoto): Promise<Uint8Array>;
   size(draft: ReportDraft, photo: SavedPhoto): Promise<number | null>;
   uri(draft: ReportDraft, photo: SavedPhoto): string;
   remove(draft: ReportDraft, photo: SavedPhoto): Promise<void>;
@@ -161,6 +162,28 @@ export class ReportDraftStore {
       if ((await this.files.size(draft, photo)) !== photo.byteLength)
         throw new Error('A photo could not be saved completely.');
     await this.index.setState(draft.userId, draft.id, 'saved');
+  }
+
+  async materialize(
+    userId: string,
+    id: string,
+  ): Promise<{
+    draft: ReportDraft;
+    prepared: PreparedDraftPhoto[];
+  }> {
+    const draft = await this.index.get(userId, id);
+    if (!draft || draft.state !== 'saved')
+      throw new Error('This report draft is unavailable on this device.');
+    const prepared: PreparedDraftPhoto[] = [];
+    for (const photo of draft.photos) {
+      if ((await this.files.size(draft, photo)) !== photo.byteLength)
+        throw new Error('A saved photo is missing or incomplete.');
+      const bytes = await this.files.read(draft, photo);
+      if (bytes.length !== photo.byteLength)
+        throw new Error('A saved photo is missing or incomplete.');
+      prepared.push({ photo, bytes });
+    }
+    return { draft, prepared };
   }
 
   async discard(userId: string, id: string): Promise<void> {

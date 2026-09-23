@@ -2,7 +2,7 @@
 
 24 September 2026. **Approved by the owner.** This researched delivery order and its listed integration decisions were approved before roadmap 1.3 implementation began.
 
-**Plan: 15 further mobile PRs, with a usable Field reporting milestone after the first five.** This includes English/Hindi support from `FEATURES.md`. The English core alone is 14 PRs. These are planned review units, not a guarantee that no additional repair or backend work will be discovered.
+**Plan: 15 further mobile PRs, with a usable Field reporting milestone after the first five.** Roadmap 1.3 became draft PR #6; this 1.5 branch is the second planned slice, leaving 13 after it. This includes English/Hindi support from `FEATURES.md`. The English core alone is 14 PRs. These are planned review units, not a guarantee that no additional repair or backend work will be discovered.
 
 The count is eleven remaining non-optional roadmap steps, plus four omissions that need explicit delivery: a phone-ready build and live Field verification, clarification/supervisor responses, the approved History screen, and localization. Alerts/push, Tamil, store release and any separately approved backend changes are outside this count.
 

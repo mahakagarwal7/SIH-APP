@@ -15,8 +15,9 @@ import {
 
 import { useAuth } from '@/features/auth/AuthProvider';
 import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
-import { useDefaultProject } from '@/features/projects/useMyWork';
+import { useCaptureProject } from '@/features/projects/useCaptureProject';
 
+import { assertLocalDraftCanBeDiscarded } from './nativeOutbox';
 import {
   choosePhoto,
   recoverPendingPhoto,
@@ -78,7 +79,7 @@ function AccountTextPhotoScreen({
   mode: 'text' | 'photo';
 }) {
   const auth = useAuth();
-  const project = useDefaultProject();
+  const project = useCaptureProject();
   const client = useQueryClient();
   const [text, setText] = useState('');
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
@@ -224,18 +225,22 @@ function AccountTextPhotoScreen({
     setDiscarding(id);
     setMessage('');
     try {
+      await assertLocalDraftCanBeDiscarded(userId, id);
       await (await getReportDraftStore()).discard(userId, id);
-    } catch {
       if (mounted.current)
-        setMessage('Could not finish discarding. Retry the discard action.');
-    } finally {
-      if (mounted.current) {
-        setDiscarding(null);
         client.setQueryData<LocalReportDraft[]>(
           ['report-drafts', userId],
           (current = []) => current.filter((draft) => draft.id !== id),
         );
-      }
+    } catch (error) {
+      if (mounted.current)
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : 'Could not finish discarding. Retry the discard action.',
+        );
+    } finally {
+      if (mounted.current) setDiscarding(null);
     }
   }
 

@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
+import { OutboxSyncAgent } from '@/features/field-reports/OutboxSyncAgent';
 
 import type { ReactNode } from 'react';
 
@@ -22,7 +23,12 @@ export function createQueryClient() {
 function SessionCache({ children }: { children: ReactNode }) {
   const [client] = useState(createQueryClient);
   useEffect(() => () => client.clear(), [client]);
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={client}>
+      <OutboxSyncAgent />
+      {children}
+    </QueryClientProvider>
+  );
 }
 
 export function ServerStateProvider({ children }: { children: ReactNode }) {

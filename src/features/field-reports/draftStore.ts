@@ -24,6 +24,7 @@ export type DraftIndex = {
 
 export type DraftFiles = {
   write(draft: VoiceDraft, bytes: Uint8Array): Promise<void>;
+  read(draft: VoiceDraft): Promise<Uint8Array>;
   size(draft: VoiceDraft): Promise<number | null>;
   remove(draft: VoiceDraft): Promise<void>;
   uri(draft: VoiceDraft): string;
@@ -77,6 +78,26 @@ export class VoiceDraftStore {
     )
       throw new Error('This recording is unavailable on this device.');
     return this.files.uri(draft);
+  }
+
+  async recording(
+    userId: string,
+    id: string,
+  ): Promise<{
+    draft: VoiceDraft;
+    bytes: Uint8Array;
+  }> {
+    const draft = await this.index.get(userId, id);
+    if (
+      !draft ||
+      draft.state !== 'saved' ||
+      (await this.files.size(draft)) !== draft.byteLength
+    )
+      throw new Error('This recording is unavailable on this device.');
+    const bytes = await this.files.read(draft);
+    if (bytes.length !== draft.byteLength)
+      throw new Error('This recording is incomplete on this device.');
+    return { draft, bytes };
   }
 
   async discard(userId: string, id: string): Promise<void> {

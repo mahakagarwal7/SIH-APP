@@ -24,6 +24,9 @@ export function getVoiceDraftStore(): Promise<VoiceDraftStore> {
             directory.create({ intermediates: true, idempotent: true });
             file.write(bytes);
           },
+          async read(draft) {
+            return fileFor(draft).file.bytes();
+          },
           async size(draft) {
             const { file } = fileFor(draft);
             return file.exists ? file.size : null;

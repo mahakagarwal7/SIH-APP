@@ -58,9 +58,11 @@ implemented before 1.4. Each numbered item remains its own tested PR.
   Normalize actual photo bytes to the production JPEG boundary, retain up to
   three private photos with captions, and recover Android picker results after
   activity recreation. No upload or submit.
-- **1.5** Offline outbox + "My Reports" screen: Saved on device / Awaiting
-  review / Accepted states; sync-on-reconnect via `reserve_field_capture` →
-  `finalize_field_media` → `submit_field_capture`.
+- **1.5** Offline outbox + "My Reports" screen: frozen manifests, reserved-path
+  uploads, restart/reconnect retry and Saved on device / Needs confirmation /
+  Awaiting review / Accepted states. This slice calls `reserve_field_capture`
+  then `finalize_field_media`; it deliberately does not call
+  `submit_field_capture` before step 1.4 confirmation.
 - **1.4** Confirmation ("is this correct?") screen after uploaded media is
   ready: original transcript, editable wording, work date, authorized activity
   selection and explicit unfinished-work wording. Voice requires confirmation
