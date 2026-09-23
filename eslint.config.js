@@ -3,7 +3,15 @@ const expoConfig = require('eslint-config-expo/flat');
 
 module.exports = defineConfig([
   expoConfig,
-  { ignores: ['dist/**', 'coverage/**', '.expo/**'] },
+  {
+    ignores: [
+      'dist/**',
+      'coverage/**',
+      '.expo/**',
+      'test-results/**',
+      '.playwright-mcp/**',
+    ],
+  },
   {
     rules: {
       'no-console': 'error',

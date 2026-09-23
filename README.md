@@ -2,7 +2,7 @@
 
 The Expo companion to [IntelliGrid](https://intelligrid-sih122.vercel.app), using the existing production Supabase backend. The owner confirmed **Nirmaan** as the mobile name on 23 September 2026.
 
-Roadmap **0.1** provides the application foundation and a minimal launch screen. Authentication, project data, reporting, offline delivery and manager features remain later slices.
+Roadmap **0.2** adds email/password sign-in, native secure session storage, session restore and sign-out. Project data, reporting, offline delivery and manager features remain later slices.
 
 ## Run locally
 
@@ -13,7 +13,7 @@ npm ci
 npm start
 ```
 
-Use `npm run android` with a compatible Android emulator or device, or `npm run web` for a browser preview. This slice has no backend calls and starts without environment values. Browser and Metro export checks do not prove installation or operation on a physical device.
+Use `npm run android` with a compatible Android emulator or device, or `npm run web` for a browser preview. Configure the public connection below to sign in with an existing account. Without both values, the app displays an incomplete-setup message. Browser and Metro export checks do not prove installation or operation on a physical device.
 
 ## Checks
 
@@ -31,7 +31,18 @@ CI runs these checks on pull requests and pushes to main. The lockfile records d
 
 Production is the selected environment. Public client settings must be supplied locally; never put private secrets into source or the app bundle.
 
-The separate web checkout uses `apps/web/.env.local` with exactly:
+For this mobile checkout, copy `.env.example` to the ignored root `.env.local` and supply exactly:
+
+```dotenv
+NEXT_PUBLIC_SUPABASE_URL=<production URL supplied locally>
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable or anon key supplied locally>
+```
+
+The local file already has the owner-supplied URL. Fill its blank key from Supabase Dashboard > Project Settings > API, then restart with `npx expo start --clear` so Metro does not reuse old configuration. For exports after changing these values, use `npm run bundle:check -- --clear`. `app.config.ts` passes only these public values to `expo-constants`; it rejects secret/service-role keys. These public values are included in the app bundle. Never add a password, service-role key, signing key or other private secret.
+
+Native sessions use `expo-secure-store`. The browser preview keeps sessions in memory only, so reloading the page requires sign-in again. The app restores valid sessions, refreshes while active and connected, and shows sign-in when a session expires. Offline sign-in is unavailable; an unexpired saved session can still be restored. Signing out affects the current device's session.
+
+The separate web checkout uses `apps/web/.env.local` with:
 
 ```dotenv
 APP_ORIGIN=http://localhost:3000
@@ -39,12 +50,13 @@ NEXT_PUBLIC_SUPABASE_URL=<supplied locally>
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable or anon key supplied locally>
 ```
 
-The web checkout is `C:\Users\Mahak\SIH-122`. The local file has the owner-supplied URL; its publishable key still needs to be filled locally from the Supabase dashboard. The mobile `.env.example` reserves those same public variable names for step 0.2. Runtime configuration through Expo Constants and authentication are not implemented in 0.1. Do not add a service-role key, password or signing key.
+The web checkout is `C:\Users\Mahak\SIH-122`. Its local file also has the owner-supplied URL and a blank key. `APP_ORIGIN` belongs to web development and is not a mobile setting. Live production login and physical-device session persistence still need verification after local configuration.
 
 ## Project layout
 
-- `app/`: Expo Router entry and launch route.
-- `src/components/`: launch screen and its test.
+- `app/`: Expo Router entry and auth route.
+- `src/features/auth/`: sign-in/account screen, session controller and hook.
+- `src/lib/`: Supabase client, secure storage and request timeout.
 - `docs/`: decisions, workflow and PR drafts.
 - `.github/workflows/ci.yml`: required checks.
 
@@ -56,4 +68,4 @@ Read [AGENTS.md](AGENTS.md), [CODEX.md](CODEX.md), [RULES.md](RULES.md), [archit
 
 The [project review](docs/PROJECT_REVIEW.md) records verified backend contracts and unresolved decisions. The [development workflow](docs/DEVELOPMENT_WORKFLOW.md) supersedes the historical prohibitions on remote actions: signed commits, pushes and feature PRs are authorized; merges remain with the owner. Work stops after each requested slice.
 
-[Foundation PR draft](docs/pr-drafts/0.1-project-foundation.md) records validation and manual checks. The supplied PDFs remain local design references: the Nirmaan book governs appearance; the SitePulse reference contributes interaction ideas only.
+[Auth PR draft](docs/pr-drafts/0.2-auth-session.md) records validation and manual checks; [the foundation draft](docs/pr-drafts/0.1-project-foundation.md) records the initial scaffold. The supplied PDFs remain local design references: the Nirmaan book governs appearance; the SitePulse reference contributes interaction ideas only.

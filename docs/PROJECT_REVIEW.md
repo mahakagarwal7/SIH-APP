@@ -1,6 +1,6 @@
 # Mobile project discovery
 
-Reviewed 23 September 2026. Discovery and roadmap 0.1 local implementation are complete. The owner confirmed the Nirmaan mobile name and the production backend. The foundation passes typecheck, lint, formatting, its launch test and Android/iOS/web export; browser preview checks also passed. See [the foundation draft](pr-drafts/0.1-project-foundation.md) for evidence and limitations. Other product and architecture decisions remain open. No APK has been built.
+Reviewed 23 September 2026. Discovery and roadmap 0.1 are complete; roadmap 0.2 adds email/password authentication, SecureStore persistence, session restore and sign-out. The owner confirmed the Nirmaan mobile name and production backend. See [the foundation draft](pr-drafts/0.1-project-foundation.md) and [auth draft](pr-drafts/0.2-auth-session.md) for separate validation evidence and limitations. Production login and physical-device persistence remain unverified. Other product and architecture decisions remain open. No APK has been built.
 
 ## Sources inspected
 
@@ -136,7 +136,9 @@ The web status helper includes Partly accepted, Answer needed, Supervisor check,
 
 On 23 September 2026, the owner selected the existing production backend: web app https://intelligrid-sih122.vercel.app and Supabase project `dgxflhdcthyborxjyfvv`. D2 is resolved; this choice does not resolve the separate native transport decision (D5).
 
-For local web development, use the web checkout's ignored `apps/web/.env.local`, with `APP_ORIGIN=http://localhost:3000` and the exact variables `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. The Supabase URL is supplied locally in that file. The owner will supply the publishable/anon key locally from Supabase Dashboard > Project Settings > API; the provided message contained a placeholder, not a usable key. Do not put passwords, service-role keys, signing keys or other private secrets in this file or the mobile bundle. Mobile configuration wiring remains part of its approved implementation slice.
+For local web development, use the web checkout's ignored `apps/web/.env.local`, with `APP_ORIGIN=http://localhost:3000` and the exact variables `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. The Supabase URL is supplied locally in that file. The owner will supply the publishable/anon key locally from Supabase Dashboard > Project Settings > API; the provided message contained a placeholder, not a usable key. Do not put passwords, service-role keys, signing keys or other private secrets in this file or the mobile bundle.
+
+Roadmap 0.2 reads the same two public variables from the mobile root `.env.local`, through `app.config.ts` and Expo Constants. That ignored local file contains the production URL with a blank key. Native tokens use SecureStore; the browser preview uses memory only. Direct Supabase password authentication follows the already specified auth flow. This does not resolve D5 for business reads/RPCs or web API transport.
 
 The local web checkout is `C:\Users\Mahak\SIH-122`; SIH-APP has no web application directory. Backend reachability, signed-in access, deployed migrations, worker processing and physical-phone connectivity have not been verified. A phone cannot reach the laptop backend through its own localhost.
 
