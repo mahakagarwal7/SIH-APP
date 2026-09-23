@@ -47,6 +47,9 @@ Suggested prompt shape for each step:
   Use the web's default active project until the full switcher in 2.1. See
   `docs/MY_WORK_CONTRACT.md` for assignment/version rules and state handling.
 - **1.2** Voice report capture screen (record → local save only, no submit).
+  Android PCM16 WAV capture with SQLite/app-private drafts; approved retention
+  after logout and same-account access. See `docs/VOICE_CAPTURE.md` for native
+  evaluation evidence, platform limits and physical-device checks.
 - **1.3** Text and photo report capture screens, same local-save pattern.
 - **1.4** Confirmation ("is this correct?") screen: transcript/caption, work
   date, suggested activity match, explicit partial-work flag.

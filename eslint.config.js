@@ -9,6 +9,8 @@ module.exports = defineConfig([
       'coverage/**',
       '.expo/**',
       'test-results/**',
+      'android/**',
+      'ios/**',
       '.playwright-mcp/**',
     ],
   },

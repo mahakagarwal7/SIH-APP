@@ -102,7 +102,9 @@ The actual media contract allows one mono PCM16 WAV recording of 0.2–25 second
 
 The repo's `expo-av` recommendation is outdated: it was removed in SDK 55. The replacement recorder's documented Android encoders/containers do not include PCM WAV. Renaming an M4A file to WAV does not solve this. See [Expo's SDK 55 migration notes](https://expo.dev/blog/upgrading-to-sdk-55) and [Android recording options](https://docs.expo.dev/versions/latest/sdk/audio/).
 
-Options requiring the owner's choice:
+The owner approved option 1 on 23 September 2026. SDK 57 also exposes a raw PCM microphone stream, distinct from its compressed-file recorder; that SDK-matched path is under evaluation. See `VOICE_CAPTURE.md` for the exact dependency and recorded-byte evidence.
+
+Options reviewed:
 
 1. Evaluate a native WAV recorder in an Expo development build, retaining the backend.
 2. Coordinate an explicit backend contract/decoder extension for Android audio.
@@ -128,7 +130,7 @@ flowchart TD
 
 Offline voice cannot show a server transcript that has not been produced. Recommend automatic upload after reconnect, followed by explicit transcript confirmation before submission. Already-confirmed text/photo submissions can resume their stable queued payload. Confirm this interaction before implementing it.
 
-Recommendation for review: SQLite stores the outbox state and immutable retry identifiers; app-private durable files store media. Partition drafts and query caches by user/project. Do not delete unsent work on logout without a clear owner-approved policy. Clear local evidence only after a durable, recoverable server handoff. Persist before displaying “Saved on device”; a failed disk write must remain visible.
+Owner-approved storage for step 1.2: SQLite metadata and app-private durable audio files, partitioned by user/project. Retain unsent drafts after logout, show them only to the same signed-in account, and delete only through explicit discard. Later outbox delivery remains a separate slice. Clear local evidence only after a durable, recoverable server handoff. Persist before displaying “Saved on device”; a failed disk write must remain visible.
 
 Foreground reconnect/resume and an explicit Sync now control can be verified independently of OS background execution. Do not promise guaranteed background sync while the app is closed.
 
@@ -148,20 +150,20 @@ Realtime is enabled in the local Supabase configuration, but the reviewed migrat
 
 ## Decision register
 
-| ID  | Decision                            | Proposed direction                                                                 | Status                                                                        |
-| --- | ----------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| D1  | APK brand                           | Nirmaan                                                                            | Confirmed by owner, 23 September 2026                                         |
-| D2  | Target backend                      | Existing production web app and Supabase project; local `.env.local` configuration | Confirmed by owner, 23 September 2026; publishable key pending                |
-| D3  | Field and Manager navigation        | Approved tabs and shared header in `NAVIGATION_PROPOSAL.md`                        | Confirmed by owner, 23 September 2026                                         |
-| D4  | Languages and Alerts                | English + Hindi; v1 Alerts/push scope still open                                   | Alerts deferred for 0.3 by owner; remaining scope unanswered                  |
-| D5  | Native transport                    | Existing authenticated Supabase reads/RPCs under RLS for step 1.1                  | Confirmed by owner, 23 September 2026; later transport scope remains separate |
-| D6  | Android audio                       | Evaluate native WAV with a development build                                       | Asked                                                                         |
-| D7  | Offline voice confirmation          | Auto-upload, then explicit transcript confirmation                                 | Asked                                                                         |
-| D8  | Iteration cadence                   | Small tested slices; major-feature PRs; owner reviews merges                       | Asked                                                                         |
-| D9  | Commit signing                      | Owner's configured GPG key ending in `831C481EF8506935`                            | Local key and signing configuration verified, 23 September 2026               |
-| D10 | Outbox storage and logout retention | SQLite + durable media; explicit unsent-work policy                                | Review before outbox slice                                                    |
-| D11 | Status refresh                      | Foreground polling until Realtime is verified                                      | Review before status slice                                                    |
-| D12 | Android identity/build ownership    | Package ID, Expo owner/build path and APK signing custody                          | Review before first distributable build                                       |
+| ID  | Decision                           | Proposed direction                                                                                           | Status                                                                                                           |
+| --- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| D1  | APK brand                          | Nirmaan                                                                                                      | Confirmed by owner, 23 September 2026                                                                            |
+| D2  | Target backend                     | Existing production web app and Supabase project; local `.env.local` configuration                           | Confirmed by owner, 23 September 2026; publishable key pending                                                   |
+| D3  | Field and Manager navigation       | Approved tabs and shared header in `NAVIGATION_PROPOSAL.md`                                                  | Confirmed by owner, 23 September 2026                                                                            |
+| D4  | Languages and Alerts               | English + Hindi; v1 Alerts/push scope still open                                                             | Alerts deferred for 0.3 by owner; remaining scope unanswered                                                     |
+| D5  | Native transport                   | Existing authenticated Supabase reads/RPCs under RLS for step 1.1                                            | Confirmed by owner, 23 September 2026; later transport scope remains separate                                    |
+| D6  | Android audio                      | Evaluate native PCM16 WAV in a local Android development build                                               | Approved 23 September 2026; emulator byte gate passed 24 September; physical-device checks in `VOICE_CAPTURE.md` |
+| D7  | Offline voice confirmation         | Auto-upload, then explicit transcript confirmation                                                           | Asked                                                                                                            |
+| D8  | Iteration cadence                  | Small tested slices; major-feature PRs; owner reviews merges                                                 | Asked                                                                                                            |
+| D9  | Commit signing                     | Owner's configured GPG key ending in `831C481EF8506935`                                                      | Local key and signing configuration verified, 23 September 2026                                                  |
+| D10 | Draft storage and logout retention | SQLite metadata + app-private audio; keep unsent drafts on logout, same-account visibility, explicit discard | Confirmed by owner, 23 September 2026                                                                            |
+| D11 | Status refresh                     | Foreground polling until Realtime is verified                                                                | Review before status slice                                                                                       |
+| D12 | Android identity/build ownership   | `com.mahakagarwal.nirmaan`; build locally on this PC with a development/debug key                            | Confirmed by owner, 23 September 2026; release signing and store publishing remain separate                      |
 
 Unanswered questions are not approvals. Preparatory documentation can proceed; dependent implementation waits.
 
