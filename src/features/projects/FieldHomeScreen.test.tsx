@@ -102,6 +102,38 @@ it('shows current assignments and recent report context for the selected project
   expect(screen.getByText('Awaiting review')).toBeVisible();
 });
 
+it('warns when recent report data may be stale even if cached items exist', async () => {
+  jest.mocked(useProjectRecentReports).mockReturnValue({
+    items: [
+      {
+        captureId: 'capture',
+        reportId: 'report',
+        projectId: 'project',
+        projectName: 'Site project',
+        createdAt: '2026-09-24T01:00:00Z',
+        kind: 'remote',
+        summary: 'Installed two spools',
+        mediaCount: 0,
+        status: 'Awaiting review',
+        detail: 'Submitted',
+        canSync: false,
+        canConfirm: false,
+      },
+    ],
+    error: new Error('Network unavailable'),
+    isPending: false,
+    isFetching: false,
+    refetch: jest.fn(),
+  });
+
+  await render(<FieldHomeScreen />);
+
+  expect(
+    screen.getByText(/recent report data may be incomplete or stale/i),
+  ).toBeVisible();
+  expect(screen.getByText('Installed two spools')).toBeVisible();
+});
+
 it('shows empty and offline states without inventing assignment counts', async () => {
   jest.mocked(useMyWork).mockReturnValue({
     project: { data: context, error: null, isPending: false },

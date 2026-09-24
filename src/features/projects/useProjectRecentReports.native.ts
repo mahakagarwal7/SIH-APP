@@ -58,7 +58,7 @@ export function useProjectRecentReports(projectId: string | undefined) {
   return {
     items,
     error: local.error ?? remote.error,
-    isPending: local.isPending && remote.isPending,
+    isPending: local.isPending || (!auth.offline && remote.isPending),
     isFetching: local.isFetching || remote.isFetching,
     refetch,
   };

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useCallback } from 'react';
 
 import { useAuth } from '@/features/auth/AuthProvider';
 import {
@@ -10,7 +11,13 @@ import {
 export function useProjectRecentReports(projectId: string | undefined) {
   const auth = useAuth();
   const userId = auth.status === 'signedIn' ? auth.session?.user.id : undefined;
-  const remote = useQuery({
+  const {
+    data,
+    error,
+    isPending,
+    isFetching,
+    refetch: refetchRemote,
+  } = useQuery({
     queryKey: ['project-recent-reports', userId, projectId],
     enabled: !!userId && !!projectId && !auth.offline,
     queryFn: ({ signal }) =>
@@ -21,12 +28,15 @@ export function useProjectRecentReports(projectId: string | undefined) {
         signal,
       ),
   });
+  const refetch = useCallback(
+    () => (userId && projectId ? refetchRemote() : Promise.resolve(undefined)),
+    [projectId, refetchRemote, userId],
+  );
   return {
-    items: mergeMyReports([], [], [], remote.data ?? []).slice(0, 3),
-    error: remote.error,
-    isPending: remote.isPending && !auth.offline,
-    isFetching: remote.isFetching,
-    refetch: () =>
-      userId && projectId ? remote.refetch() : Promise.resolve(undefined),
+    items: mergeMyReports([], [], [], data ?? []).slice(0, 3),
+    error,
+    isPending: isPending && !auth.offline,
+    isFetching,
+    refetch,
   };
 }

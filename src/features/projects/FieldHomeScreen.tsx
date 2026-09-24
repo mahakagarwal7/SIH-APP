@@ -129,11 +129,14 @@ export function FieldHomeScreen() {
             </Text>
             <NavLink href="/field/reports" label="View all" />
           </View>
-          {recent.error && !recent.items.length ? (
+          {recent.error ? (
             <Text accessibilityRole="alert" style={styles.error}>
-              Report status could not be refreshed.
+              Recent report data may be incomplete or stale because refresh
+              failed.
             </Text>
-          ) : recent.isPending && !recent.items.length ? (
+          ) : null}
+          {recent.error && !recent.items.length ? null : recent.isPending &&
+            !recent.items.length ? (
             <Text style={styles.empty}>Loading recent reports…</Text>
           ) : recent.items.length === 0 ? (
             <Text style={styles.empty}>No reports for this project yet.</Text>
