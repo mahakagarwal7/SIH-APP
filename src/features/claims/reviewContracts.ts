@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { isSelectableWorkDate } from '@/components/workDate';
+
 const id = z.uuid();
 const date = z.iso.date();
 
@@ -306,7 +308,7 @@ export function stableCommand<T extends Record<string, unknown>>(
 }
 
 export function validWorkDate(value: string) {
-  return date.safeParse(value).success;
+  return isSelectableWorkDate(value);
 }
 
 const positiveReasons: readonly [string, string][] = [

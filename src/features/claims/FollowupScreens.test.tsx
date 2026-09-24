@@ -251,6 +251,39 @@ it('records one explicit location answer without approving the claim', async () 
   expect(screen.getByRole('button', { name: 'Send answer' })).toBeDisabled();
 });
 
+it('uses a required calendar control for a work-date clarification', async () => {
+  jest.mocked(useReportFollowups).mockReturnValue({
+    report: {
+      data: {
+        ...reportData,
+        questions: [
+          {
+            ...question,
+            reason_code: 'date',
+            question_text: 'When was this work completed?',
+            options: [],
+          },
+        ],
+      },
+      error: null,
+      isPending: false,
+    },
+    offline: false,
+    refresh,
+    finish,
+  } as never);
+
+  await render(<ReportFollowupScreen reportId={reportId} />);
+
+  expect(screen.getByText('Work date · Required')).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Choose work date' }),
+  ).toBeEnabled();
+  expect(screen.getByText('Not recorded')).toBeVisible();
+  expect(screen.queryByPlaceholderText('YYYY-MM-DD')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Send answer' })).toBeDisabled();
+});
+
 it('freezes clarification inputs while the captured answer is sending', async () => {
   const pending = deferred<{
     reportId: string;

@@ -3,6 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { WorkDatePicker } from '@/components/WorkDatePicker';
 import {
   LocalizedText as Text,
   LocalizedPressable as Pressable,
@@ -464,22 +465,15 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
             style={styles.input}
             value={reason}
           />
-          <TextInput
-            accessibilityLabel="Corrected work date"
-            autoCapitalize="none"
-            editable={!busy}
-            maxLength={10}
-            onChangeText={(value) => {
-              setCorrectedDate(value);
+          <WorkDatePicker
+            disabled={busy}
+            label="Corrected work date"
+            onChange={(value) => {
+              setCorrectedDate(value ?? '');
               clearPreview();
             }}
-            placeholder={
-              needsDate
-                ? 'Required work date · YYYY-MM-DD'
-                : 'Optional corrected date · YYYY-MM-DD'
-            }
-            style={styles.input}
-            value={correctedDate}
+            required={needsDate}
+            value={correctedDate || null}
           />
           {['ITEM_PROGRESS', 'PERCENT_PROGRESS'].includes(
             data.claim.facts.kind,

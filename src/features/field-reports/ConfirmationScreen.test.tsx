@@ -195,7 +195,9 @@ it('freezes editing during a delayed confirmation and shows only the persisted w
   expect(screen.getByLabelText('Confirmed report wording').props.editable).toBe(
     false,
   );
-  expect(screen.getByLabelText('Work date').props.editable).toBe(false);
+  expect(
+    screen.getByRole('button', { name: 'Choose work date' }),
+  ).toBeDisabled();
   await act(async () => finish());
   expect(screen.getByLabelText('Confirmed report wording').props.value).toBe(
     stored.confirmedPayload?.text,
@@ -249,8 +251,10 @@ it('shows the saved activity label when restored offline', async () => {
   } as AuthViewState);
   await render(<App />);
   expect(await screen.findByText('A-20 · Install supports')).toBeVisible();
-  expect(screen.getByLabelText('Work date').props.value).toBe('2026-09-24');
-  expect(screen.getByLabelText('Work date').props.editable).toBe(false);
+  expect(screen.getByText('24 Sept 2026')).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Choose work date' }),
+  ).toBeDisabled();
 });
 
 it('shows access errors and permits correction after a definitive activity rejection', async () => {

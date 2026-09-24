@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { WorkDatePicker } from '@/components/WorkDatePicker';
 import { useAuth } from '@/features/auth/AuthProvider';
 import {
   LocalizedText as Text,
@@ -298,16 +299,12 @@ function AccountConfirmation({
             complete; 6 remain unfinished.”
           </Text>
 
-          <Text style={styles.label}>Work date</Text>
-          <TextInput
-            accessibilityLabel="Work date"
-            editable={!locked && !busy}
-            onChangeText={setEditedWorkDate}
-            placeholder="YYYY-MM-DD (optional)"
-            style={[styles.input, locked && styles.locked]}
-            value={workDate}
+          <WorkDatePicker
+            disabled={locked || busy}
+            label="Work date"
+            onChange={(value) => setEditedWorkDate(value ?? '')}
+            value={workDate || null}
           />
-          {!workDate && <Text style={styles.help}>Not recorded</Text>}
 
           <Text style={styles.label}>Activity</Text>
           <Pressable

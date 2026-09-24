@@ -278,17 +278,12 @@ it('records rejection with a reason without inventing an activity selection', as
   expect(finish).toHaveBeenCalledWith(true);
 });
 
-it('allows rejection when an optional corrected date is invalid', async () => {
+it('does not invent an optional corrected date for rejection', async () => {
   await render(<DecisionScreen claimId={claimId} />);
   await fireEvent.changeText(
     screen.getByLabelText('Decision reason'),
     'Evidence is not credible.',
   );
-  await fireEvent.changeText(
-    screen.getByLabelText('Corrected work date'),
-    '2026-02-30',
-  );
-
   const rejectButton = screen.getByRole('button', { name: 'Reject claim' });
   expect(rejectButton).toBeEnabled();
   await fireEvent.press(rejectButton);
@@ -344,9 +339,9 @@ it('locks preview inputs until the current preview response arrives', async () =
   await fireEvent.press(screen.getByRole('button', { name: 'Preview change' }));
 
   expect(screen.getByLabelText('Decision reason').props.editable).toBe(false);
-  expect(screen.getByLabelText('Corrected work date').props.editable).toBe(
-    false,
-  );
+  expect(
+    screen.getByRole('button', { name: 'Choose corrected work date' }),
+  ).toBeDisabled();
   expect(screen.getByRole('radio', { name: /PIP-1201/ })).toBeDisabled();
 
   resolvePreview(preview);
