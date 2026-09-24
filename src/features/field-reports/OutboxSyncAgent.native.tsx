@@ -32,16 +32,17 @@ export function OutboxSyncAgent() {
         if (!active) return;
         client.setQueryData(['field-outbox', userId], rows);
         void client.invalidateQueries({ queryKey: ['my-reports', userId] });
-        again = rows.some(
-          (row) =>
-            [
-              'queued',
-              'reserving',
-              'uploading',
-              'finalizing',
-              'processing',
-            ].includes(row.state) ||
-            (row.state === 'failed' && row.retryable),
+        again = rows.some((row) =>
+          row.submissionState === 'submitted'
+            ? !row.evidenceReleased
+            : [
+                'queued',
+                'reserving',
+                'uploading',
+                'finalizing',
+                'processing',
+              ].includes(row.state) ||
+              (row.state === 'failed' && row.retryable),
         );
       } catch {
         again = true;

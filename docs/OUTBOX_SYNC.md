@@ -1,6 +1,6 @@
 # Outbox and My reports contract
 
-Roadmap 1.5 connects durable local capture to the existing production media contract. It does not submit a report for review. The next slice owns transcript/text confirmation and the only mobile call to `submit_field_capture`.
+Roadmap 1.5 connects durable local capture to the existing production media contract. Roadmap 1.4 adds [explicit confirmation and submission](CONFIRMATION_SUBMISSION.md), including offline text-only confirmation before reservation. Uploading evidence alone never submits a report for review.
 
 ## Frozen local identity
 
@@ -34,13 +34,14 @@ My reports merges account-scoped local drafts, outbox rows and the signed-in aut
 - **Saved on device**: durable locally, not yet reserved.
 - **Syncing / Processing evidence**: reserved upload or server media work remains.
 - **Needs confirmation**: server media is ready, but nothing has been submitted.
+- **Sending for review / Check report / Sync paused / Sync needs attention**: a confirmed payload is waiting for a receipt, requires correction after a definite activity rejection, or needs attention to the displayed error. Pending confirmations remain accessible.
 - **Awaiting review / Accepted / Partly accepted**: derived from an existing submitted report and its readable claims.
 - **Answer needed / Supervisor check / Needs planner attention / Rejected / Kept as unplanned / Withdrawn / Observed — schedule unchanged**: preserved rather than collapsed into success. Outstanding clarification, verification and dispute take precedence over partial acceptance, matching the web report summary.
 
 The server list currently reads the latest 100 authored reports. For those reports it pages through all readable claims using stable ID order and an exact count, advancing by the number actually returned so smaller server page caps are supported. Duplicate IDs, changing totals, incomplete pages or more than 10,000 claims fail visibly instead of producing a misleading acceptance summary. Remote-only attachment counts remain unknown and are labeled **Attachment count unavailable**.
 
-The last loaded server data can remain visible offline, clearly labeled stale by the offline banner. Remembered capture context is used only offline; an online access/load error is shown even when a previous project remains cached. Local drafts survive logout but stay hidden from other accounts. Capture screens and native stores block local deletion after an item enters the outbox so retry/confirmation cannot lose its evidence.
+The last loaded server data can remain visible offline, clearly labeled stale by the offline banner. Remembered capture context is used only offline; an online access/load error is shown even when a previous project remains cached. Local drafts survive logout but stay hidden from other accounts. Capture screens and native stores block local deletion after an item enters the outbox until a durable submission receipt permits evidence cleanup. Failed cleanup retries while the foreground app is active without submitting again.
 
 ## Evidence limits
 
-Unit/integration tests cover interruption, restart, duplicate upload, manifest mutation, account switches between network phases, deletion/preparation races, coordinator wakeups, revoked access, transient/terminal failures, claim pagination/status precedence, cached project errors and navigation during sync. The final local suite passes 206 tests in 36 suites. Android/iOS/web exports establish bundle compatibility when recorded in the PR validation notes. These checks do not prove the local publishable key, production membership, deployed worker, transcription quality, physical connectivity or RLS behavior on a live account.
+Unit/integration tests cover interruption, restart, duplicate upload, manifest mutation, account switches between network phases, deletion/preparation races, coordinator wakeups, revoked access, transient/terminal failures, claim pagination/status precedence, cached project errors and navigation during sync. PR #7 passed 206 tests in 36 suites; the integrated confirmation results are recorded in the PR #8 draft. Android/iOS/web exports establish bundle compatibility when recorded in the PR validation notes. These checks do not prove the local publishable key, production membership, deployed worker, transcription quality, physical connectivity or RLS behavior on a live account.

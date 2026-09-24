@@ -1,6 +1,6 @@
 # Mobile project discovery
 
-Reviewed 23 September and updated 24 September 2026. PRs 1–6 are now merged by the owner. PR #7 adds the outbox/My reports slice and integrates current main while retaining those earlier fixes. A development/debug x86_64 APK was built, installed and launched in an emulator during earlier voice evaluation. Native probe recordings passed the production WAV byte validator. That historical artifact requires Metro and does not validate this outbox slice. Production login, physical-phone behavior, upload and worker processing remain unverified here. See [voice evidence](VOICE_CAPTURE.md), [the outbox contract](OUTBOX_SYNC.md), [the approved delivery plan](DELIVERY_PLAN.md) and the individual PR drafts.
+Reviewed 23 September and updated 24 September 2026. PRs 1–7 are now merged by the owner. PR #8 adds confirmation/submission and integrates main `5d23479` while retaining their fixes. A development/debug x86_64 APK was built, installed and launched in an emulator during earlier voice evaluation. Native probe recordings passed the production WAV byte validator. That historical artifact requires Metro and does not validate this confirmation slice. Production login, physical-phone behavior, upload and worker processing remain unverified here. See [voice evidence](VOICE_CAPTURE.md), [the outbox contract](OUTBOX_SYNC.md), [the approved delivery plan](DELIVERY_PLAN.md) and the individual PR drafts.
 
 Roadmap 1.1 adds read-only My work and the default authorized project context after owner approval of the existing authenticated Supabase reads/RPCs for this slice. See [the My work draft](pr-drafts/1.1-my-work.md) for its separate validation and limitations; the full project switcher remains 2.1.
 
@@ -128,7 +128,7 @@ flowchart TD
   H --> I[Accepted / partly accepted / rejected / observed]
 ```
 
-Offline voice cannot show a server transcript that has not been produced. The approved implementation automatically resumes reserved upload after reconnect, then stops at explicit transcript/text confirmation. No outbox path submits a report for review. Roadmap 1.4 will persist and retry the exact confirmed payload before calling `submit_field_capture`.
+Offline voice cannot show a server transcript that has not been produced. The implementation automatically resumes reserved upload after reconnect, then stops at explicit transcript/text confirmation. Roadmap 1.4 now persists and retries the exact confirmed payload before calling `submit_field_capture`; unconfirmed captures still cannot enter review.
 
 Owner-approved storage for step 1.2: SQLite metadata and app-private durable media files, partitioned by user/project. Retain unsent drafts after logout and show them only to the same signed-in account. Roadmap 1.5 freezes capture/media IDs, byte counts, MIME types, captions and SHA-256 before reservation; retries cannot replace that manifest. Once a draft enters the outbox, capture screens retain its local evidence through confirmation. Persist before displaying “Saved on device”; a failed disk write must remain visible.
 

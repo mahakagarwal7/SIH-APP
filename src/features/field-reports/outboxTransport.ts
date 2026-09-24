@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { withTimeout } from '@/lib/request';
 import { getSupabase, getSupabaseConnection } from '@/lib/supabase';
 
-import { OutboxSyncError } from './outbox';
+import { OutboxSyncError, SubmissionRejectedError } from './outbox';
 
 import type {
   CaptureFile,
@@ -134,7 +134,7 @@ export class SupabaseOutboxTransport implements OutboxTransport {
   async inspect(reportId: string): Promise<RemoteMediaState> {
     const attachments = await this.client
       .from('attachments')
-      .select('id,state')
+      .select('id,state,media_kind')
       .eq('report_id', reportId);
     if (attachments.error)
       throw transportError(
@@ -142,7 +142,7 @@ export class SupabaseOutboxTransport implements OutboxTransport {
         'Could not check media processing.',
       );
     const rows = attachments.data ?? [];
-    if (!rows.length) return { status: 'ready' };
+    if (!rows.length) return { status: 'ready', originalTranscript: null };
     const ids = rows.map((row) => row.id);
     const [jobs, results] = await Promise.all([
       this.client
@@ -151,7 +151,7 @@ export class SupabaseOutboxTransport implements OutboxTransport {
         .in('attachment_id', ids),
       this.client
         .from('media_results')
-        .select('attachment_id')
+        .select('attachment_id,original_transcript')
         .in('attachment_id', ids),
     ]);
     if (jobs.error)
@@ -162,7 +162,16 @@ export class SupabaseOutboxTransport implements OutboxTransport {
       (results.data ?? []).map((row) => row.attachment_id),
     );
     if (rows.every((row) => row.state === 'received' && completed.has(row.id)))
-      return { status: 'ready' };
+      return {
+        status: 'ready',
+        originalTranscript: (() => {
+          const audioId = rows.find((row) => row.media_kind === 'audio')?.id;
+          return (
+            (results.data ?? []).find((row) => row.attachment_id === audioId)
+              ?.original_transcript ?? null
+          );
+        })(),
+      };
     const failed = (jobs.data ?? []).filter((job) => job.status === 'failed');
     if (failed.some((job) => job.attempts >= 3))
       return {
@@ -178,6 +187,30 @@ export class SupabaseOutboxTransport implements OutboxTransport {
           failed[0]?.error_code || 'Media processing needs another attempt.',
       };
     return { status: 'processing' };
+  }
+
+  async submit(reportId: string, payload: import('./outbox').ConfirmedPayload) {
+    const result = await this.client.rpc('submit_field_capture', {
+      p_report: reportId,
+      p_text: payload.text,
+      p_work_date: payload.workDate,
+      p_activity: payload.activityId,
+    });
+    if (result.error) {
+      if (
+        result.error.code === '42501' &&
+        result.error.message === 'Activity access denied'
+      )
+        throw new SubmissionRejectedError();
+      throw transportError(result.error, 'Could not submit this report.');
+    }
+    if (typeof result.data !== 'string')
+      throw new OutboxSyncError(
+        'The server returned an invalid submission receipt.',
+        'server',
+        true,
+      );
+    return result.data;
   }
 }
 

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -26,6 +26,8 @@ import {
 } from './nativeOutbox';
 import { getReportDraftStore } from './nativeReportDraftStore';
 
+import type { Href } from 'expo-router';
+
 function Action({
   label,
   disabled,
@@ -50,6 +52,7 @@ function Action({
 
 function AccountReports({ userId }: { userId: string }) {
   const auth = useAuth();
+  const router = useRouter();
   const mounted = useRef(true);
   const syncingRef = useRef(false);
   useEffect(() => {
@@ -114,7 +117,7 @@ function AccountReports({ userId }: { userId: string }) {
       await remoteRefetch();
       if (mounted.current)
         setMessage(
-          'Sync pass finished. Processing media will update while the app remains open.',
+          'Sync pass finished. Delivery status will update while the app remains open.',
         );
     } catch {
       if (mounted.current)
@@ -206,6 +209,18 @@ function AccountReports({ userId }: { userId: string }) {
               {new Date(item.createdAt).toLocaleString()}
             </Text>
             <Text style={styles.detail}>{item.detail}</Text>
+            {item.canOpenConfirmation && (
+              <Action
+                label={item.canConfirm ? 'Check and send' : 'View confirmation'}
+                disabled={false}
+                onPress={() =>
+                  router.push({
+                    pathname: '/field-confirm/[captureId]',
+                    params: { captureId: item.captureId },
+                  } as Href)
+                }
+              />
+            )}
             {item.canSync && (
               <Text style={styles.retry}>Use Sync now to retry this item.</Text>
             )}

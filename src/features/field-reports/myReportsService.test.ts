@@ -21,6 +21,13 @@ const outbox: OutboxRecord = {
   manifest: { captureId, language: 'auto', files: [] },
   reportId,
   uploadedFiles: [],
+  originalTranscript: null,
+  confirmedPayload: null,
+  confirmedActivityLabel: null,
+  submissionRejected: false,
+  submissionState: 'unconfirmed',
+  submittedAt: null,
+  evidenceReleased: false,
   state: 'needs_confirmation',
   attemptCount: 1,
   lastErrorKind: null,
@@ -48,6 +55,86 @@ it('deduplicates local/outbox/server identity and prefers accepted server status
     reportId,
     status: 'Accepted',
     summary: 'Installed two supports',
+    canSync: false,
+    canConfirm: false,
+  });
+});
+
+it('opens confirmation only for a ready, still-unsubmitted outbox record', () => {
+  const [item] = mergeMyReports([], [], [outbox], []);
+  expect(item).toMatchObject({
+    status: 'Needs confirmation',
+    canConfirm: true,
+    canSync: false,
+  });
+});
+
+it('opens an offline text draft for confirmation before server reservation', () => {
+  expect(
+    mergeMyReports(
+      [],
+      [],
+      [{ ...outbox, reportId: null, state: 'queued' }],
+      [],
+    )[0],
+  ).toMatchObject({ canConfirm: true, canOpenConfirmation: true });
+});
+
+it.each(['paused', 'failed'] as const)(
+  'shows a pending submission %s error and keeps its detail accessible',
+  (state) => {
+    expect(
+      mergeMyReports(
+        [],
+        [],
+        [
+          {
+            ...outbox,
+            submissionState: 'pending',
+            confirmedPayload: {
+              text: 'Checked wording',
+              workDate: null,
+              activityId: null,
+            },
+            state,
+            lastError: 'Project access changed',
+          },
+        ],
+        [],
+      )[0],
+    ).toMatchObject({
+      status: state === 'paused' ? 'Sync paused' : 'Sync needs attention',
+      detail: 'Project access changed',
+      canConfirm: false,
+      canOpenConfirmation: true,
+    });
+  },
+);
+
+it('offers correction instead of blind retry after definite rejection', () => {
+  expect(
+    mergeMyReports(
+      [],
+      [],
+      [
+        {
+          ...outbox,
+          submissionState: 'pending',
+          confirmedPayload: {
+            text: 'Checked wording',
+            workDate: null,
+            activityId: null,
+          },
+          state: 'paused',
+          submissionRejected: true,
+        },
+      ],
+      [],
+    )[0],
+  ).toMatchObject({
+    status: 'Check report',
+    canConfirm: true,
+    canOpenConfirmation: true,
     canSync: false,
   });
 });

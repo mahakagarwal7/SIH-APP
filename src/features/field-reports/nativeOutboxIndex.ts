@@ -20,7 +20,16 @@ export async function assertLocalDraftCanBeDiscarded(
   userId: string,
   captureId: string,
 ) {
-  if (await (await getNativeOutboxIndex()).get(userId, captureId))
+  const record = await (await getNativeOutboxIndex()).get(userId, captureId);
+  if (
+    record &&
+    !(
+      record.submissionState === 'submitted' &&
+      record.submittedAt &&
+      record.confirmedPayload &&
+      record.reportId
+    )
+  )
     throw new Error(
       'This report has entered the outbox. Keep its device copy until confirmation is complete.',
     );

@@ -1,3 +1,4 @@
+import { SubmissionRejectedError } from './outbox';
 import { OutboxService } from './outboxService';
 import {
   createAccountOutboxTransport,
@@ -38,6 +39,13 @@ function record(): OutboxRecord {
     },
     reportId: null,
     uploadedFiles: [],
+    originalTranscript: null,
+    confirmedPayload: null,
+    confirmedActivityLabel: null,
+    submissionRejected: false,
+    submissionState: 'unconfirmed',
+    submittedAt: null,
+    evidenceReleased: false,
     state: 'queued',
     attemptCount: 0,
     lastErrorKind: null,
@@ -83,7 +91,10 @@ it('requires current membership and distinguishes ready, retryable and terminal 
     ['project_members', { data: { project_id: 'project' }, error: null }],
     [
       'attachments',
-      { data: [{ id: 'attachment', state: 'reserved' }], error: null },
+      {
+        data: [{ id: 'attachment', state: 'reserved', media_kind: 'audio' }],
+        error: null,
+      },
     ],
     [
       'media_jobs',
@@ -126,17 +137,69 @@ it('requires current membership and distinguishes ready, retryable and terminal 
     message: 'media_retry_limit',
   });
   results.set('attachments', {
-    data: [{ id: 'attachment', state: 'received' }],
+    data: [{ id: 'attachment', state: 'received', media_kind: 'audio' }],
     error: null,
   });
   results.set('media_results', {
-    data: [{ attachment_id: 'attachment' }],
+    data: [
+      {
+        attachment_id: 'attachment',
+        original_transcript: 'Two of eight complete.',
+      },
+    ],
     error: null,
   });
   await expect(transport.inspect('report')).resolves.toEqual({
     status: 'ready',
+    originalTranscript: 'Two of eight complete.',
   });
 });
+
+it('submits the locked payload through the existing production RPC', async () => {
+  const rpc = jest.fn(async () => ({ data: 'report-id', error: null }));
+  const transport = new SupabaseOutboxTransport({
+    rpc,
+  } as unknown as SupabaseClient<Database>);
+  await expect(
+    transport.submit('report-id', {
+      text: 'Two of eight complete; six remain unfinished.',
+      workDate: '2026-09-24',
+      activityId: '40000000-0000-4000-8000-000000000004',
+    }),
+  ).resolves.toBe('report-id');
+  expect(rpc).toHaveBeenCalledWith('submit_field_capture', {
+    p_report: 'report-id',
+    p_text: 'Two of eight complete; six remain unfinished.',
+    p_work_date: '2026-09-24',
+    p_activity: '40000000-0000-4000-8000-000000000004',
+  });
+});
+
+it.each([
+  ['42501', 'Activity access denied', true],
+  ['42501', 'Author required', false],
+  ['42501', 'Access changed', false],
+  ['40001', 'CAPTURE_ID_REUSED', false],
+  ['22023', 'Invalid capture submission', false],
+] as const)(
+  'classifies %s/%s as safely editable only for a definite activity rejection',
+  async (code, message, rejected) => {
+    const transport = new SupabaseOutboxTransport({
+      rpc: async () => ({ data: null, error: { code, message } }),
+    } as unknown as SupabaseClient<Database>);
+    try {
+      await transport.submit('report', {
+        text: 'Work completed',
+        workDate: null,
+        activityId: null,
+      });
+      throw new Error('Expected rejection');
+    } catch (error) {
+      expect(error instanceof SubmissionRejectedError).toBe(rejected);
+      expect(error).toHaveProperty('kind');
+    }
+  },
+);
 
 it.each(['membership', 'reservation'] as const)(
   'pauses when accounts change after %s without sending another account token',

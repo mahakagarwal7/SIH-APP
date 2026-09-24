@@ -58,6 +58,7 @@ beforeEach(() => {
     upload: jest.fn(async () => {}),
     finalize: jest.fn(async () => {}),
     inspect: jest.fn(async () => ({ status: 'processing' as const })),
+    submit: jest.fn(async () => '30000000-0000-4000-8000-000000000003'),
   });
 });
 function localStore(
@@ -275,3 +276,34 @@ it('retains an explicit paused-item retry when an automatic pass is already runn
   ]);
   expect(sync).toHaveBeenLastCalledWith('alice', { includePaused: true });
 });
+
+it.each(['voice', 'report'] as const)(
+  'releases %s evidence through the actual store guard only after a durable receipt',
+  async (kind) => {
+    const local = localStore(kind);
+    await prepareLocalOutbox('alice');
+    records.set(captureId, {
+      ...records.get(captureId)!,
+      reportId: '30000000-0000-4000-8000-000000000003',
+      state: 'needs_confirmation',
+      originalTranscript: kind === 'voice' ? 'Two supports installed.' : null,
+    });
+    const outbox = await getNativeOutbox();
+    await outbox.confirm('alice', captureId, {
+      text: 'Two supports installed.',
+      workDate: null,
+      activityId: null,
+    });
+    await expect(local.store.discard('alice', captureId)).rejects.toThrow(
+      'entered the outbox',
+    );
+    expect(local.exists()).toBe(true);
+    const result = await outbox.sync('alice', captureId);
+    expect(result).toMatchObject({
+      submissionState: 'submitted',
+      evidenceReleased: true,
+    });
+    expect(local.exists()).toBe(false);
+    expect(await local.store.list('alice')).toEqual([]);
+  },
+);

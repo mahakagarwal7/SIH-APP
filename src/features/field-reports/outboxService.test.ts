@@ -39,7 +39,9 @@ function setup() {
     upload: jest.fn(async () => {}),
     finalize: jest.fn(async () => {}),
     inspect: jest.fn(async () => inspected),
+    submit: jest.fn(async () => reportId),
   };
+  const releaseEvidence = jest.fn(async () => {});
   let clock = 0;
   const service = new OutboxService(
     index,
@@ -47,6 +49,7 @@ function setup() {
     () => transport,
     async () => digest,
     () => `2026-09-24T00:00:0${clock++}.000Z`,
+    releaseEvidence,
   );
   const input = {
     captureId,
@@ -78,6 +81,7 @@ function setup() {
     index,
     reader,
     transport,
+    releaseEvidence,
     input,
     setInspected(value: RemoteMediaState) {
       inspected = value;
@@ -124,11 +128,85 @@ it('moves processed media to needs confirmation without submitting it', async ()
   const { service, input, setInspected, transport } = setup();
   await service.enqueue(input);
   const processing = await service.sync('user-one', captureId);
-  setInspected({ status: 'ready' });
+  setInspected({
+    status: 'ready',
+    originalTranscript: 'Two of eight complete.',
+  });
   const ready = await service.sync('user-one', processing.captureId);
-  expect(ready.state).toBe('needs_confirmation');
+  expect(ready).toMatchObject({
+    state: 'needs_confirmation',
+    originalTranscript: 'Two of eight complete.',
+    submissionState: 'unconfirmed',
+  });
   expect(transport.upload).toHaveBeenCalledTimes(1);
   expect(transport.finalize).toHaveBeenCalledTimes(1);
+  expect(transport.submit).not.toHaveBeenCalled();
+});
+
+it('locks the confirmed payload before submit and retries a lost response unchanged', async () => {
+  const { service, input, setInspected, transport, releaseEvidence } = setup();
+  await service.enqueue(input);
+  setInspected({
+    status: 'ready',
+    originalTranscript: 'Two of eight complete.',
+  });
+  await service.sync('user-one', captureId);
+  const payload = {
+    text: 'Two of eight complete; six remain unfinished.',
+    workDate: '2026-09-24',
+    activityId: '40000000-0000-4000-8000-000000000004',
+  };
+  const confirmed = await service.confirm('user-one', captureId, payload);
+  expect(confirmed).toMatchObject({
+    confirmedPayload: payload,
+    submissionState: 'pending',
+  });
+  expect(transport.submit).not.toHaveBeenCalled();
+
+  jest
+    .mocked(transport.submit)
+    .mockRejectedValueOnce(
+      new OutboxSyncError('Connection interrupted.', 'network', true),
+    );
+  const uncertain = await service.sync('user-one', captureId);
+  expect(uncertain).toMatchObject({
+    state: 'failed',
+    submissionState: 'pending',
+    confirmedPayload: payload,
+  });
+  await expect(
+    service.confirm('user-one', captureId, { ...payload, text: 'Changed' }),
+  ).rejects.toThrow('locked');
+
+  const submitted = await service.sync('user-one', captureId);
+  expect(transport.submit).toHaveBeenNthCalledWith(2, reportId, payload);
+  expect(submitted).toMatchObject({
+    submissionState: 'submitted',
+    evidenceReleased: true,
+  });
+  expect(releaseEvidence).toHaveBeenCalledTimes(1);
+});
+
+it('retries local evidence cleanup without resubmitting the report', async () => {
+  const { service, input, setInspected, transport, releaseEvidence } = setup();
+  setInspected({ status: 'ready', originalTranscript: 'Progress recorded.' });
+  await service.enqueue(input);
+  await service.sync('user-one', captureId);
+  await service.confirm('user-one', captureId, {
+    text: 'Progress recorded; remaining work is unfinished.',
+    workDate: null,
+    activityId: null,
+  });
+  releaseEvidence.mockRejectedValueOnce(new Error('File is busy.'));
+  const submitted = await service.sync('user-one', captureId);
+  expect(submitted).toMatchObject({
+    submissionState: 'submitted',
+    evidenceReleased: false,
+  });
+  const cleaned = await service.sync('user-one', captureId);
+  expect(cleaned.evidenceReleased).toBe(true);
+  expect(transport.submit).toHaveBeenCalledTimes(1);
+  expect(releaseEvidence).toHaveBeenCalledTimes(2);
 });
 
 it('pauses after revoked access and only retries when explicitly requested', async () => {

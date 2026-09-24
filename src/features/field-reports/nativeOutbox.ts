@@ -47,6 +47,26 @@ export function getNativeOutbox(): Promise<OutboxService> {
           },
           getOutboxTransport,
           sha256Hex,
+          undefined,
+          async (record) => {
+            if (record.kind === 'voice') {
+              const store = await getVoiceDraftStore();
+              if (
+                (await store.list(record.userId)).some(
+                  (row) => row.id === record.captureId,
+                )
+              )
+                await store.discard(record.userId, record.captureId);
+              return;
+            }
+            const store = await getReportDraftStore();
+            if (
+              (await store.list(record.userId)).some(
+                (row) => row.id === record.captureId,
+              )
+            )
+              await store.discard(record.userId, record.captureId);
+          },
         ),
     )
     .catch((error) => {

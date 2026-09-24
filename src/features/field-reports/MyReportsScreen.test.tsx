@@ -40,6 +40,7 @@ jest.mock('./myReportsService', () => {
 });
 jest.mock('expo-router', () => ({
   useFocusEffect: jest.fn(),
+  useRouter: () => ({ push: jest.fn() }),
 }));
 
 const originalAppState = AppState.currentState;
@@ -125,7 +126,7 @@ it('manually retries paused work and reports completion without claiming submiss
   });
   expect(
     await screen.findByText(
-      'Sync pass finished. Processing media will update while the app remains open.',
+      'Sync pass finished. Delivery status will update while the app remains open.',
     ),
   ).toBeVisible();
   expect(screen.queryByText('Sent for review')).toBeNull();

@@ -134,3 +134,31 @@ it('does not start a pass for a new draft while offline', async () => {
   await act(() => notifyOutboxWork('alice'));
   expect(syncNativeOutbox).not.toHaveBeenCalled();
 });
+
+it('retries pending device cleanup after a receipt and stops after the files are released', async () => {
+  jest
+    .mocked(syncNativeOutbox)
+    .mockResolvedValueOnce([
+      {
+        state: 'needs_confirmation',
+        submissionState: 'submitted',
+        evidenceReleased: false,
+      },
+    ] as OutboxRecord[])
+    .mockResolvedValue([
+      {
+        state: 'needs_confirmation',
+        submissionState: 'submitted',
+        evidenceReleased: true,
+      },
+    ] as OutboxRecord[]);
+  await render(<App />);
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(5000);
+  });
+  expect(syncNativeOutbox).toHaveBeenCalledTimes(2);
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(300000);
+  });
+  expect(syncNativeOutbox).toHaveBeenCalledTimes(2);
+});

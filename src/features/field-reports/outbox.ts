@@ -27,6 +27,13 @@ export type CaptureManifest = {
   files: CaptureFile[];
 };
 
+export type ConfirmedPayload = {
+  text: string;
+  workDate: string | null;
+  activityId: string | null;
+};
+export type SubmissionState = 'unconfirmed' | 'pending' | 'submitted';
+
 export type OutboxRecord = {
   captureId: string;
   userId: string;
@@ -38,6 +45,13 @@ export type OutboxRecord = {
   manifest: CaptureManifest;
   reportId: string | null;
   uploadedFiles: string[];
+  originalTranscript: string | null;
+  confirmedPayload: ConfirmedPayload | null;
+  confirmedActivityLabel: string | null;
+  submissionRejected: boolean;
+  submissionState: SubmissionState;
+  submittedAt: string | null;
+  evidenceReleased: boolean;
   state: OutboxState;
   attemptCount: number;
   lastErrorKind: OutboxErrorKind | null;
@@ -58,7 +72,7 @@ export type OutboxFileReader = {
 
 export type RemoteMediaState =
   | { status: 'processing' }
-  | { status: 'ready' }
+  | { status: 'ready'; originalTranscript: string | null }
   | { status: 'retryable'; message: string }
   | { status: 'failed'; message: string };
 
@@ -68,6 +82,7 @@ export type OutboxTransport = {
   upload(path: string, file: CaptureFile, bytes: Uint8Array): Promise<void>;
   finalize(reportId: string): Promise<void>;
   inspect(reportId: string): Promise<RemoteMediaState>;
+  submit(reportId: string, payload: ConfirmedPayload): Promise<string>;
 };
 
 export class OutboxSyncError extends Error {
@@ -77,6 +92,17 @@ export class OutboxSyncError extends Error {
     public readonly retryable: boolean,
   ) {
     super(message);
+  }
+}
+
+// This RPC error is emitted only after checking submitted-report replay.
+export class SubmissionRejectedError extends OutboxSyncError {
+  constructor() {
+    super(
+      'The selected activity is no longer available. Check the report and choose another activity or leave it unselected.',
+      'access',
+      false,
+    );
   }
 }
 
