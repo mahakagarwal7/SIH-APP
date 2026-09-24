@@ -3,14 +3,13 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, View } from 'react-native';
 
+import { useAuth } from '@/features/auth/AuthProvider';
+import { useLocalization } from '@/features/localization/LocalizationProvider';
 import {
   formatDateTime,
   LocalizedText as Text,
   LocalizedPressable as Pressable,
 } from '@/features/localization/LocalizedText';
-import { useLocalization } from '@/features/localization/LocalizationProvider';
-
-import { useAuth } from '@/features/auth/AuthProvider';
 import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
 
 import {

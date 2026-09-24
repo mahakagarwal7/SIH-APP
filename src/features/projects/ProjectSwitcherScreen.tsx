@@ -6,7 +6,6 @@ import {
   LocalizedText as Text,
   LocalizedPressable as Pressable,
 } from '@/features/localization/LocalizedText';
-
 import {
   BackButton,
   ShellPage,

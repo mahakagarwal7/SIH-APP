@@ -1,9 +1,8 @@
 import { usePathname } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
-import { LocalizedText as Text } from '@/features/localization/LocalizedText';
-
 import { useAuth } from '@/features/auth/AuthProvider';
+import { LocalizedText as Text } from '@/features/localization/LocalizedText';
 import { useProjectSelection } from '@/features/projects/useProjectSelection';
 
 import { NavLink, shellStyles } from './shellUi';

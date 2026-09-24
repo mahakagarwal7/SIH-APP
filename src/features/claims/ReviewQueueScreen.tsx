@@ -3,14 +3,13 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Linking, StyleSheet, View } from 'react-native';
 
 import {
-  LocalizedText as Text,
-  LocalizedPressable as Pressable,
-} from '@/features/localization/LocalizedText';
-import {
   getActiveLocaleTag,
   useLocalization,
 } from '@/features/localization/LocalizationProvider';
-
+import {
+  LocalizedText as Text,
+  LocalizedPressable as Pressable,
+} from '@/features/localization/LocalizedText';
 import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
 import { WorkReadError } from '@/features/projects/myWorkService';
 import { getSupabase } from '@/lib/supabase';

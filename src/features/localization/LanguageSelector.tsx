@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { LocalizedText as Text } from './LocalizedText';
 import { useLocalization } from './LocalizationProvider';
+import { LocalizedText as Text } from './LocalizedText';
 import { languageNames } from './translations';
 
 import type { AppLocale } from './translations';

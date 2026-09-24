@@ -3,15 +3,14 @@ import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import {
+  getActiveLocaleTag,
+  useLocalization,
+} from '@/features/localization/LocalizationProvider';
+import {
   LocalizedText as Text,
   LocalizedPressable as Pressable,
   LocalizedTextInput as TextInput,
 } from '@/features/localization/LocalizedText';
-import {
-  getActiveLocaleTag,
-  useLocalization,
-} from '@/features/localization/LocalizationProvider';
-
 import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
 import { WorkReadError } from '@/features/projects/myWorkService';
 

@@ -2,8 +2,8 @@ import Feather from '@expo/vector-icons/Feather';
 import { Tabs } from 'expo-router/js-tabs';
 import { useWindowDimensions } from 'react-native';
 
-import { LocalizedText as Text } from '@/features/localization/LocalizedText';
 import { useLocalization } from '@/features/localization/LocalizationProvider';
+import { LocalizedText as Text } from '@/features/localization/LocalizedText';
 
 import type { ComponentProps } from 'react';
 

@@ -8,13 +8,13 @@ import {
 import { secureStorage } from '@/lib/secureStorage';
 
 import { LanguageSelector } from './LanguageSelector';
-import { LocalizedText as Text } from './LocalizedText';
 import {
   isAppLocale,
   LANGUAGE_KEY,
   LocalizationProvider,
   translateText,
 } from './LocalizationProvider';
+import { LocalizedText as Text } from './LocalizedText';
 
 jest.mock('@/lib/secureStorage', () => ({
   secureStorage: {

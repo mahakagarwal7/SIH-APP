@@ -2,12 +2,11 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import { LocalizedText as Text } from '@/features/localization/LocalizedText';
 import {
   getActiveLocaleTag,
   useLocalization,
 } from '@/features/localization/LocalizationProvider';
-
+import { LocalizedText as Text } from '@/features/localization/LocalizedText';
 import { NavLink, ShellPage, shellStyles } from '@/features/navigation/shellUi';
 
 import { groupMyWork, siteToday } from './myWork';

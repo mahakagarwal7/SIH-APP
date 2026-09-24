@@ -3,13 +3,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { useAuth } from '@/features/auth/AuthProvider';
 import {
   LocalizedText as Text,
   LocalizedPressable as Pressable,
   LocalizedTextInput as TextInput,
 } from '@/features/localization/LocalizedText';
-
-import { useAuth } from '@/features/auth/AuthProvider';
 import {
   BackButton,
   ShellPage,

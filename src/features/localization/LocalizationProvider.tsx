@@ -25,7 +25,7 @@ function translate(source: string, locale: AppLocale) {
   const exact = hiTranslations[source];
   if (exact) return exact;
 
-  const patterns: Array<[RegExp, (...matches: string[]) => string]> = [
+  const patterns: [RegExp, (...matches: string[]) => string][] = [
     [
       /^Timeline\. Planned (.+) to (.+)\.(?: Baseline (.+) to (.+)\.)?(?: Accepted (.+) to (.+)\.| Accepted start not recorded\.)?$/,
       (

@@ -8,7 +8,6 @@ import {
   LocalizedPressable as Pressable,
   LocalizedTextInput as TextInput,
 } from '@/features/localization/LocalizedText';
-
 import {
   BackButton,
   ShellPage,

@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 
+import { LanguageSelector } from '@/features/localization/LanguageSelector';
 import {
   LocalizedText as Text,
   LocalizedPressable as Pressable,
@@ -15,8 +16,6 @@ import {
 } from '@/features/localization/LocalizedText';
 
 import { useAuth } from './AuthProvider';
-
-import { LanguageSelector } from '@/features/localization/LanguageSelector';
 
 import type { AuthViewState } from './AuthProvider';
 import type { ComponentRef } from 'react';
