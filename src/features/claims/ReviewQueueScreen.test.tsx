@@ -162,6 +162,41 @@ it('shows unresolved evidence and expands the verbatim report with match reasons
   expect(screen.getByText('Match score 90%')).toBeVisible();
 });
 
+it('marks a historical candidate using the candidate revision itself', async () => {
+  const historical = {
+    ...item,
+    candidates: [
+      {
+        ...item.candidates[0],
+        revision_id: '10000000-0000-4000-8000-000000000008',
+        activity: null,
+      },
+    ],
+  };
+  jest.mocked(useReviewQueue).mockReturnValue(
+    state({
+      data: {
+        items: [historical],
+        page: 0,
+        pageSize: 20,
+        total: 1,
+        hasNext: false,
+      },
+    }),
+  );
+
+  await render(<ReviewQueueScreen />);
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Review report context' }),
+  );
+
+  expect(
+    screen.getByText(
+      'Candidate belongs to the report’s earlier schedule revision.',
+    ),
+  ).toBeVisible();
+});
+
 it('renders loading, empty and backend error states explicitly', async () => {
   jest
     .mocked(useReviewQueue)

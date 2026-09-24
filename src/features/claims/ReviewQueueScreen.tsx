@@ -90,7 +90,6 @@ function ReviewCard({
 }) {
   const facts = item.claim.facts;
   const headline = facts.activityHint || facts.evidenceQuote;
-  const staleRevision = item.claim.plan_revision_id !== item.currentRevisionId;
   return (
     <View style={shellStyles.card}>
       <Text style={styles.identifier}>
@@ -178,7 +177,7 @@ function ReviewCard({
               <CandidateCard
                 key={candidate.activity_id}
                 candidate={candidate}
-                staleRevision={staleRevision}
+                staleRevision={candidate.revision_id !== item.currentRevisionId}
               />
             ))
           ) : (
