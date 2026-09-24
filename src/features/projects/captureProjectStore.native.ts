@@ -28,3 +28,7 @@ export async function readRememberedProjectContext(userId: string) {
     return null;
   return context;
 }
+
+export async function forgetRememberedProjectContext(userId: string) {
+  await (await index).remove(userId);
+}

@@ -28,5 +28,11 @@ export async function createCaptureProjectIndex(db: SQLiteDatabase) {
       );
       return row ? (JSON.parse(row.context) as ProjectContext) : null;
     },
+    async remove(userId: string) {
+      await db.runAsync(
+        'DELETE FROM local_project_context WHERE userId = ?',
+        userId,
+      );
+    },
   };
 }
