@@ -12,6 +12,7 @@ const processing = {
   project_id: '30000000-0000-4000-8000-000000000003',
   author_id: '20000000-0000-4000-8000-000000000002',
   capture_id: '10000000-0000-4000-8000-000000000001',
+  current_version: 1,
   lifecycle: 'submitted',
   received_at: '2026-09-24T00:00:00Z',
   source_kind: 'text',
@@ -30,7 +31,19 @@ const processing = {
 } as RemoteReport;
 const accepted = {
   ...processing,
-  claims: [{ report_id: processing.id, state: 'accepted' }],
+  jobs: [
+    {
+      ...processing.jobs[0],
+      status: 'succeeded',
+    },
+  ],
+  claims: [
+    {
+      report_id: processing.id,
+      report_version: processing.current_version,
+      state: 'accepted',
+    },
+  ],
 } as RemoteReport;
 const originalState = AppState.currentState;
 

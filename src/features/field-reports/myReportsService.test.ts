@@ -42,6 +42,7 @@ const remote = {
   project_id: projectId,
   author_id: userId,
   capture_id: captureId,
+  current_version: 1,
   lifecycle: 'submitted' as const,
   received_at: '2026-09-24T00:01:00Z',
   source_kind: 'text' as const,
@@ -49,6 +50,7 @@ const remote = {
     {
       id: '50000000-0000-4000-8000-000000000005',
       report_id: reportId,
+      report_version: 1,
       state: 'accepted' as const,
     },
   ],
@@ -285,6 +287,7 @@ it.each([
             {
               id: '60000000-0000-4000-8000-000000000006',
               report_id: reportId,
+              report_version: 1,
               state,
             },
           ],
@@ -345,7 +348,9 @@ function reportClient(
             });
           const offset = Number(url.searchParams.get('offset') || 0);
           offsets.push(offset);
-          const page = claims.slice(offset, offset + pageCap);
+          const page = claims
+            .slice(offset, offset + pageCap)
+            .map((claim) => ({ ...claim, report_version: 1 }));
           return new Response(JSON.stringify(page), {
             status: 200,
             headers: {
@@ -390,7 +395,7 @@ it('reads all claim pages even when the server caps pages below the requested si
 });
 
 it('reads claims beyond the production row cap before displaying final outcomes', async () => {
-  const claims = Array.from({ length: 201 }, (_, index) => ({
+  const claims = Array.from({ length: 2_101 }, (_, index) => ({
     id: `${String(index).padStart(8, '0')}-0000-4000-8000-000000000005`,
     report_id: reportId,
     state: index === 200 ? 'pending' : 'accepted',
@@ -398,8 +403,10 @@ it('reads claims beyond the production row cap before displaying final outcomes'
   const { client, offsets } = reportClient(claims, 200);
   const reports = await loadRemoteReports(client, userId);
 
-  expect(offsets).toEqual([0, 200]);
-  expect(reports[0]?.claims).toHaveLength(201);
+  expect(offsets).toEqual(
+    Array.from({ length: 11 }, (_, index) => index * 200),
+  );
+  expect(reports[0]?.claims).toHaveLength(2_101);
   expect(mergeMyReports([], [], [], reports)[0]?.status).toBe(
     'Partly accepted',
   );

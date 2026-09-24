@@ -83,6 +83,7 @@ export type ClaimRow = {
   id: string;
   project_id: string;
   report_id: string;
+  report_version: number;
   state:
     | 'pending'
     | 'clarification'

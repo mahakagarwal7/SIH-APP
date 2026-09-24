@@ -15,6 +15,7 @@ const reportSchema = z.object({
   project_id: z.string().uuid(),
   author_id: z.string().uuid(),
   capture_id: z.string().uuid(),
+  current_version: z.number().int().nonnegative(),
   lifecycle: z.enum(['draft', 'submitted', 'withdrawn']),
   received_at: z.string(),
   source_kind: z.enum(['text', 'voice', 'spreadsheet']),
@@ -22,6 +23,7 @@ const reportSchema = z.object({
 const claimSchema = z.object({
   id: z.string().uuid(),
   report_id: z.string().uuid(),
+  report_version: z.number().int().positive(),
   state: z.enum([
     'pending',
     'clarification',
@@ -45,7 +47,7 @@ const jobSchema = z.object({
   created_at: z.string(),
 });
 const PAGE_SIZE = 200;
-const MAX_STATUS_ROWS = 2_000;
+const MAX_STATUS_ROWS = 10_000;
 
 export type RemoteReport = z.infer<typeof reportSchema> & {
   claims: z.infer<typeof claimSchema>[];
@@ -179,7 +181,7 @@ export async function loadRemoteReports(
   let reportsQuery = client
     .from('reports')
     .select(
-      'id,project_id,author_id,capture_id,lifecycle,received_at,source_kind',
+      'id,project_id,author_id,capture_id,current_version,lifecycle,received_at,source_kind',
     )
     .eq('author_id', userId)
     .order('received_at', { ascending: false })
@@ -197,8 +199,9 @@ export async function loadRemoteReports(
       async (from, to) => {
         let query = client
           .from('claims')
-          .select('id,report_id,state', { count: 'exact' })
+          .select('id,report_id,report_version,state', { count: 'exact' })
           .in('report_id', ids)
+          .neq('state', 'superseded')
           .order('report_id')
           .order('id')
           .range(from, to);

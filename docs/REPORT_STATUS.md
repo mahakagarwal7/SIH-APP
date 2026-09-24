@@ -6,11 +6,13 @@ Roadmap 1.6 completes foreground delivery tracking after `submit_field_capture` 
 
 For the signed-in author’s 100 most recent reports, one refresh reads:
 
-- `reports`: capture identity, lifecycle and receipt time;
-- `jobs`: the latest visible extraction state (`queued`, `running`, `retry_wait`, `succeeded`, `failed`);
+- `reports`: capture identity, lifecycle, current version and receipt time;
+- `jobs`: the current report version's visible extraction state (`queued`, `running`, `retry_wait`, `succeeded`, `failed`);
 - `claims`: current review/follow-up outcomes, excluding superseded claims from the displayed status.
 
-Claims and jobs are read in stable pages of at most 200 rows with exact counts. The reader fails the whole refresh if a page is missing, changes during pagination, exceeds the 2,000-row safety bound, or contains another report's ID. It never derives a final status from a silently truncated list.
+Claims and jobs are read in stable pages of at most 200 rows with exact counts. The reader fails the whole refresh if a page is missing, changes during pagination, exceeds the 10,000-row safety bound, or contains another report's ID. It never derives a final status from a silently truncated list.
+
+A queued, running, retry-waiting or failed job for the current report version takes precedence over outcomes from older versions. Once that job succeeds, the screen derives the status from the report's current non-superseded claims.
 
 ## Honest states
 

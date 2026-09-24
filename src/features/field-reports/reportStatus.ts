@@ -15,8 +15,13 @@ export type ReportJobState =
 
 export type ReportStatusInput = {
   id: string;
+  current_version: number;
   lifecycle: 'draft' | 'submitted' | 'withdrawn';
-  claims: { report_id: string; state: ReportClaimState | string }[];
+  claims: {
+    report_id: string;
+    report_version: number;
+    state: ReportClaimState | string;
+  }[];
   jobs: {
     report_id: string;
     report_version: number;
@@ -61,9 +66,45 @@ export function reportDeliveryStatus(
       terminal: false,
     };
 
+  const currentVersionJob = report.jobs
+    .filter(
+      (job) =>
+        job.report_id === report.id &&
+        job.report_version === report.current_version,
+    )
+    .sort((left, right) => right.report_version - left.report_version)[0];
+  if (currentVersionJob?.status === 'failed')
+    return {
+      status: 'Processing needs attention',
+      detail: 'The current report version could not finish processing.',
+      terminal: true,
+    };
+  if (currentVersionJob?.status === 'retry_wait')
+    return {
+      status: 'Waiting to retry',
+      detail: 'The server will retry processing the current report version.',
+      terminal: false,
+    };
+  if (
+    currentVersionJob?.status === 'queued' ||
+    currentVersionJob?.status === 'running'
+  )
+    return {
+      status: 'Processing report',
+      detail: 'The current report version is queued or still processing.',
+      terminal: false,
+    };
+
   const claims = report.claims.filter(
     (claim) => claim.report_id === report.id && claim.state !== 'superseded',
   );
+  if (!claims.some((claim) => claim.report_version === report.current_version))
+    return {
+      status: 'Processing report',
+      detail:
+        'The current report version has not produced visible outcomes yet.',
+      terminal: false,
+    };
   if (claims.length) {
     const terminal = claims.every((claim) => terminalClaims.has(claim.state));
     if (claims.every((claim) => claim.state === 'withdrawn'))
@@ -136,25 +177,9 @@ export function reportDeliveryStatus(
     };
   }
 
-  const latest = report.jobs
-    .filter((job) => job.report_id === report.id)
-    .sort((left, right) => right.report_version - left.report_version)[0];
-  if (latest?.status === 'failed')
-    return {
-      status: 'Processing needs attention',
-      detail: 'The report reached production, but processing could not finish.',
-      terminal: true,
-    };
-  if (latest?.status === 'retry_wait')
-    return {
-      status: 'Waiting to retry',
-      detail:
-        'The report reached production and the server will retry processing.',
-      terminal: false,
-    };
   return {
     status: 'Processing report',
-    detail: 'The report reached production and extraction is still running.',
+    detail: 'The report reached production and current outcomes are loading.',
     terminal: false,
   };
 }

@@ -6,8 +6,13 @@ import {
 
 const base = {
   id: 'report',
+  current_version: 1,
   lifecycle: 'submitted' as const,
-  claims: [] as { report_id: string; state: string }[],
+  claims: [] as {
+    report_id: string;
+    report_version: number;
+    state: string;
+  }[],
   jobs: [] as {
     report_id: string;
     report_version: number;
@@ -57,7 +62,7 @@ it('keeps extraction, retry and terminal processing failures distinct', () => {
     }),
   ).toEqual({
     status: 'Processing needs attention',
-    detail: 'The report reached production, but processing could not finish.',
+    detail: 'The current report version could not finish processing.',
     terminal: true,
   });
 });
@@ -66,22 +71,24 @@ it('preserves actionable and terminal claim outcomes', () => {
   expect(
     reportDeliveryStatus({
       ...base,
-      claims: [{ report_id: 'report', state: 'clarification' }],
+      claims: [
+        { report_id: 'report', report_version: 1, state: 'clarification' },
+      ],
     }),
   ).toMatchObject({ status: 'Answer needed', terminal: false });
   expect(
     reportDeliveryStatus({
       ...base,
       claims: [
-        { report_id: 'report', state: 'accepted' },
-        { report_id: 'report', state: 'rejected' },
+        { report_id: 'report', report_version: 1, state: 'accepted' },
+        { report_id: 'report', report_version: 1, state: 'rejected' },
       ],
     }),
   ).toMatchObject({ status: 'Partly accepted', terminal: true });
   expect(
     reportDeliveryStatus({
       ...base,
-      claims: [{ report_id: 'report', state: 'observed' }],
+      claims: [{ report_id: 'report', report_version: 1, state: 'observed' }],
     }),
   ).toMatchObject({
     status: 'Observed — schedule unchanged',
@@ -89,13 +96,77 @@ it('preserves actionable and terminal claim outcomes', () => {
   });
 });
 
+it('prioritizes the current version job over outcomes from earlier versions', () => {
+  const earlierAccepted = {
+    ...base,
+    current_version: 2,
+    claims: [{ report_id: 'report', report_version: 1, state: 'accepted' }],
+  };
+  expect(
+    reportDeliveryStatus({
+      ...earlierAccepted,
+      jobs: [
+        {
+          report_id: 'report',
+          report_version: 1,
+          status: 'succeeded',
+          error_code: null,
+        },
+        {
+          report_id: 'report',
+          report_version: 2,
+          status: 'running',
+          error_code: null,
+        },
+      ],
+    }),
+  ).toMatchObject({ status: 'Processing report', terminal: false });
+  expect(
+    reportDeliveryStatus({
+      ...earlierAccepted,
+      jobs: [
+        {
+          report_id: 'report',
+          report_version: 1,
+          status: 'succeeded',
+          error_code: null,
+        },
+        {
+          report_id: 'report',
+          report_version: 2,
+          status: 'failed',
+          error_code: 'attempts_exhausted',
+        },
+      ],
+    }),
+  ).toMatchObject({ status: 'Processing needs attention', terminal: true });
+});
+
+it('keeps polling until current-version claims are visible after extraction', () => {
+  expect(
+    reportDeliveryStatus({
+      ...base,
+      current_version: 2,
+      claims: [{ report_id: 'report', report_version: 1, state: 'accepted' }],
+      jobs: [
+        {
+          report_id: 'report',
+          report_version: 2,
+          status: 'succeeded',
+          error_code: null,
+        },
+      ],
+    }),
+  ).toMatchObject({ status: 'Processing report', terminal: false });
+});
+
 it('does not label mixed final claim outcomes as still needing review', () => {
   expect(
     reportDeliveryStatus({
       ...base,
       claims: [
-        { report_id: 'report', state: 'observed' },
-        { report_id: 'report', state: 'rejected' },
+        { report_id: 'report', report_version: 1, state: 'observed' },
+        { report_id: 'report', report_version: 1, state: 'rejected' },
       ],
     }),
   ).toEqual({
@@ -123,7 +194,8 @@ it('polls only submitted reports with a nonterminal outcome', () => {
     needsReportPolling([
       {
         ...processing,
-        claims: [{ report_id: 'report', state: 'accepted' }],
+        jobs: [{ ...processing.jobs[0]!, status: 'succeeded' }],
+        claims: [{ report_id: 'report', report_version: 1, state: 'accepted' }],
       },
     ]),
   ).toBe(false);

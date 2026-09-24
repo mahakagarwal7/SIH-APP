@@ -169,6 +169,7 @@ it('labels unqueried server attachments as unavailable instead of zero files', a
       project_id: 'project',
       author_id: 'alice',
       capture_id: 'capture',
+      current_version: 1,
       lifecycle: 'submitted',
       received_at: '2026-09-24T00:00:00Z',
       source_kind: 'voice',
@@ -213,7 +214,7 @@ it('shows server processing as distinct from planner review', async () => {
   expect(await screen.findByText('Processing report')).toBeVisible();
   expect(
     screen.getByText(
-      'The report reached production and extraction is still running.',
+      'The current report version is queued or still processing.',
     ),
   ).toBeVisible();
   expect(screen.queryByText('Awaiting review')).toBeNull();
