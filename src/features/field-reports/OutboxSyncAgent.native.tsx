@@ -32,6 +32,9 @@ export function OutboxSyncAgent() {
         if (!active) return;
         client.setQueryData(['field-outbox', userId], rows);
         void client.invalidateQueries({ queryKey: ['my-reports', userId] });
+        void client.invalidateQueries({
+          queryKey: ['project-recent-reports', userId],
+        });
         again = rows.some((row) =>
           row.submissionState === 'submitted'
             ? !row.evidenceReleased

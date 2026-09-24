@@ -13,7 +13,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  android-preview-helper:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test Android preview build guards
+        shell: pwsh
+        run: ./scripts/tests/build-android-preview.tests.ps1
+
   quality:
+    needs: android-preview-helper
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:

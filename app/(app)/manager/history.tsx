@@ -1,10 +1,4 @@
-import { PlaceholderScreen } from '@/features/navigation/PlaceholderScreen';
+import { HistoryScreen } from '@/features/history/HistoryScreen';
 export default function History() {
-  return (
-    <PlaceholderScreen
-      title="Execution history"
-      workspace="Manager"
-      description="Accepted events and their supporting evidence will appear here."
-    />
-  );
+  return <HistoryScreen />;
 }

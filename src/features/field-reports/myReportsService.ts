@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { getSupabase } from '@/lib/supabase';
 
+import { reportDeliveryStatus } from './reportStatus';
+
 import type { LocalVoiceDraft } from './draftStore';
 import type { OutboxRecord } from './outbox';
 import type { LocalReportDraft } from './reportDraftStore';
@@ -13,12 +15,15 @@ const reportSchema = z.object({
   project_id: z.string().uuid(),
   author_id: z.string().uuid(),
   capture_id: z.string().uuid(),
+  current_version: z.number().int().nonnegative(),
   lifecycle: z.enum(['draft', 'submitted', 'withdrawn']),
   received_at: z.string(),
   source_kind: z.enum(['text', 'voice', 'spreadsheet']),
 });
 const claimSchema = z.object({
+  id: z.string().uuid(),
   report_id: z.string().uuid(),
+  report_version: z.number().int().positive(),
   state: z.enum([
     'pending',
     'clarification',
@@ -26,15 +31,27 @@ const claimSchema = z.object({
     'disputed',
     'accepted',
     'rejected',
+    'observed',
     'unplanned',
     'superseded',
     'withdrawn',
-    'observed',
   ]),
 });
+const jobSchema = z.object({
+  id: z.string().uuid(),
+  report_id: z.string().uuid(),
+  report_version: z.number().int().positive(),
+  status: z.enum(['queued', 'running', 'retry_wait', 'succeeded', 'failed']),
+  attempts: z.number().int().nonnegative(),
+  error_code: z.string().nullable(),
+  created_at: z.string(),
+});
+const PAGE_SIZE = 200;
+const MAX_STATUS_ROWS = 10_000;
 
 export type RemoteReport = z.infer<typeof reportSchema> & {
   claims: z.infer<typeof claimSchema>[];
+  jobs: z.infer<typeof jobSchema>[];
 };
 
 export type MyReportItem = {
@@ -51,6 +68,7 @@ export type MyReportItem = {
   canSync: boolean;
   canConfirm: boolean;
   canOpenConfirmation: boolean;
+  canOpen: boolean;
 };
 
 export class ReportsReadError extends Error {
@@ -108,97 +126,136 @@ function outboxStatus(record: OutboxRecord) {
   }
 }
 
-function submittedStatus(report: RemoteReport) {
-  if (report.lifecycle === 'withdrawn') return 'Withdrawn';
-  if (report.lifecycle === 'draft') return 'Server draft';
-  const claims = report.claims.filter((claim) => claim.state !== 'superseded');
-  if (!claims.length) return 'Awaiting review';
-  if (claims.every((claim) => claim.state === 'withdrawn')) return 'Withdrawn';
-  if (claims.some((claim) => claim.state === 'disputed'))
-    return 'Needs planner attention';
-  if (claims.some((claim) => claim.state === 'clarification'))
-    return 'Answer needed';
-  if (claims.some((claim) => claim.state === 'verification'))
-    return 'Supervisor check';
-  if (claims.every((claim) => claim.state === 'accepted')) return 'Accepted';
-  if (claims.some((claim) => claim.state === 'accepted'))
-    return 'Partly accepted';
-  if (claims.every((claim) => claim.state === 'observed'))
-    return 'Observed — schedule unchanged';
-  if (claims.every((claim) => claim.state === 'rejected')) return 'Rejected';
-  if (claims.every((claim) => claim.state === 'unplanned'))
-    return 'Kept as unplanned';
-  return 'Awaiting review';
+async function readCompleteRows<Row extends { id: string }>(
+  loadPage: (
+    from: number,
+    to: number,
+  ) => Promise<{
+    data: unknown;
+    error: { code?: string } | null;
+    count: number | null;
+  }>,
+  schema: z.ZodType<Row>,
+  belongsToReports: (row: Row) => boolean,
+): Promise<Row[]> {
+  const rows: Row[] = [];
+  const ids = new Set<string>();
+  let expected: number | undefined;
+  let from = 0;
+
+  while (from < MAX_STATUS_ROWS) {
+    const response = await loadPage(from, from + PAGE_SIZE - 1);
+    if (response.error) throw new ReportsReadError();
+    if (
+      response.count === null ||
+      !Number.isSafeInteger(response.count) ||
+      response.count > MAX_STATUS_ROWS ||
+      (expected !== undefined && expected !== response.count)
+    )
+      throw new ReportsReadError();
+
+    const page = z.array(schema).safeParse(response.data);
+    if (
+      !page.success ||
+      page.data.some((row) => !belongsToReports(row) || ids.has(row.id))
+    )
+      throw new ReportsReadError();
+
+    page.data.forEach((row) => ids.add(row.id));
+    rows.push(...page.data);
+    if (rows.length > response.count) throw new ReportsReadError();
+    if (rows.length === response.count) return rows;
+    if (!page.data.length) throw new ReportsReadError();
+
+    expected = response.count;
+    from += page.data.length;
+  }
+
+  throw new ReportsReadError();
 }
 
 export async function loadRemoteReports(
   client: SupabaseClient<Database>,
   userId: string,
   signal?: AbortSignal,
+  projectId?: string,
 ): Promise<RemoteReport[]> {
   let reportsQuery = client
     .from('reports')
     .select(
-      'id,project_id,author_id,capture_id,lifecycle,received_at,source_kind',
+      'id,project_id,author_id,capture_id,current_version,lifecycle,received_at,source_kind',
     )
     .eq('author_id', userId)
     .order('received_at', { ascending: false })
     .limit(100);
+  if (projectId) reportsQuery = reportsQuery.eq('project_id', projectId);
   if (signal) reportsQuery = reportsQuery.abortSignal(signal);
   const reports = await reportsQuery;
   if (reports.error) throw new ReportsReadError();
   const parsed = z.array(reportSchema).safeParse(reports.data);
-  if (!parsed.success || parsed.data.some((row) => row.author_id !== userId))
+  if (
+    !parsed.success ||
+    parsed.data.some(
+      (row) =>
+        row.author_id !== userId ||
+        (projectId !== undefined && row.project_id !== projectId),
+    )
+  )
     throw new ReportsReadError();
   if (!parsed.data.length) return [];
   const ids = parsed.data.map((report) => report.id);
-  const claims = await loadClaims(client, ids, signal);
+  const [claims, jobs] = await Promise.all([
+    readCompleteRows(
+      async (from, to) => {
+        let query = client
+          .from('claims')
+          .select('id,report_id,report_version,state', { count: 'exact' })
+          .in('report_id', ids)
+          .neq('state', 'superseded')
+          .order('report_id')
+          .order('id')
+          .range(from, to);
+        if (signal) query = query.abortSignal(signal);
+        return query;
+      },
+      claimSchema,
+      (claim) => ids.includes(claim.report_id),
+    ),
+    readCompleteRows(
+      async (from, to) => {
+        let query = client
+          .from('jobs')
+          .select(
+            'id,report_id,report_version,status,attempts,error_code,created_at',
+            { count: 'exact' },
+          )
+          .in('report_id', ids)
+          .order('report_id')
+          .order('report_version', { ascending: false })
+          .order('created_at', { ascending: false })
+          .order('id')
+          .range(from, to);
+        if (signal) query = query.abortSignal(signal);
+        return query;
+      },
+      jobSchema,
+      (job) => ids.includes(job.report_id),
+    ),
+  ]);
   return parsed.data.map((report) => ({
     ...report,
     claims: claims.filter((claim) => claim.report_id === report.id),
+    jobs: jobs.filter((job) => job.report_id === report.id),
   }));
 }
 
-async function loadClaims(
+export function loadRemoteReportsForProject(
   client: SupabaseClient<Database>,
-  ids: string[],
+  userId: string,
+  projectId: string,
   signal?: AbortSignal,
 ) {
-  const rows: z.infer<typeof claimSchema>[] = [];
-  const seen = new Set<string>();
-  let expected: number | undefined;
-  while (rows.length < 10000) {
-    let query = client
-      .from('claims')
-      .select('id,report_id,state', { count: 'exact' })
-      .in('report_id', ids)
-      .order('id')
-      .range(rows.length, rows.length + 199);
-    if (signal) query = query.abortSignal(signal);
-    const result = await query;
-    if (
-      result.error ||
-      result.count === null ||
-      result.count > 10000 ||
-      (expected !== undefined && result.count !== expected)
-    )
-      throw new ReportsReadError();
-    expected = result.count;
-    const page = z
-      .array(claimSchema.extend({ id: z.string().uuid() }))
-      .safeParse(result.data);
-    if (!page.success) throw new ReportsReadError();
-    for (const row of page.data) {
-      if (seen.has(row.id) || !ids.includes(row.report_id))
-        throw new ReportsReadError();
-      seen.add(row.id);
-      rows.push({ report_id: row.report_id, state: row.state });
-    }
-    if (rows.length === expected) return rows;
-    if (!page.data.length || rows.length > expected)
-      throw new ReportsReadError();
-  }
-  throw new ReportsReadError();
+  return loadRemoteReports(client, userId, signal, projectId);
 }
 
 export function getReportsClient() {
@@ -218,15 +275,13 @@ export function mergeMyReports(
   const items: MyReportItem[] = [];
   for (const row of outbox) {
     const server = remoteByCapture.get(row.captureId);
-    const [status, detail] =
+    const serverStatus =
       server && server.lifecycle !== 'draft'
-        ? [
-            submittedStatus(server),
-            server.lifecycle === 'withdrawn'
-              ? 'Withdrawn from the production project.'
-              : 'Submitted to the production project.',
-          ]
-        : outboxStatus(row);
+        ? reportDeliveryStatus(server)
+        : null;
+    const [status, detail] = serverStatus
+      ? [serverStatus.status, serverStatus.detail]
+      : outboxStatus(row);
     items.push({
       captureId: row.captureId,
       reportId: server?.id ?? row.reportId,
@@ -259,6 +314,7 @@ export function mergeMyReports(
           ((row.kind === 'report' && row.manifest.files.length === 0) ||
             (row.state === 'needs_confirmation' &&
               (row.kind !== 'voice' || !!row.originalTranscript)))),
+      canOpen: server?.lifecycle === 'submitted',
     });
     remoteByCapture.delete(row.captureId);
   }
@@ -280,6 +336,7 @@ export function mergeMyReports(
       canSync: row.available,
       canConfirm: false,
       canOpenConfirmation: false,
+      canOpen: false,
     });
   }
   for (const row of reports) {
@@ -300,9 +357,11 @@ export function mergeMyReports(
       canSync: row.available,
       canConfirm: false,
       canOpenConfirmation: false,
+      canOpen: false,
     });
   }
-  for (const row of remoteByCapture.values())
+  for (const row of remoteByCapture.values()) {
+    const delivery = reportDeliveryStatus(row);
     items.push({
       captureId: row.capture_id,
       reportId: row.id,
@@ -312,15 +371,14 @@ export function mergeMyReports(
       kind: 'remote',
       summary: '',
       mediaCount: null,
-      status: submittedStatus(row),
-      detail:
-        row.lifecycle === 'draft'
-          ? 'Media may still be processing; continue on the device that created it.'
-          : 'Submitted to the production project.',
+      status: delivery.status,
+      detail: delivery.detail,
       canSync: false,
       canConfirm: false,
       canOpenConfirmation: false,
+      canOpen: row.lifecycle === 'submitted',
     });
+  }
   return items.sort(
     (left, right) =>
       right.createdAt.localeCompare(left.createdAt) ||

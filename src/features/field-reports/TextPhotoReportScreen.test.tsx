@@ -337,10 +337,15 @@ it('releases the form after photo recovery fails', async () => {
 
 it('shows discard failure even when project access is unavailable', async () => {
   jest.mocked(useCaptureProject).mockReturnValue({
-    data: null,
+    data: undefined,
+    projects: [],
     isPending: false,
     isFetching: false,
     error: null,
+    offline: false,
+    remembered: false,
+    refetch: jest.fn(),
+    select: jest.fn(),
   } as ReturnType<typeof useCaptureProject>);
   list.mockResolvedValue([savedDraft]);
   discard.mockRejectedValue(new Error('Disk busy'));

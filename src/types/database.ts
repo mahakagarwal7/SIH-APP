@@ -70,10 +70,24 @@ export type MediaResultRow = {
   details: Json;
   created_at: string;
 };
+export type ReportJobRow = {
+  id: string;
+  report_id: string;
+  report_version: number;
+  status: 'queued' | 'running' | 'retry_wait' | 'succeeded' | 'failed';
+  attempts: number;
+  error_code: string | null;
+  created_at: string;
+};
 export type ClaimRow = {
   id: string;
   project_id: string;
   report_id: string;
+  report_version: number;
+  run_id: string;
+  ordinal: number;
+  facts: Json;
+  validation_flags: string[];
   state:
     | 'pending'
     | 'clarification'
@@ -81,10 +95,94 @@ export type ClaimRow = {
     | 'disputed'
     | 'accepted'
     | 'rejected'
+    | 'observed'
     | 'unplanned'
     | 'superseded'
-    | 'withdrawn'
-    | 'observed';
+    | 'withdrawn';
+  version: number;
+  plan_revision_id: string;
+  policy_version: number;
+  parent_claim_id: string | null;
+  root_claim_id: string | null;
+  followup_round: number;
+  manual_review: boolean;
+  correction_of_event_id: string | null;
+};
+export type ReportVersionRow = {
+  report_id: string;
+  version: number;
+  source_text: string;
+  work_date: string | null;
+  selected_activity_id: string | null;
+  content_hash: string;
+  context: Json;
+  created_at: string;
+};
+export type CandidateMatchRow = {
+  claim_id: string;
+  project_id: string;
+  activity_id: string;
+  revision_id: string;
+  rank: number;
+  score: number;
+  features: Json;
+  mismatch_flags: string[];
+};
+export type VerificationRequestRow = {
+  id: string;
+  project_id: string;
+  claim_id: string;
+  report_id: string;
+  activity_id: string;
+  verifier_id: string;
+  claim_version: number;
+  report_version: number;
+  plan_revision_id: string;
+  policy_version: number;
+  assignment_version: number;
+  facts_hash: string;
+  status:
+    'open' | 'confirmed' | 'needs_info' | 'denied' | 'superseded' | 'cancelled';
+  allocation_confirmed: boolean;
+  work_confirmed: boolean;
+  version: number;
+  created_at: string;
+};
+export type ClarificationRequestRow = {
+  id: string;
+  project_id: string;
+  claim_id: string;
+  report_id: string;
+  claim_version: number;
+  report_version: number;
+  version: number;
+  reason_code: 'location' | 'date' | 'scope' | 'assignment' | 'detail';
+  question_text: string;
+  options: Json;
+  automatic: boolean;
+  status: 'open' | 'answered' | 'resolved' | 'superseded' | 'cancelled';
+  created_at: string;
+};
+export type ClarificationResponseRow = {
+  id: string;
+  request_id: string;
+  project_id: string;
+  actor_id: string;
+  question_version: number;
+  input: Json;
+  resulting_report_version: number | null;
+  created_at: string;
+};
+export type VerificationDecisionRow = {
+  id: string;
+  request_id: string;
+  project_id: string;
+  actor_id: string;
+  request_version: number;
+  allocation: 'confirmed' | 'denied' | 'needs_info';
+  work: 'confirmed' | 'denied' | 'needs_info';
+  reason: string;
+  created_at: string;
 };
 export type Database = {
   public: {
@@ -96,11 +194,49 @@ export type Database = {
       attachments: ReadTable<AttachmentRow>;
       media_jobs: ReadTable<MediaJobRow>;
       media_results: ReadTable<MediaResultRow>;
+      jobs: ReadTable<ReportJobRow>;
       claims: ReadTable<ClaimRow>;
+      report_versions: ReadTable<ReportVersionRow>;
+      candidate_matches: ReadTable<CandidateMatchRow>;
+      clarification_requests: ReadTable<ClarificationRequestRow>;
+      clarification_responses: ReadTable<ClarificationResponseRow>;
+      verification_requests: ReadTable<VerificationRequestRow>;
+      verification_decisions: ReadTable<VerificationDecisionRow>;
     };
     Views: { [_ in never]: never };
     Functions: {
+      execution_history: { Args: { p_project: string }; Returns: Json };
       schedule_snapshot: { Args: { p_project: string }; Returns: Json };
+      preview_claim: { Args: { p_command: Json }; Returns: Json };
+      decide_claim: { Args: { p_command: Json }; Returns: Json };
+      request_clarification: {
+        Args: { p_claim: string; p_command: Json };
+        Returns: Json;
+      };
+      request_verification: {
+        Args: { p_claim: string; p_command: Json };
+        Returns: Json;
+      };
+      respond_clarification: {
+        Args: { p_question: string; p_command: Json };
+        Returns: Json;
+      };
+      decide_verification: {
+        Args: { p_request: string; p_command: Json };
+        Returns: Json;
+      };
+      verification_context: {
+        Args: { p_project: string };
+        Returns: { request_id: string; reporter_name: string }[];
+      };
+      verification_context_v2: {
+        Args: { p_project: string };
+        Returns: {
+          request_id: string;
+          reporter_name: string;
+          assignment_is_current: boolean;
+        }[];
+      };
       reserve_field_capture: {
         Args: {
           p_project: string;
