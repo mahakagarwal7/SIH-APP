@@ -2,6 +2,8 @@ import {
   candidateReasons,
   candidateSchema,
   claimFactsSchema,
+  stableCommand,
+  validWorkDate,
 } from './reviewContracts';
 
 const candidate = candidateSchema.parse({
@@ -71,4 +73,31 @@ it('accepts production-valid nullable text and preserves observation-v2 facts', 
 
   expect(parsed.success).toBe(true);
   if (parsed.success) expect(parsed.data.observation).toEqual(observation);
+});
+
+it('reuses a command ID only while the exact payload remains unchanged', () => {
+  let sequence = 0;
+  const createId = () => `id-${++sequence}`;
+  const first = stableCommand(
+    null,
+    { action: 'reject', reason: 'Duplicate' },
+    createId,
+  );
+  const retry = stableCommand(
+    first,
+    { action: 'reject', reason: 'Duplicate' },
+    createId,
+  );
+  const changed = stableCommand(
+    retry,
+    { action: 'reject', reason: 'New evidence' },
+    createId,
+  );
+  expect(retry.id).toBe(first.id);
+  expect(changed.id).not.toBe(first.id);
+});
+
+it('validates real calendar dates before a decision reaches production', () => {
+  expect(validWorkDate('2028-02-29')).toBe(true);
+  expect(validWorkDate('2026-02-30')).toBe(false);
 });

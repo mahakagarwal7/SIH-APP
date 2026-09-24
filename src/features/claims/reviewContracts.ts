@@ -190,9 +190,124 @@ export const reviewSnapshotSchema = z.object({
   activities: z.array(reviewActivitySchema),
 });
 
+export const decisionActivitySchema = reviewActivitySchema.extend({
+  actualsVersion: z.number().int().nonnegative(),
+  unit: z.string().min(1).nullable(),
+});
+
+export const decisionSnapshotSchema = z.object({
+  projectId: id,
+  revisionId: id,
+  policyVersion: z.number().int().positive(),
+  scheduleVersion: z.number().int().nonnegative(),
+  activities: z.array(decisionActivitySchema),
+});
+
+export const activeVerificationSchema = z.object({
+  id,
+  project_id: id,
+  claim_id: id,
+  report_id: id,
+  activity_id: id,
+  verifier_id: id,
+  claim_version: z.number().int().positive(),
+  report_version: z.number().int().positive(),
+  plan_revision_id: id,
+  policy_version: z.number().int().positive(),
+  assignment_version: z.number().int().positive(),
+  facts_hash: z.string().min(1),
+  status: z.enum(['open', 'confirmed', 'needs_info', 'denied']),
+  allocation_confirmed: z.boolean(),
+  work_confirmed: z.boolean(),
+  version: z.number().int().positive(),
+  created_at: z.iso.datetime({ offset: true }),
+});
+
+const actualsSchema = z.object({
+  actual_start: date.nullable(),
+  actual_finish: date.nullable(),
+  accepted_quantity: z.coerce.number().nonnegative(),
+  accepted_percent: z.coerce.number().min(0).max(100).nullable(),
+  percent_basis: z.string().nullable(),
+  progress_as_of: date.nullable(),
+  milestone_date: date.nullable(),
+  version: z.number().int().nonnegative(),
+});
+
+export const decisionPreviewSchema = z.object({
+  activityId: id,
+  activityName: z.string().min(1),
+  before: actualsSchema,
+  after: actualsSchema,
+  disposition: z.string().min(1),
+  previewHash: z.string().regex(/^[a-f0-9]{64}$/),
+});
+
+export const decisionResultSchema = z.object({
+  state: z.enum(['accepted', 'rejected', 'unplanned', 'observed']),
+  claimId: id,
+  scheduleVersion: z.number().int().nonnegative(),
+  eventId: id.optional(),
+  activityId: id.optional(),
+  actualsVersion: z.number().int().nonnegative().optional(),
+  deliveryState: z.string().optional(),
+});
+
+export const clarificationResultSchema = z.object({ questionId: id });
+export const verificationResultSchema = z.object({
+  verificationId: id,
+  status: z.literal('open'),
+});
+
+export const decisionCommandSchema = z.object({
+  commandId: id,
+  claimId: id,
+  activityId: id.nullable(),
+  action: z.enum(['accept', 'reject', 'unplanned', 'observe']),
+  expectedReportVersion: z.number().int().positive(),
+  expectedRunId: id,
+  expectedClaimVersion: z.number().int().positive(),
+  expectedPlanRevisionId: id,
+  expectedActualsVersion: z.number().int().nonnegative(),
+  expectedPolicyVersion: z.number().int().positive(),
+  reason: z.string().trim().min(1).max(1000),
+  correctedDate: date.nullable(),
+  reconciliation: z.enum(['apply', 'corroborate']).optional(),
+  previewHash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
+  expectedVerificationId: id.nullable().optional(),
+  expectedVerificationVersion: z
+    .number()
+    .int()
+    .positive()
+    .nullable()
+    .optional(),
+});
+
 export type ReviewClaim = z.infer<typeof reviewClaimSchema>;
 export type CandidateMatch = z.infer<typeof candidateSchema>;
 export type ReviewActivity = z.infer<typeof reviewActivitySchema>;
+export type DecisionCommand = z.infer<typeof decisionCommandSchema>;
+export type DecisionPreview = z.infer<typeof decisionPreviewSchema>;
+
+export type StableCommand<T> = { serialized: string; id: string; payload: T };
+
+export function stableCommand<T extends Record<string, unknown>>(
+  current: StableCommand<T> | null,
+  payload: T,
+  createId: () => string,
+): StableCommand<T> {
+  const serialized = JSON.stringify(payload);
+  return current?.serialized === serialized
+    ? current
+    : { serialized, id: createId(), payload };
+}
+
+export function validWorkDate(value: string) {
+  return date.safeParse(value).success;
+}
 
 const positiveReasons: readonly [string, string][] = [
   ['tag', 'Matching asset tag'],

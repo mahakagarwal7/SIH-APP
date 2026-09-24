@@ -128,6 +128,26 @@ export type CandidateMatchRow = {
   features: Json;
   mismatch_flags: string[];
 };
+export type VerificationRequestRow = {
+  id: string;
+  project_id: string;
+  claim_id: string;
+  report_id: string;
+  activity_id: string;
+  verifier_id: string;
+  claim_version: number;
+  report_version: number;
+  plan_revision_id: string;
+  policy_version: number;
+  assignment_version: number;
+  facts_hash: string;
+  status:
+    'open' | 'confirmed' | 'needs_info' | 'denied' | 'superseded' | 'cancelled';
+  allocation_confirmed: boolean;
+  work_confirmed: boolean;
+  version: number;
+  created_at: string;
+};
 export type Database = {
   public: {
     Tables: {
@@ -142,10 +162,21 @@ export type Database = {
       claims: ReadTable<ClaimRow>;
       report_versions: ReadTable<ReportVersionRow>;
       candidate_matches: ReadTable<CandidateMatchRow>;
+      verification_requests: ReadTable<VerificationRequestRow>;
     };
     Views: { [_ in never]: never };
     Functions: {
       schedule_snapshot: { Args: { p_project: string }; Returns: Json };
+      preview_claim: { Args: { p_command: Json }; Returns: Json };
+      decide_claim: { Args: { p_command: Json }; Returns: Json };
+      request_clarification: {
+        Args: { p_claim: string; p_command: Json };
+        Returns: Json;
+      };
+      request_verification: {
+        Args: { p_claim: string; p_command: Json };
+        Returns: Json;
+      };
       reserve_field_capture: {
         Args: {
           p_project: string;

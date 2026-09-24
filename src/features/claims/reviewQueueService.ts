@@ -22,8 +22,9 @@ type Client = SupabaseClient<Database>;
 export type ReviewQueueItem = Awaited<
   ReturnType<typeof loadReviewQueue>
 >['items'][number];
+export type ReviewQueuePage = Awaited<ReturnType<typeof loadReviewQueue>>;
 export const REVIEW_PAGE_SIZE = 20;
-const claimColumns =
+export const reviewClaimColumns =
   'id,project_id,report_id,report_version,run_id,ordinal,facts,validation_flags,state,version,plan_revision_id,policy_version,parent_claim_id,root_claim_id,followup_round,manual_review,correction_of_event_id';
 const memberColumns = 'project_id,user_id,display_name,role,active,version';
 const mediaContextSchema = z
@@ -123,7 +124,7 @@ export async function loadReviewQueue(
   const from = page * REVIEW_PAGE_SIZE;
   const result = await client
     .from('claims')
-    .select(claimColumns, { count: 'exact' })
+    .select(reviewClaimColumns, { count: 'exact' })
     .eq('project_id', project.id)
     .in('state', [...actionableReviewStates])
     .order('id')
