@@ -1,4 +1,5 @@
 import { act, renderHook } from '@testing-library/react-native';
+import { useState } from 'react';
 import { AppState } from 'react-native';
 
 import { useReportStatusPolling } from './useReportStatusPolling';
@@ -48,7 +49,9 @@ it('backs off while processing and stops after a terminal outcome', async () => 
     .fn()
     .mockResolvedValueOnce({ data: [processing] })
     .mockResolvedValueOnce({ data: [accepted] });
-  await renderHook(() => useReportStatusPolling({ enabled: true, refetch }));
+  await renderHook(() =>
+    useReportStatusPolling({ enabled: true, focused: true, refetch }),
+  );
   await act(async () => {
     await jest.advanceTimersByTimeAsync(5_000);
   });
@@ -77,7 +80,7 @@ it('pauses while inactive and starts a fresh foreground check on resume', async 
   AppState.currentState = 'background';
   const refetch = jest.fn().mockResolvedValue({ data: [processing] });
   const view = await renderHook(() =>
-    useReportStatusPolling({ enabled: true, refetch }),
+    useReportStatusPolling({ enabled: true, focused: true, refetch }),
   );
   await act(async () => {
     await jest.advanceTimersByTimeAsync(60_000);
@@ -94,9 +97,28 @@ it('pauses while inactive and starts a fresh foreground check on resume', async 
 
 it('does not schedule network work while disabled', async () => {
   const refetch = jest.fn();
-  await renderHook(() => useReportStatusPolling({ enabled: false, refetch }));
+  await renderHook(() =>
+    useReportStatusPolling({ enabled: false, focused: true, refetch }),
+  );
   await act(async () => {
     await jest.advanceTimersByTimeAsync(60_000);
+  });
+  expect(refetch).not.toHaveBeenCalled();
+});
+
+it('stops scheduling status polls when the screen loses focus', async () => {
+  const refetch = jest.fn().mockResolvedValue({ data: [processing] });
+  const view = await renderHook(() => {
+    const [focused, setFocused] = useState(true);
+    useReportStatusPolling({ enabled: true, focused, refetch });
+    return { blur: () => setFocused(false) };
+  });
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(3_000);
+  });
+  await act(async () => view.result.current.blur());
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(2_000);
   });
   expect(refetch).not.toHaveBeenCalled();
 });

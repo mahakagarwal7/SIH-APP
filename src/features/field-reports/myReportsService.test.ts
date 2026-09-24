@@ -400,7 +400,9 @@ it('reads claims beyond the production row cap before displaying final outcomes'
 
   expect(offsets).toEqual([0, 200]);
   expect(reports[0]?.claims).toHaveLength(201);
-  expect(mergeMyReports([], [], [], reports)[0]?.status).toBe('Partly accepted');
+  expect(mergeMyReports([], [], [], reports)[0]?.status).toBe(
+    'Partly accepted',
+  );
   expect(needsReportPolling(reports)).toBe(true);
 });
 

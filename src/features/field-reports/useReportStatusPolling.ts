@@ -9,9 +9,11 @@ type RefetchResult = { data?: RemoteReport[] };
 
 export function useReportStatusPolling({
   enabled,
+  focused,
   refetch,
 }: {
   enabled: boolean;
+  focused: boolean;
   refetch: () => Promise<RefetchResult>;
 }) {
   const [foreground, setForeground] = useState(
@@ -26,7 +28,7 @@ export function useReportStatusPolling({
   }, []);
 
   useEffect(() => {
-    if (!enabled || !foreground) return;
+    if (!enabled || !focused || !foreground) return;
     let stopped = false;
     let delay = 5_000;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -50,5 +52,5 @@ export function useReportStatusPolling({
       stopped = true;
       clearTimeout(timer);
     };
-  }, [enabled, foreground, refetch]);
+  }, [enabled, focused, foreground, refetch]);
 }

@@ -10,7 +10,7 @@ For the signed-in author’s 100 most recent reports, one refresh reads:
 - `jobs`: the latest visible extraction state (`queued`, `running`, `retry_wait`, `succeeded`, `failed`);
 - `claims`: current review/follow-up outcomes, excluding superseded claims from the displayed status.
 
-Every returned claim/job report ID must belong to the selected author result. A malformed or cross-report response fails the whole refresh instead of showing a partial status list.
+Claims and jobs are read in stable pages of at most 200 rows with exact counts. The reader fails the whole refresh if a page is missing, changes during pagination, exceeds the 2,000-row safety bound, or contains another report's ID. It never derives a final status from a silently truncated list.
 
 ## Honest states
 
@@ -27,7 +27,7 @@ The UI keeps Saved on device, Sending for review, production processing, planner
 
 My reports performs its normal initial/focus refresh, then polls only if at least one submitted report has a nonterminal outcome. The first check waits 5 seconds; subsequent checks use bounded exponential delays up to 60 seconds. A successful terminal result stops its timer.
 
-Polling pauses when the app is inactive, the device is offline or the My reports screen unmounts. Returning to the foreground or reconnecting starts a fresh screen/query cycle. A failed refresh keeps the last known status, shows the existing refresh error and retries with backoff. No status work is promised while the app is closed.
+Polling pauses when the app is inactive, the device is offline, My reports loses navigation focus or the screen unmounts. Returning to the screen or foreground starts a fresh bounded poll cycle. A failed refresh keeps the last known status, shows the existing refresh error and retries with backoff. No status work is promised while the app is closed.
 
 ## Evidence limits
 

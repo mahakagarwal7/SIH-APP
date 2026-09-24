@@ -64,6 +64,7 @@ function AccountReports({ userId }: { userId: string }) {
     };
   }, []);
   const [syncing, setSyncing] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [message, setMessage] = useState('');
   const local = useQuery({
     queryKey: ['my-reports', userId, 'local'],
@@ -89,12 +90,18 @@ function AccountReports({ userId }: { userId: string }) {
   const pollingRequired = needsReportPolling(remote.data ?? []);
   useReportStatusPolling({
     enabled: !auth.offline && pollingRequired,
+    focused,
     refetch: remoteRefetch,
   });
   useFocusEffect(
     useCallback(() => {
+      mounted.current = true;
+      setFocused(true);
       void localRefetch();
       if (!auth.offline) void remoteRefetch();
+      return () => {
+        setFocused(false);
+      };
     }, [auth.offline, localRefetch, remoteRefetch]),
   );
   const items = useMemo(

@@ -89,6 +89,23 @@ it('preserves actionable and terminal claim outcomes', () => {
   });
 });
 
+it('does not label mixed final claim outcomes as still needing review', () => {
+  expect(
+    reportDeliveryStatus({
+      ...base,
+      claims: [
+        { report_id: 'report', state: 'observed' },
+        { report_id: 'report', state: 'rejected' },
+      ],
+    }),
+  ).toEqual({
+    status: 'Final outcomes recorded',
+    detail:
+      'Every extracted claim has a final outcome, with different results.',
+    terminal: true,
+  });
+});
+
 it('polls only submitted reports with a nonterminal outcome', () => {
   const processing = {
     ...base,

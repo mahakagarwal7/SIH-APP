@@ -122,6 +122,13 @@ export function reportDeliveryStatus(
         detail: 'The work remains recorded without an accepted plan activity.',
         terminal: true,
       };
+    if (terminal)
+      return {
+        status: 'Final outcomes recorded',
+        detail:
+          'Every extracted claim has a final outcome, with different results.',
+        terminal: true,
+      };
     return {
       status: 'Needs review',
       detail: 'The report is ready for planner review.',
