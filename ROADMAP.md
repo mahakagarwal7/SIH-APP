@@ -108,6 +108,11 @@ implemented before 1.4. Each numbered item remains its own tested PR.
 - **6.2** Alerts & approvals list — **confirm scope with the human first**
   (see `CODEX.md` §5 open questions) before building this; it's not one of
   the 5 confirmed backend features.
+- **6.3** English/Hindi localization across the completed signed-out, Field
+  and Manager flows. Persist a device language preference, localize dates,
+  quantities, controls, alerts and screen-reader copy, and preserve readable
+  Devanagari under system font scaling. Tamil remains a separate product
+  decision. This is approved delivery-plan slice 14.
 
 ---
 
