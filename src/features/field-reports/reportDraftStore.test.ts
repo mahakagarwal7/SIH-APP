@@ -54,6 +54,10 @@ function setup() {
     write: jest.fn(async (row, saved, bytes) => {
       files.set(`${row.id}:${saved.id}`, bytes.slice());
     }),
+    read: jest.fn(
+      async (row, saved) =>
+        files.get(`${row.id}:${saved.id}`)?.slice() ?? new Uint8Array(),
+    ),
     size: jest.fn(
       async (row, saved) => files.get(`${row.id}:${saved.id}`)?.length ?? null,
     ),

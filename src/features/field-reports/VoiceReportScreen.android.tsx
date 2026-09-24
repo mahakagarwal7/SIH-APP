@@ -19,10 +19,11 @@ import {
 
 import { useAuth } from '@/features/auth/AuthProvider';
 import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
-import { useDefaultProject } from '@/features/projects/useMyWork';
+import { useCaptureProject } from '@/features/projects/useCaptureProject';
 
 import { androidMicrophone } from './androidMicrophone';
 import { getVoiceDraftStore } from './nativeDraftStore';
+import { assertLocalDraftCanBeDiscarded } from './nativeOutbox';
 import { ReportMethodLinks } from './ReportMethodLinks';
 import { VoiceCapture } from './voiceCapture';
 
@@ -238,7 +239,7 @@ function CapturePanel({
 
 function AccountVoiceScreen({ userId }: { userId: string }) {
   const auth = useAuth();
-  const project = useDefaultProject();
+  const project = useCaptureProject();
   const client = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [playing, setPlaying] = useState<string | null>(null);
@@ -352,9 +353,14 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
     setDiscarding(id);
     setError('');
     try {
+      await assertLocalDraftCanBeDiscarded(userId, id);
       await (await getVoiceDraftStore()).discard(userId, id);
-    } catch {
-      setError('Could not finish discarding. Retry the discard action.');
+    } catch (failure) {
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : 'Could not finish discarding. Retry the discard action.',
+      );
     } finally {
       setDiscarding(null);
       void client.invalidateQueries({ queryKey: ['voice-drafts', userId] });

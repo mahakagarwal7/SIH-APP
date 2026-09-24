@@ -2,16 +2,16 @@
 
 24 September 2026. **Approved by the owner.** This researched delivery order and its listed integration decisions were approved before roadmap 1.3 implementation began.
 
-**Plan: 15 further mobile PRs, with a usable Field reporting milestone after the first five.** This includes English/Hindi support from `FEATURES.md`. The English core alone is 14 PRs. These are planned review units, not a guarantee that no additional repair or backend work will be discovered.
+**Plan: 15 further mobile PRs, with a usable Field reporting milestone after the first five.** Roadmap 1.3 became draft PR #6; this 1.5 branch is the second planned slice, leaving 13 after it. This includes English/Hindi support from `FEATURES.md`. The English core alone is 14 PRs. These are planned review units, not a guarantee that no additional repair or backend work will be discovered.
 
 The count is eleven remaining non-optional roadmap steps, plus four omissions that need explicit delivery: a phone-ready build and live Field verification, clarification/supervisor responses, the approved History screen, and localization. Alerts/push, Tamil, store release and any separately approved backend changes are outside this count.
 
 ## Verified starting point
 
 Integration update, 24 September 2026: the table below preserves the original
-planning audit. The owner has since merged PRs 1–5. PR #6's review fixes integrate
-main `dae6f4b`, retaining the completed earlier fixes and resolving the old stack's
-conflicts. This does not change the approved delivery sequence.
+planning audit. The owner has since merged PRs 1–6. PR #7 integrates main
+`b0d600d`, retaining their completed fixes and resolving the old stack's conflicts.
+This does not change the approved delivery sequence.
 
 Mobile source: `56df7bae5351a6bdc39721e77862da62d485edd5` on `feature/1.2-voice-capture`.
 

@@ -1,6 +1,6 @@
 # Mobile project discovery
 
-Reviewed 23 September and updated 24 September 2026. Foundation, auth, navigation, My work and local voice capture are represented by PRs 1–5, now merged by the owner. PR #6 adds local text/photo capture and integrates current main while retaining those earlier fixes. A development/debug x86_64 APK was built, installed and launched in an emulator during voice evaluation. Native probe recordings passed the production WAV byte validator. That historical artifact requires Metro and is not the planned standalone ARM64 phone preview. Production login, physical-phone behavior, upload and worker processing remain unverified for this slice. See [voice evidence](VOICE_CAPTURE.md), [the text/photo contract](TEXT_PHOTO_CAPTURE.md), [the approved delivery plan](DELIVERY_PLAN.md) and the individual PR drafts.
+Reviewed 23 September and updated 24 September 2026. PRs 1–6 are now merged by the owner. PR #7 adds the outbox/My reports slice and integrates current main while retaining those earlier fixes. A development/debug x86_64 APK was built, installed and launched in an emulator during earlier voice evaluation. Native probe recordings passed the production WAV byte validator. That historical artifact requires Metro and does not validate this outbox slice. Production login, physical-phone behavior, upload and worker processing remain unverified here. See [voice evidence](VOICE_CAPTURE.md), [the outbox contract](OUTBOX_SYNC.md), [the approved delivery plan](DELIVERY_PLAN.md) and the individual PR drafts.
 
 Roadmap 1.1 adds read-only My work and the default authorized project context after owner approval of the existing authenticated Supabase reads/RPCs for this slice. See [the My work draft](pr-drafts/1.1-my-work.md) for its separate validation and limitations; the full project switcher remains 2.1.
 
@@ -128,9 +128,9 @@ flowchart TD
   H --> I[Accepted / partly accepted / rejected / observed]
 ```
 
-Offline voice cannot show a server transcript that has not been produced. Recommend automatic upload after reconnect, followed by explicit transcript confirmation before submission. Already-confirmed text/photo submissions can resume their stable queued payload. Confirm this interaction before implementing it.
+Offline voice cannot show a server transcript that has not been produced. The approved implementation automatically resumes reserved upload after reconnect, then stops at explicit transcript/text confirmation. No outbox path submits a report for review. Roadmap 1.4 will persist and retry the exact confirmed payload before calling `submit_field_capture`.
 
-Owner-approved storage for step 1.2: SQLite metadata and app-private durable audio files, partitioned by user/project. Retain unsent drafts after logout, show them only to the same signed-in account, and delete only through explicit discard. Later outbox delivery remains a separate slice. Clear local evidence only after a durable, recoverable server handoff. Persist before displaying “Saved on device”; a failed disk write must remain visible.
+Owner-approved storage for step 1.2: SQLite metadata and app-private durable media files, partitioned by user/project. Retain unsent drafts after logout and show them only to the same signed-in account. Roadmap 1.5 freezes capture/media IDs, byte counts, MIME types, captions and SHA-256 before reservation; retries cannot replace that manifest. Once a draft enters the outbox, capture screens retain its local evidence through confirmation. Persist before displaying “Saved on device”; a failed disk write must remain visible.
 
 Foreground reconnect/resume and an explicit Sync now control can be verified independently of OS background execution. Do not promise guaranteed background sync while the app is closed.
 

@@ -1,4 +1,8 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  notifyManager,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query';
 import {
   act,
   fireEvent,
@@ -9,7 +13,7 @@ import {
 import { Alert } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
-import { useDefaultProject } from '@/features/projects/useMyWork';
+import { useCaptureProject } from '@/features/projects/useCaptureProject';
 
 import { choosePhoto, recoverPendingPhoto } from './nativePhotoPicker';
 import { getReportDraftStore } from './nativeReportDraftStore';
@@ -19,11 +23,14 @@ import type { LocalReportDraft, ReportDraftStore } from './reportDraftStore';
 import type { AuthViewState } from '@/features/auth/AuthProvider';
 
 jest.mock('@/features/auth/AuthProvider', () => ({ useAuth: jest.fn() }));
-jest.mock('@/features/projects/useMyWork', () => ({
-  useDefaultProject: jest.fn(),
+jest.mock('@/features/projects/useCaptureProject', () => ({
+  useCaptureProject: jest.fn(),
 }));
 jest.mock('./nativeReportDraftStore', () => ({
   getReportDraftStore: jest.fn(),
+}));
+jest.mock('./nativeOutbox', () => ({
+  assertLocalDraftCanBeDiscarded: jest.fn(async () => {}),
 }));
 jest.mock('./nativePhotoPicker', () => ({
   takePhoto: jest.fn(),
@@ -39,6 +46,14 @@ jest.mock('expo-crypto', () => ({ randomUUID: () => `local-${++mockUuid}` }));
 const save = jest.fn();
 const list = jest.fn();
 const discard = jest.fn();
+
+beforeAll(() => {
+  notifyManager.setScheduler((callback) => callback());
+});
+
+afterAll(() => {
+  notifyManager.setScheduler((callback) => setTimeout(callback, 0));
+});
 
 function App({ mode = 'text' }: { mode?: 'text' | 'photo' }) {
   const client = new QueryClient({
@@ -58,7 +73,7 @@ beforeEach(() => {
     session: { user: { id: 'alice' } },
     offline: false,
   } as AuthViewState);
-  jest.mocked(useDefaultProject).mockReturnValue({
+  jest.mocked(useCaptureProject).mockReturnValue({
     data: {
       member: { user_id: 'alice' },
       project: { id: 'project', name: 'Site project' },
@@ -66,7 +81,7 @@ beforeEach(() => {
     isPending: false,
     isFetching: false,
     error: null,
-  } as ReturnType<typeof useDefaultProject>);
+  } as ReturnType<typeof useCaptureProject>);
   save.mockReset().mockResolvedValue(undefined);
   list.mockReset().mockResolvedValue([]);
   discard.mockReset().mockResolvedValue(undefined);
@@ -215,9 +230,7 @@ it('keeps a failed discard visible and allows the user to retry it', async () =>
   await render(<App />);
   await screen.findByText(savedDraft.text);
   await fireEvent.press(screen.getByRole('button', { name: 'Discard draft' }));
-  await screen.findByText(
-    'Could not finish discarding. Retry the discard action.',
-  );
+  await screen.findByText('Disk busy');
   expect(screen.getByText(savedDraft.text)).toBeVisible();
   await waitFor(() =>
     expect(screen.getByRole('button', { name: 'Discard draft' })).toBeEnabled(),
@@ -323,12 +336,12 @@ it('releases the form after photo recovery fails', async () => {
 });
 
 it('shows discard failure even when project access is unavailable', async () => {
-  jest.mocked(useDefaultProject).mockReturnValue({
+  jest.mocked(useCaptureProject).mockReturnValue({
     data: null,
     isPending: false,
     isFetching: false,
     error: null,
-  } as ReturnType<typeof useDefaultProject>);
+  } as ReturnType<typeof useCaptureProject>);
   list.mockResolvedValue([savedDraft]);
   discard.mockRejectedValue(new Error('Disk busy'));
   jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
@@ -337,9 +350,5 @@ it('shows discard failure even when project access is unavailable', async () => 
   await render(<App />);
   await screen.findByText(savedDraft.text);
   await fireEvent.press(screen.getByRole('button', { name: 'Discard draft' }));
-  expect(
-    await screen.findByText(
-      'Could not finish discarding. Retry the discard action.',
-    ),
-  ).toBeVisible();
+  expect(await screen.findByText('Disk busy')).toBeVisible();
 });

@@ -31,6 +31,13 @@ let client: SupabaseClient<Database> | null = null;
 
 export function getSupabase(): SupabaseClient<Database> | null {
   if (client) return client;
+  const connection = getSupabaseConnection();
+  if (!connection) return null;
+  client = createAuthClient(connection);
+  return client;
+}
+
+export function getSupabaseConnection(): PublicConnection | null {
   const connection: unknown = Constants.expoConfig?.extra?.supabase;
   if (
     !connection ||
@@ -41,6 +48,5 @@ export function getSupabase(): SupabaseClient<Database> | null {
     typeof connection.key !== 'string'
   )
     return null;
-  client = createAuthClient({ url: connection.url, key: connection.key });
-  return client;
+  return { url: connection.url, key: connection.key };
 }

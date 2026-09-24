@@ -1,3 +1,6 @@
+import { withDraftMutation } from './draftMutations';
+import { notifyOutboxWork } from './outboxEvents';
+
 export const MAX_REPORT_TEXT = 10_000;
 export const MAX_PHOTOS = 3;
 export const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
@@ -44,6 +47,7 @@ export type ReportDraftFiles = {
     photo: SavedPhoto,
     bytes: Uint8Array,
   ): Promise<void>;
+  read(draft: ReportDraft, photo: SavedPhoto): Promise<Uint8Array>;
   size(draft: ReportDraft, photo: SavedPhoto): Promise<number | null>;
   uri(draft: ReportDraft, photo: SavedPhoto): string;
   remove(draft: ReportDraft, photo: SavedPhoto): Promise<void>;
@@ -106,11 +110,13 @@ function sameDraft(left: ReportDraft, right: ReportDraft) {
 
 // This service owns local data only. Upload and submission belong to the outbox slice.
 export class ReportDraftStore {
-  private readonly mutations = new Set<string>();
-
   constructor(
     private index: ReportDraftIndex,
     private files: ReportDraftFiles,
+    private beforeDiscard: (
+      userId: string,
+      id: string,
+    ) => Promise<void> = async () => {},
   ) {}
 
   // Reject overlap instead of queueing a stale retry behind a completed discard.
@@ -119,17 +125,7 @@ export class ReportDraftStore {
     id: string,
     action: () => Promise<void>,
   ) {
-    const key = JSON.stringify([userId, id]);
-    if (this.mutations.has(key))
-      throw new Error(
-        'This draft is busy. Wait for its save or discard to finish.',
-      );
-    this.mutations.add(key);
-    try {
-      await action();
-    } finally {
-      this.mutations.delete(key);
-    }
+    return withDraftMutation(userId, id, action);
   }
 
   async list(userId: string): Promise<LocalReportDraft[]> {
@@ -156,9 +152,10 @@ export class ReportDraftStore {
     draft: ReportDraft,
     prepared: PreparedDraftPhoto[],
   ): Promise<void> {
-    return this.mutate(draft.userId, draft.id, () =>
+    await this.mutate(draft.userId, draft.id, () =>
       this.persist(draft, prepared),
     );
+    notifyOutboxWork(draft.userId);
   }
 
   private async persist(
@@ -193,8 +190,31 @@ export class ReportDraftStore {
     await this.index.setState(draft.userId, draft.id, 'saved');
   }
 
+  async materialize(
+    userId: string,
+    id: string,
+  ): Promise<{
+    draft: ReportDraft;
+    prepared: PreparedDraftPhoto[];
+  }> {
+    const draft = await this.index.get(userId, id);
+    if (!draft || draft.state !== 'saved')
+      throw new Error('This report draft is unavailable on this device.');
+    const prepared: PreparedDraftPhoto[] = [];
+    for (const photo of draft.photos) {
+      if ((await this.files.size(draft, photo)) !== photo.byteLength)
+        throw new Error('A saved photo is missing or incomplete.');
+      const bytes = await this.files.read(draft, photo);
+      if (bytes.length !== photo.byteLength)
+        throw new Error('A saved photo is missing or incomplete.');
+      prepared.push({ photo, bytes });
+    }
+    return { draft, prepared };
+  }
+
   async discard(userId: string, id: string): Promise<void> {
     return this.mutate(userId, id, async () => {
+      await this.beforeDiscard(userId, id);
       const draft = await this.index.get(userId, id);
       if (!draft)
         throw new Error('This draft is unavailable for this account.');

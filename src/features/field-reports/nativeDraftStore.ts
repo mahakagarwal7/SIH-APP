@@ -3,6 +3,7 @@ import { openDatabaseAsync } from 'expo-sqlite';
 
 import { createDraftIndex } from './draftIndex';
 import { VoiceDraftStore } from './draftStore';
+import { assertLocalDraftCanBeDiscarded } from './nativeOutboxIndex';
 
 import type { VoiceDraft } from './draftStore';
 
@@ -18,22 +19,29 @@ export function getVoiceDraftStore(): Promise<VoiceDraftStore> {
   store ??= openDatabaseAsync('nirmaan-drafts.db')
     .then(
       async (db) =>
-        new VoiceDraftStore(await createDraftIndex(db), {
-          async write(draft, bytes) {
-            const { directory, file } = fileFor(draft);
-            directory.create({ intermediates: true, idempotent: true });
-            file.write(bytes);
+        new VoiceDraftStore(
+          await createDraftIndex(db),
+          {
+            async write(draft, bytes) {
+              const { directory, file } = fileFor(draft);
+              directory.create({ intermediates: true, idempotent: true });
+              file.write(bytes);
+            },
+            async read(draft) {
+              return fileFor(draft).file.bytes();
+            },
+            async size(draft) {
+              const { file } = fileFor(draft);
+              return file.exists ? file.size : null;
+            },
+            async remove(draft) {
+              const { file } = fileFor(draft);
+              if (file.exists) file.delete();
+            },
+            uri: (draft) => fileFor(draft).file.uri,
           },
-          async size(draft) {
-            const { file } = fileFor(draft);
-            return file.exists ? file.size : null;
-          },
-          async remove(draft) {
-            const { file } = fileFor(draft);
-            if (file.exists) file.delete();
-          },
-          uri: (draft) => fileFor(draft).file.uri,
-        }),
+          assertLocalDraftCanBeDiscarded,
+        ),
     )
     .catch((error) => {
       store = undefined;

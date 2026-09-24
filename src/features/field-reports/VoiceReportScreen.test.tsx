@@ -9,10 +9,11 @@ import { useState } from 'react';
 import { Alert, AppState } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
-import { useDefaultProject } from '@/features/projects/useMyWork';
+import { useCaptureProject } from '@/features/projects/useCaptureProject';
 
 import { androidMicrophone } from './androidMicrophone';
 import { getVoiceDraftStore } from './nativeDraftStore';
+import { assertLocalDraftCanBeDiscarded } from './nativeOutbox';
 import { VoiceReportScreen } from './VoiceReportScreen.android';
 
 import type { VoiceDraftStore } from './draftStore';
@@ -21,13 +22,16 @@ import type { AuthViewState } from '@/features/auth/AuthProvider';
 import type { AppStateStatus } from 'react-native';
 
 jest.mock('@/features/auth/AuthProvider', () => ({ useAuth: jest.fn() }));
-jest.mock('@/features/projects/useMyWork', () => ({
-  useDefaultProject: jest.fn(),
+jest.mock('@/features/projects/useCaptureProject', () => ({
+  useCaptureProject: jest.fn(),
 }));
 jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('./androidMicrophone', () => ({ androidMicrophone: jest.fn() }));
 jest.mock('./nativeDraftStore', () => ({ getVoiceDraftStore: jest.fn() }));
+jest.mock('./nativeOutbox', () => ({
+  assertLocalDraftCanBeDiscarded: jest.fn(async () => {}),
+}));
 jest.mock('./ReportMethodLinks', () => ({ ReportMethodLinks: () => null }));
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'draft-id' }));
 const mockPlayer = {
@@ -77,14 +81,14 @@ beforeEach(() => {
   AppState.currentState = 'active';
   mockPlayer.addListener.mockReturnValue({ remove: jest.fn() });
   signedIn();
-  jest.mocked(useDefaultProject).mockReturnValue({
+  jest.mocked(useCaptureProject).mockReturnValue({
     data: {
       member: { user_id: 'alice' },
       project: { id: 'project', name: 'Site project' },
     },
     isPending: false,
     error: null,
-  } as ReturnType<typeof useDefaultProject>);
+  } as ReturnType<typeof useCaptureProject>);
   jest
     .mocked(requestRecordingPermissionsAsync)
     .mockResolvedValue({ granted: true } as Awaited<
@@ -96,14 +100,15 @@ beforeEach(() => {
   });
   save.mockReset().mockResolvedValue(undefined);
   list.mockReset().mockResolvedValue([]);
+  jest.mocked(assertLocalDraftCanBeDiscarded).mockResolvedValue(undefined);
   jest
     .mocked(getVoiceDraftStore)
     .mockResolvedValue({ save, list } as unknown as VoiceDraftStore);
 });
 
 function renameProject() {
-  const current = jest.mocked(useDefaultProject).mock.results.at(-1)!.value;
-  jest.mocked(useDefaultProject).mockReturnValue({
+  const current = jest.mocked(useCaptureProject).mock.results.at(-1)!.value;
+  jest.mocked(useCaptureProject).mockReturnValue({
     ...current,
     data: {
       ...current.data,
@@ -383,11 +388,11 @@ it('prevents draft deletion and save retry from racing over an unsaved recording
 });
 it('loads local drafts while offline without project access and labels incomplete media honestly', async () => {
   signedIn('alice', true);
-  jest.mocked(useDefaultProject).mockReturnValue({
+  jest.mocked(useCaptureProject).mockReturnValue({
     isPending: true,
     data: undefined,
     error: null,
-  } as ReturnType<typeof useDefaultProject>);
+  } as ReturnType<typeof useCaptureProject>);
   list.mockResolvedValue([
     {
       id: 'missing',
@@ -448,5 +453,39 @@ it('ignores a discard confirmation after its account screen unmounts', async () 
   await view.unmount();
   await act(() => confirm?.onPress?.());
   expect(discard).not.toHaveBeenCalled();
+  alert.mockRestore();
+});
+
+it('retains local evidence after the draft enters the outbox', async () => {
+  list.mockResolvedValue([
+    {
+      id: 'outbox-draft',
+      projectName: 'Site project',
+      duration: 2,
+      createdAt: '2026-09-24T00:00:00Z',
+      state: 'saved',
+      available: true,
+    },
+  ]);
+  const discard = jest.fn(async () => {});
+  jest.mocked(getVoiceDraftStore).mockResolvedValue({
+    save,
+    list,
+    discard,
+  } as unknown as VoiceDraftStore);
+  jest
+    .mocked(assertLocalDraftCanBeDiscarded)
+    .mockRejectedValueOnce(new Error('Keep this device copy.'));
+  const alert = jest.spyOn(Alert, 'alert');
+  await render(<App />);
+  await fireEvent.press(
+    await screen.findByRole('button', { name: 'Discard draft' }),
+  );
+  const confirm = alert.mock.calls
+    .at(-1)?.[2]
+    ?.find((button) => button.text === 'Discard');
+  await act(() => confirm?.onPress?.());
+  expect(discard).not.toHaveBeenCalled();
+  expect(await screen.findByText('Keep this device copy.')).toBeVisible();
   alert.mockRestore();
 });

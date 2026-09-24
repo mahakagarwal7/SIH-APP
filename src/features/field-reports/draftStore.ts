@@ -1,3 +1,6 @@
+import { withDraftMutation } from './draftMutations';
+import { notifyOutboxWork } from './outboxEvents';
+
 export type VoiceDraft = {
   id: string;
   userId: string;
@@ -24,6 +27,7 @@ export type DraftIndex = {
 
 export type DraftFiles = {
   write(draft: VoiceDraft, bytes: Uint8Array): Promise<void>;
+  read(draft: VoiceDraft): Promise<Uint8Array>;
   size(draft: VoiceDraft): Promise<number | null>;
   remove(draft: VoiceDraft): Promise<void>;
   uri(draft: VoiceDraft): string;
@@ -36,6 +40,10 @@ export class VoiceDraftStore {
   constructor(
     private index: DraftIndex,
     private files: DraftFiles,
+    private beforeDiscard: (
+      userId: string,
+      id: string,
+    ) => Promise<void> = async () => {},
   ) {}
 
   async list(userId: string): Promise<LocalVoiceDraft[]> {
@@ -51,6 +59,13 @@ export class VoiceDraftStore {
   }
 
   async save(draft: VoiceDraft, bytes: Uint8Array): Promise<void> {
+    await withDraftMutation(draft.userId, draft.id, () =>
+      this.persist(draft, bytes),
+    );
+    notifyOutboxWork(draft.userId);
+  }
+
+  private async persist(draft: VoiceDraft, bytes: Uint8Array): Promise<void> {
     if (bytes.length !== draft.byteLength)
       throw new Error('Incomplete recording.');
     const existing = await this.index.get(draft.userId, draft.id);
@@ -79,12 +94,36 @@ export class VoiceDraftStore {
     return this.files.uri(draft);
   }
 
-  async discard(userId: string, id: string): Promise<void> {
+  async recording(
+    userId: string,
+    id: string,
+  ): Promise<{
+    draft: VoiceDraft;
+    bytes: Uint8Array;
+  }> {
     const draft = await this.index.get(userId, id);
-    if (!draft) throw new Error('This draft is unavailable for this account.');
-    // Keep a tombstone if file deletion fails, allowing an explicit retry.
-    await this.index.setState(userId, id, 'deleting');
-    await this.files.remove(draft);
-    await this.index.remove(userId, id);
+    if (
+      !draft ||
+      draft.state !== 'saved' ||
+      (await this.files.size(draft)) !== draft.byteLength
+    )
+      throw new Error('This recording is unavailable on this device.');
+    const bytes = await this.files.read(draft);
+    if (bytes.length !== draft.byteLength)
+      throw new Error('This recording is incomplete on this device.');
+    return { draft, bytes };
+  }
+
+  async discard(userId: string, id: string): Promise<void> {
+    return withDraftMutation(userId, id, async () => {
+      await this.beforeDiscard(userId, id);
+      const draft = await this.index.get(userId, id);
+      if (!draft)
+        throw new Error('This draft is unavailable for this account.');
+      // Keep a tombstone if file deletion fails, allowing an explicit retry.
+      await this.index.setState(userId, id, 'deleting');
+      await this.files.remove(draft);
+      await this.index.remove(userId, id);
+    });
   }
 }
