@@ -97,13 +97,13 @@ export const shellStyles = StyleSheet.create({
     marginBottom: 16,
   },
   eyebrow: {
-    color: '#627786',
+    color: '#586c7a',
     fontSize: 12,
     lineHeight: 20,
     letterSpacing: 1,
     marginBottom: 12,
   },
-  body: { color: '#627786', fontSize: 16, lineHeight: 26 },
+  body: { color: '#586c7a', fontSize: 16, lineHeight: 26 },
   card: {
     backgroundColor: '#ffffff',
     borderColor: '#d7e0e5',

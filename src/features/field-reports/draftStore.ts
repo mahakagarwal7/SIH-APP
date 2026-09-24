@@ -1,3 +1,6 @@
+import { withDraftMutation } from './draftMutations';
+import { notifyOutboxWork } from './outboxEvents';
+
 export type VoiceDraft = {
   id: string;
   userId: string;
@@ -37,6 +40,10 @@ export class VoiceDraftStore {
   constructor(
     private index: DraftIndex,
     private files: DraftFiles,
+    private beforeDiscard: (
+      userId: string,
+      id: string,
+    ) => Promise<void> = async () => {},
   ) {}
 
   async list(userId: string): Promise<LocalVoiceDraft[]> {
@@ -52,6 +59,13 @@ export class VoiceDraftStore {
   }
 
   async save(draft: VoiceDraft, bytes: Uint8Array): Promise<void> {
+    await withDraftMutation(draft.userId, draft.id, () =>
+      this.persist(draft, bytes),
+    );
+    notifyOutboxWork(draft.userId);
+  }
+
+  private async persist(draft: VoiceDraft, bytes: Uint8Array): Promise<void> {
     if (bytes.length !== draft.byteLength)
       throw new Error('Incomplete recording.');
     const existing = await this.index.get(draft.userId, draft.id);
@@ -101,11 +115,15 @@ export class VoiceDraftStore {
   }
 
   async discard(userId: string, id: string): Promise<void> {
-    const draft = await this.index.get(userId, id);
-    if (!draft) throw new Error('This draft is unavailable for this account.');
-    // Keep a tombstone if file deletion fails, allowing an explicit retry.
-    await this.index.setState(userId, id, 'deleting');
-    await this.files.remove(draft);
-    await this.index.remove(userId, id);
+    return withDraftMutation(userId, id, async () => {
+      await this.beforeDiscard(userId, id);
+      const draft = await this.index.get(userId, id);
+      if (!draft)
+        throw new Error('This draft is unavailable for this account.');
+      // Keep a tombstone if file deletion fails, allowing an explicit retry.
+      await this.index.setState(userId, id, 'deleting');
+      await this.files.remove(draft);
+      await this.index.remove(userId, id);
+    });
   }
 }

@@ -1,6 +1,6 @@
 # Confirmation and submission contract
 
-Roadmap 1.4 adds the explicit **Check → Send** boundary after roadmap 1.5 has reserved, uploaded and verified a field capture. The mobile app uses the existing production `submit_field_capture(p_report, p_text, p_work_date, p_activity)` RPC under the signed-in user's RLS context. It changes no schema, worker or web API.
+Roadmap 1.4 adds the explicit **Check → Send** boundary. Voice and photo evidence must first be uploaded and verified through roadmap 1.5; text-only captures can be confirmed offline before reservation. The mobile app uses the existing production `submit_field_capture(p_report, p_text, p_work_date, p_activity)` RPC under the signed-in user's RLS context. It changes no schema, worker or web API.
 
 ## What the worker confirms
 
@@ -13,17 +13,21 @@ The production contract has no pre-submit AI suggestion or separate partial-work
 Before the first submission attempt, SQLite stores the normalized tuple below on the existing account-scoped outbox row:
 
 - trimmed `text` containing 1–10,000 characters;
-- `workDate` as a real `YYYY-MM-DD` calendar date or `null`;
+- `workDate` as a real `YYYY-MM-DD` calendar date (years 0001–9999) or `null`;
 - authorized `activityId` or `null`.
 
-Once stored, this payload is locked. A lost response, app restart or reconnect retries the same report ID and byte-for-byte JSON values. The production RPC returns the existing report for the same fingerprint and rejects a changed payload for that capture. SQLite migration adds confirmation, submission receipt, original transcript and evidence-release columns without replacing existing outbox records.
+Inputs freeze as soon as confirmation starts, and the screen displays the persisted payload after saving. A lost response, app restart or reconnect retries the same capture/report identity and byte-for-byte JSON values. The production RPC returns the existing report for the same fingerprint and rejects a changed payload for that capture. SQLite migration adds confirmation, submission receipt, original transcript, saved activity label, rejection and evidence-release columns without replacing existing outbox records or their retryability.
 
-Offline confirmation stores the locked payload and remains **Sending for review** until a foreground reconnect verifies the RPC receipt. Only then does the row become **Awaiting review**. Submitted and accepted remain separate states.
+There is one narrow correction path: the exact RPC error `42501 / Activity access denied` occurs after its submitted-replay check and proves the draft was not submitted. The app persists that rejection and requires the worker to correct/reconfirm before sending again. Auth, generic access and network errors do not prove rejection, so their payload stays locked. SQLite permits replacement only from the recorded rejection state before any receipt.
+
+Offline confirmation stores the locked payload. Text-only reports reserve their stable capture on reconnect and submit that payload. **Sending for review** changes to **Awaiting review** only after a verified receipt; paused/failed attempts show the actual error. Submitted and accepted remain separate states. My reports keeps a link to pending and completed confirmations. Saved activity labels remain visible when live options are unavailable.
+
+Confirmation and synchronization serialize per account/capture in the shared native service, including direct screen retries and automatic passes. Durable changes invalidate the open confirmation query, so offline saves lock immediately and foreground receipts appear without reopening the screen.
 
 ## Evidence lifecycle
 
-Unconfirmed evidence remains in app-private storage. After a valid submission receipt, the app marks the server receipt durably and then deletes the original local voice/photo draft. Cleanup is retryable and cannot cause a second logical submission because the confirmed payload and submitted receipt remain in SQLite.
+Unconfirmed evidence remains in app-private storage. After a valid submission receipt, the app marks the server receipt durably and then deletes the original local voice/photo draft through the existing guarded store. The guard permits deletion only when the confirmed payload, report ID and receipt are durable. Foreground cleanup retries with bounded backoff, including after a direct retry wakes an idle coordinator. It does not resubmit a receipted report.
 
 ## Evidence limits
 
-Unit and component tests cover payload validation, transcript display, explicit confirmation, offline save, lost-response retry, immutable payload enforcement, current membership/activity reads, exact RPC arguments and post-receipt cleanup. These checks mock Supabase. They do not prove production membership, worker transcription, a live RLS mutation, physical-device keyboard/date entry or cross-client planner visibility.
+Unit, component and real SQLite integration tests cover payload validation, transcript display, input freezing, offline save/restart, concurrent receipt checks, immutable uncertain receipts, definitive activity rejection, current membership/activity reads, exact RPC arguments, guarded cleanup and foreground retry. These checks mock Supabase. They do not prove production membership, worker transcription, a live RLS mutation, physical-device keyboard/date entry or cross-client planner visibility. Validation results are recorded in the PR draft.

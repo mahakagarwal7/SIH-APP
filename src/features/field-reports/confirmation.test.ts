@@ -33,3 +33,13 @@ it('rejects blank wording, invalid calendar dates and invalid activity ids', () 
     }),
   ).toThrow('activity');
 });
+
+it('rejects year zero before locking a payload that the database cannot accept', () => {
+  expect(() =>
+    normalizeConfirmation({
+      text: 'Progress recorded.',
+      workDate: '0000-01-01',
+      activityId: null,
+    }),
+  ).toThrow('date');
+});

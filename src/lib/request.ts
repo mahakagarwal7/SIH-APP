@@ -16,7 +16,14 @@ export function withTimeout(fetcher: Fetcher, milliseconds = 10_000): Fetcher {
     else signal?.addEventListener('abort', abort, { once: true });
     const timer = setTimeout(abort, milliseconds);
     try {
-      return await fetcher(input, { ...init, signal: controller.signal });
+      const response = await fetcher(input, {
+        ...init,
+        signal: controller.signal,
+      });
+      // Auth responses are buffered: keep cancellation active after headers arrive.
+      // Reading a clone leaves the original body and response metadata intact for the SDK.
+      await response.clone().arrayBuffer();
+      return response;
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);

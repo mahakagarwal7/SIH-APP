@@ -57,6 +57,8 @@ it('persists the frozen manifest, upload progress and owner partition', async ()
       uploadedFiles: [],
       originalTranscript: null,
       confirmedPayload: null,
+      confirmedActivityLabel: null,
+      submissionRejected: false,
       submissionState: 'unconfirmed',
       submittedAt: null,
       evidenceReleased: false,
@@ -64,6 +66,7 @@ it('persists the frozen manifest, upload progress and owner partition', async ()
       attemptCount: 0,
       lastErrorKind: null,
       lastError: null,
+      retryable: true,
       updatedAt: '2026-09-24T00:00:00Z',
     };
     await index.put(row);
@@ -94,6 +97,28 @@ it('persists the frozen manifest, upload progress and owner partition', async ()
     await expect(
       (await createOutboxIndex(db)).list('alice'),
     ).resolves.toHaveLength(1);
+    const persisted = (await index.get('alice', row.captureId))!;
+    await index.put({
+      ...persisted,
+      state: 'failed',
+      lastErrorKind: 'server',
+      retryable: false,
+    });
+    await expect(
+      (await createOutboxIndex(db)).get('alice', row.captureId),
+    ).resolves.toMatchObject({ retryable: false });
+    sql.exec(
+      "ALTER TABLE local_field_outbox DROP COLUMN retryable; UPDATE local_field_outbox SET lastErrorKind='local';",
+    );
+    await expect(
+      (await createOutboxIndex(db)).get('alice', row.captureId),
+    ).resolves.toMatchObject({
+      retryable: false,
+      state: 'failed',
+      reportId: persisted.reportId,
+      uploadedFiles: persisted.uploadedFiles,
+      manifest: persisted.manifest,
+    });
   } finally {
     sql.close();
   }
@@ -133,6 +158,8 @@ it('migrates an existing roadmap 1.5 outbox without replacing its rows', async (
       text: 'Progress recorded.',
       submissionState: 'unconfirmed',
       confirmedPayload: null,
+      confirmedActivityLabel: null,
+      submissionRejected: false,
       evidenceReleased: false,
     });
   } finally {

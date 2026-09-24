@@ -8,6 +8,11 @@ The count is eleven remaining non-optional roadmap steps, plus four omissions th
 
 ## Verified starting point
 
+Integration update, 24 September 2026: the table below preserves the original
+planning audit. The owner has since merged PRs 1–7. PR #8 integrates main
+`5d23479`, retaining their completed fixes and resolving the old stack's conflicts.
+This does not change the approved delivery sequence.
+
 Mobile source: `56df7bae5351a6bdc39721e77862da62d485edd5` on `feature/1.2-voice-capture`.
 
 | Existing work                                                           | GitHub state observed during this audit | Evidence / limit                                                                               |

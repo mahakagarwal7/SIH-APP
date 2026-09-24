@@ -11,12 +11,19 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 type StoredOutbox = Omit<
   OutboxRecord,
-  'manifest' | 'uploadedFiles' | 'confirmedPayload' | 'evidenceReleased'
+  | 'manifest'
+  | 'uploadedFiles'
+  | 'confirmedPayload'
+  | 'evidenceReleased'
+  | 'retryable'
+  | 'submissionRejected'
 > & {
   manifest: string;
   uploadedFiles: string;
   confirmedPayload: string | null;
   evidenceReleased: number;
+  retryable: number;
+  submissionRejected: number;
 };
 
 function hydrate(row: StoredOutbox | null): OutboxRecord | null {
@@ -41,7 +48,8 @@ function hydrate(row: StoredOutbox | null): OutboxRecord | null {
     (row.submissionState === 'unconfirmed' && confirmedPayload !== null) ||
     (row.submissionState !== 'unconfirmed' && confirmedPayload === null) ||
     (row.submissionState === 'submitted' && !row.submittedAt) ||
-    (row.evidenceReleased === 1 && row.submissionState !== 'submitted')
+    (row.evidenceReleased === 1 && row.submissionState !== 'submitted') ||
+    (row.submissionRejected === 1 && row.submissionState !== 'pending')
   )
     throw new Error('Invalid local confirmation state.');
   return {
@@ -50,6 +58,8 @@ function hydrate(row: StoredOutbox | null): OutboxRecord | null {
     uploadedFiles,
     confirmedPayload,
     evidenceReleased: row.evidenceReleased === 1,
+    retryable: row.retryable === 1,
+    submissionRejected: row.submissionRejected === 1,
   };
 }
 
@@ -71,6 +81,8 @@ export async function createOutboxIndex(
       uploadedFiles TEXT NOT NULL,
       originalTranscript TEXT,
       confirmedPayload TEXT,
+      confirmedActivityLabel TEXT,
+      submissionRejected INTEGER NOT NULL DEFAULT 0 CHECK(submissionRejected IN (0,1)),
       submissionState TEXT NOT NULL DEFAULT 'unconfirmed' CHECK(submissionState IN ('unconfirmed','pending','submitted')),
       submittedAt TEXT,
       evidenceReleased INTEGER NOT NULL DEFAULT 0 CHECK(evidenceReleased IN (0,1)),
@@ -78,7 +90,8 @@ export async function createOutboxIndex(
       attemptCount INTEGER NOT NULL,
       lastErrorKind TEXT CHECK(lastErrorKind IS NULL OR lastErrorKind IN ('auth','access','local','network','server')),
       lastError TEXT,
-      updatedAt TEXT NOT NULL
+      updatedAt TEXT NOT NULL,
+      retryable INTEGER NOT NULL DEFAULT 1 CHECK(retryable IN (0,1))
     );
     CREATE INDEX IF NOT EXISTS local_outbox_owner ON local_field_outbox(userId, createdAt);`);
   const columns = new Set(
@@ -92,6 +105,17 @@ export async function createOutboxIndex(
     await db.execAsync(
       'ALTER TABLE local_field_outbox ADD COLUMN originalTranscript TEXT',
     );
+  if (!columns.has('confirmedActivityLabel'))
+    await db.execAsync(
+      'ALTER TABLE local_field_outbox ADD COLUMN confirmedActivityLabel TEXT',
+    );
+  if (!columns.has('submissionRejected'))
+    await db.execAsync(
+      'ALTER TABLE local_field_outbox ADD COLUMN submissionRejected INTEGER NOT NULL DEFAULT 0 CHECK(submissionRejected IN (0,1))',
+    );
+  if (!columns.has('retryable'))
+    await db.execAsync(`ALTER TABLE local_field_outbox ADD COLUMN retryable INTEGER NOT NULL DEFAULT 1 CHECK(retryable IN (0,1));
+      UPDATE local_field_outbox SET retryable=0 WHERE lastErrorKind IN ('auth','access','local');`);
   if (!columns.has('confirmedPayload'))
     await db.execAsync(
       'ALTER TABLE local_field_outbox ADD COLUMN confirmedPayload TEXT',
@@ -128,8 +152,8 @@ export async function createOutboxIndex(
     async put(record) {
       const result = await db.runAsync(
         `INSERT INTO local_field_outbox
-          (captureId,userId,projectId,projectName,kind,createdAt,text,manifest,reportId,uploadedFiles,originalTranscript,confirmedPayload,submissionState,submittedAt,evidenceReleased,state,attemptCount,lastErrorKind,lastError,updatedAt)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          (captureId,userId,projectId,projectName,kind,createdAt,text,manifest,reportId,uploadedFiles,originalTranscript,confirmedPayload,submissionState,submittedAt,evidenceReleased,state,attemptCount,lastErrorKind,lastError,updatedAt,retryable,submissionRejected,confirmedActivityLabel)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(captureId) DO UPDATE SET
           userId=excluded.userId,projectId=excluded.projectId,projectName=excluded.projectName,kind=excluded.kind,
           createdAt=excluded.createdAt,text=excluded.text,manifest=excluded.manifest,reportId=excluded.reportId,
@@ -137,7 +161,8 @@ export async function createOutboxIndex(
           confirmedPayload=excluded.confirmedPayload,submissionState=excluded.submissionState,
           submittedAt=excluded.submittedAt,evidenceReleased=excluded.evidenceReleased,
           state=excluded.state,attemptCount=excluded.attemptCount,
-          lastErrorKind=excluded.lastErrorKind,lastError=excluded.lastError,updatedAt=excluded.updatedAt
+          lastErrorKind=excluded.lastErrorKind,lastError=excluded.lastError,updatedAt=excluded.updatedAt,
+          retryable=excluded.retryable,submissionRejected=excluded.submissionRejected,confirmedActivityLabel=excluded.confirmedActivityLabel
          WHERE local_field_outbox.userId=excluded.userId
            AND local_field_outbox.projectId=excluded.projectId
            AND local_field_outbox.projectName=excluded.projectName
@@ -147,7 +172,10 @@ export async function createOutboxIndex(
            AND local_field_outbox.manifest=excluded.manifest
            AND (local_field_outbox.reportId IS NULL OR local_field_outbox.reportId=excluded.reportId)
            AND (local_field_outbox.originalTranscript IS NULL OR local_field_outbox.originalTranscript=excluded.originalTranscript)
-           AND (local_field_outbox.confirmedPayload IS NULL OR local_field_outbox.confirmedPayload=excluded.confirmedPayload)
+           AND (local_field_outbox.confirmedPayload IS NULL OR local_field_outbox.confirmedPayload=excluded.confirmedPayload
+             OR (local_field_outbox.submissionRejected=1 AND excluded.submissionRejected=0
+               AND local_field_outbox.submissionState='pending' AND excluded.submissionState='pending'
+               AND local_field_outbox.submittedAt IS NULL AND excluded.submittedAt IS NULL))
            AND (local_field_outbox.submittedAt IS NULL OR local_field_outbox.submittedAt=excluded.submittedAt)
            AND (local_field_outbox.submissionState=excluded.submissionState
              OR (local_field_outbox.submissionState='unconfirmed' AND excluded.submissionState='pending')
@@ -175,6 +203,9 @@ export async function createOutboxIndex(
         record.lastErrorKind,
         record.lastError,
         record.updatedAt,
+        record.retryable ? 1 : 0,
+        record.submissionRejected ? 1 : 0,
+        record.confirmedActivityLabel,
       );
       if (result.changes !== 1)
         throw new Error(

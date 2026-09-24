@@ -141,3 +141,87 @@ it('retains a deletion tombstone when a private file cannot be removed', async (
   await store.discard('alice', draft.id);
   expect(await store.list('alice')).toEqual([]);
 });
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+it('rejects a concurrent discard without interrupting the in-flight save', async () => {
+  const { store, media, files } = setup();
+  const entered = deferred(),
+    resume = deferred();
+  const write = jest.mocked(media.write).getMockImplementation()!;
+  jest.mocked(media.write).mockImplementationOnce(async (...args) => {
+    entered.resolve();
+    await resume.promise;
+    await write(...args);
+  });
+  const saving = store.save(draft, [{ photo, bytes: new Uint8Array(4) }]);
+  await entered.promise;
+  try {
+    await expect(store.discard('alice', draft.id)).rejects.toThrow(/busy/i);
+    await expect(
+      store.save(draft, [{ photo, bytes: new Uint8Array(4) }]),
+    ).rejects.toThrow(/busy/i);
+  } finally {
+    resume.resolve();
+    await saving.catch(() => undefined);
+  }
+  expect((await store.list('alice'))[0]?.available).toBe(true);
+  expect(files.size).toBe(1);
+  await store.discard('alice', draft.id);
+  expect(await store.list('alice')).toEqual([]);
+});
+
+it('rejects save retry while discard is still reading the same draft', async () => {
+  const { store, index, media } = setup();
+  await store.save(draft, [{ photo, bytes: new Uint8Array(4) }]);
+  const entered = deferred(),
+    resume = deferred();
+  const read = jest.mocked(index.get).getMockImplementation()!;
+  jest.mocked(index.get).mockImplementationOnce(async (...args) => {
+    const row = await read(...args);
+    entered.resolve();
+    await resume.promise;
+    return row;
+  });
+  const deleting = store.discard('alice', draft.id);
+  await entered.promise;
+  try {
+    await expect(
+      store.save(draft, [{ photo, bytes: new Uint8Array(4) }]),
+    ).rejects.toThrow(/busy/i);
+  } finally {
+    resume.resolve();
+    await deleting;
+  }
+  expect(media.write).toHaveBeenCalledTimes(1);
+  expect(await store.list('alice')).toEqual([]);
+});
+
+it('allows a different draft to save while one draft is busy', async () => {
+  const { store, media } = setup();
+  const entered = deferred(),
+    resume = deferred();
+  const write = jest.mocked(media.write).getMockImplementation()!;
+  jest.mocked(media.write).mockImplementationOnce(async (...args) => {
+    entered.resolve();
+    await resume.promise;
+    await write(...args);
+  });
+  const saving = store.save(draft, [{ photo, bytes: new Uint8Array(4) }]);
+  await entered.promise;
+  try {
+    await store.save({ ...draft, id: 'another-draft', photos: [] }, []);
+  } finally {
+    resume.resolve();
+    await saving;
+  }
+  const saved = await store.list('alice');
+  expect(saved).toHaveLength(2);
+  expect(saved.every((row) => row.available)).toBe(true);
+});

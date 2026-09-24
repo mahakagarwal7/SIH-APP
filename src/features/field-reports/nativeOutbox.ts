@@ -1,11 +1,12 @@
 import { CryptoDigestAlgorithm, digest, randomUUID } from 'expo-crypto';
-import { openDatabaseAsync } from 'expo-sqlite';
 
+import { DraftBusyError, withDraftMutation } from './draftMutations';
 import { getVoiceDraftStore } from './nativeDraftStore';
+import { getNativeOutboxIndex } from './nativeOutboxIndex';
 import { getReportDraftStore } from './nativeReportDraftStore';
-import { createOutboxIndex } from './outboxIndex';
+import { notifyOutboxWork } from './outboxEvents';
 import { OutboxService } from './outboxService';
-import { lazyOutboxTransport } from './outboxTransport';
+import { getOutboxTransport } from './outboxTransport';
 
 import type { CaptureFile, OutboxRecord } from './outbox';
 
@@ -20,11 +21,11 @@ export async function sha256Hex(bytes: Uint8Array) {
 
 let service: Promise<OutboxService> | undefined;
 export function getNativeOutbox(): Promise<OutboxService> {
-  service ??= openDatabaseAsync('nirmaan-drafts.db')
+  service ??= getNativeOutboxIndex()
     .then(
-      async (db) =>
+      (index) =>
         new OutboxService(
-          await createOutboxIndex(db),
+          index,
           {
             async read(record, file) {
               if (record.kind === 'voice') {
@@ -44,7 +45,7 @@ export function getNativeOutbox(): Promise<OutboxService> {
               return photo.bytes;
             },
           },
-          lazyOutboxTransport,
+          getOutboxTransport,
           sha256Hex,
           undefined,
           async (record) => {
@@ -86,66 +87,70 @@ async function prepare(userId: string) {
   for (const local of voice) {
     if (!local.available || known.has(local.id)) continue;
     try {
-      const source = await (
-        await getVoiceDraftStore()
-      ).recording(userId, local.id);
-      const file: CaptureFile = {
-        id: randomUUID(),
-        name: `${local.id}.wav`,
-        kind: 'audio',
-        mime: 'audio/wav',
-        bytes: source.bytes.length,
-        sha256: await sha256Hex(source.bytes),
-        caption: '',
-      };
-      await outbox.enqueue({
-        captureId: local.id,
-        userId,
-        projectId: local.projectId,
-        projectName: local.projectName,
-        kind: 'voice',
-        createdAt: local.createdAt,
-        text: '',
-        manifest: { captureId: local.id, language: 'auto', files: [file] },
+      await withDraftMutation(userId, local.id, async () => {
+        const source = await (
+          await getVoiceDraftStore()
+        ).recording(userId, local.id);
+        const file: CaptureFile = {
+          id: randomUUID(),
+          name: `${local.id}.wav`,
+          kind: 'audio',
+          mime: 'audio/wav',
+          bytes: source.bytes.length,
+          sha256: await sha256Hex(source.bytes),
+          caption: '',
+        };
+        await outbox.enqueue({
+          captureId: local.id,
+          userId,
+          projectId: local.projectId,
+          projectName: local.projectName,
+          kind: 'voice',
+          createdAt: local.createdAt,
+          text: '',
+          manifest: { captureId: local.id, language: 'auto', files: [file] },
+        });
+        known.add(local.id);
+        enqueued += 1;
       });
-      known.add(local.id);
-      enqueued += 1;
-    } catch {
-      unavailable += 1;
+    } catch (error) {
+      if (!(error instanceof DraftBusyError)) unavailable += 1;
     }
   }
   const reports = await (await getReportDraftStore()).list(userId);
   for (const local of reports) {
     if (!local.available || known.has(local.id)) continue;
     try {
-      const source = await (
-        await getReportDraftStore()
-      ).materialize(userId, local.id);
-      const files: CaptureFile[] = [];
-      for (const prepared of source.prepared)
-        files.push({
-          id: prepared.photo.id,
-          name: prepared.photo.fileName,
-          kind: 'photo',
-          mime: prepared.photo.mimeType,
-          bytes: prepared.bytes.length,
-          sha256: await sha256Hex(prepared.bytes),
-          caption: prepared.photo.caption,
+      await withDraftMutation(userId, local.id, async () => {
+        const source = await (
+          await getReportDraftStore()
+        ).materialize(userId, local.id);
+        const files: CaptureFile[] = [];
+        for (const prepared of source.prepared)
+          files.push({
+            id: prepared.photo.id,
+            name: prepared.photo.fileName,
+            kind: 'photo',
+            mime: prepared.photo.mimeType,
+            bytes: prepared.bytes.length,
+            sha256: await sha256Hex(prepared.bytes),
+            caption: prepared.photo.caption,
+          });
+        await outbox.enqueue({
+          captureId: local.id,
+          userId,
+          projectId: local.projectId,
+          projectName: local.projectName,
+          kind: 'report',
+          createdAt: local.createdAt,
+          text: local.text,
+          manifest: { captureId: local.id, language: 'auto', files },
         });
-      await outbox.enqueue({
-        captureId: local.id,
-        userId,
-        projectId: local.projectId,
-        projectName: local.projectName,
-        kind: 'report',
-        createdAt: local.createdAt,
-        text: local.text,
-        manifest: { captureId: local.id, language: 'auto', files },
+        known.add(local.id);
+        enqueued += 1;
       });
-      known.add(local.id);
-      enqueued += 1;
-    } catch {
-      unavailable += 1;
+    } catch (error) {
+      if (!(error instanceof DraftBusyError)) unavailable += 1;
     }
   }
   return { enqueued, unavailable };
@@ -167,29 +172,26 @@ const running = new Map<string, Promise<OutboxRecord[]>>();
 export function syncNativeOutbox(
   userId: string,
   options: { includePaused?: boolean } = {},
-) {
+): Promise<OutboxRecord[]> {
   const current = running.get(userId);
-  if (current) return current;
+  if (current) {
+    // An explicit retry must not lose its includePaused request to an automatic pass.
+    return options.includePaused
+      ? current.then(() => syncNativeOutbox(userId, options))
+      : current;
+  }
   const operation = prepareLocalOutbox(userId)
     .then(async () =>
       (await getNativeOutbox()).syncAll(userId, {
         includePaused: options.includePaused,
       }),
     )
-    .finally(() => running.delete(userId));
+    .finally(() => {
+      running.delete(userId);
+      if (options.includePaused) notifyOutboxWork(userId);
+    });
   running.set(userId, operation);
   return operation;
 }
 
-export async function assertLocalDraftCanBeDiscarded(
-  userId: string,
-  captureId: string,
-) {
-  const record = (await (await getNativeOutbox()).list(userId)).find(
-    (candidate) => candidate.captureId === captureId,
-  );
-  if (record)
-    throw new Error(
-      'This report has entered the outbox. Keep its device copy until confirmation is complete.',
-    );
-}
+export { assertLocalDraftCanBeDiscarded } from './nativeOutboxIndex';

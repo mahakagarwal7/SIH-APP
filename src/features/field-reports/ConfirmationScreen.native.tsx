@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -22,6 +22,7 @@ import {
   loadConfirmationActivities,
 } from './confirmationService';
 import { getNativeOutbox } from './nativeOutbox';
+import { subscribeOutboxChanges } from './outboxEvents';
 
 function PrimaryAction({
   label,
@@ -54,6 +55,22 @@ function AccountConfirmation({
 }) {
   const auth = useAuth();
   const router = useRouter();
+  const client = useQueryClient();
+  const busyRef = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    const unsubscribe = subscribeOutboxChanges((owner, id) => {
+      if (owner === userId && id === captureId)
+        void client.invalidateQueries({
+          queryKey: ['confirmation', userId, captureId],
+        });
+    });
+    return () => {
+      mounted.current = false;
+      unsubscribe();
+    };
+  }, [client, userId, captureId]);
   const [editedText, setEditedText] = useState<string>();
   const [editedWorkDate, setEditedWorkDate] = useState<string>();
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>();
@@ -90,17 +107,31 @@ function AccountConfirmation({
   });
 
   async function submitConfirmed() {
-    if (!record || busy) return;
+    if (!record || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError('');
     setMessage('');
     try {
       const outbox = await getNativeOutbox();
-      await outbox.confirm(userId, captureId, {
-        text,
-        workDate: workDate || null,
-        activityId,
-      });
+      const selected = activities.data?.find(
+        (activity) => activity.id === activityId,
+      );
+      const confirmed = await outbox.confirm(
+        userId,
+        captureId,
+        {
+          text,
+          workDate: workDate || null,
+          activityId,
+        },
+        selected
+          ? `${selected.externalId} · ${selected.name}`
+          : record.confirmedActivityLabel,
+      );
+      if (!mounted.current) return;
+      client.setQueryData(['confirmation', userId, captureId], confirmed);
+      setChecked(false);
       if (auth.offline) {
         setMessage(
           'Confirmation saved on this device. It will send after reconnecting.',
@@ -109,29 +140,36 @@ function AccountConfirmation({
         const result = await outbox.sync(userId, captureId, {
           includePaused: true,
         });
+        if (!mounted.current) return;
+        client.setQueryData(['confirmation', userId, captureId], result);
         if (result.submissionState === 'submitted') {
           setMessage('Sent for review. Planner acceptance is still pending.');
           await local.refetch();
         } else {
           setMessage(
-            'Your confirmed wording is saved and locked. Use retry after reconnecting.',
+            result.submissionRejected
+              ? 'Check the activity and confirm the corrected report.'
+              : 'Your confirmed wording is saved and locked until its receipt is verified.',
           );
           await local.refetch();
         }
       }
     } catch (reason) {
+      if (!mounted.current) return;
       setError(
         reason instanceof Error
           ? reason.message
           : 'Could not save this confirmation.',
       );
     } finally {
-      setBusy(false);
+      busyRef.current = false;
+      if (mounted.current) setBusy(false);
     }
   }
 
   async function retry() {
-    if (!record || busy || auth.offline) return;
+    if (!record || busyRef.current || auth.offline) return;
+    busyRef.current = true;
     setBusy(true);
     setError('');
     try {
@@ -140,6 +178,8 @@ function AccountConfirmation({
       ).sync(userId, captureId, {
         includePaused: true,
       });
+      if (!mounted.current) return;
+      client.setQueryData(['confirmation', userId, captureId], result);
       setMessage(
         result.submissionState === 'submitted'
           ? 'Sent for review. Planner acceptance is still pending.'
@@ -147,9 +187,11 @@ function AccountConfirmation({
       );
       await local.refetch();
     } catch (reason) {
+      if (!mounted.current) return;
       setError(reason instanceof Error ? reason.message : 'Retry failed.');
     } finally {
-      setBusy(false);
+      busyRef.current = false;
+      if (mounted.current) setBusy(false);
     }
   }
 
@@ -170,20 +212,27 @@ function AccountConfirmation({
       </ShellPage>
     );
 
-  const locked = record.submissionState !== 'unconfirmed';
+  const locked =
+    record.submissionState !== 'unconfirmed' && !record.submissionRejected;
   const submitted = record.submissionState === 'submitted';
   const text =
+    (locked ? record.confirmedPayload?.text : undefined) ??
     editedText ??
     record.confirmedPayload?.text ??
     (record.kind === 'voice' ? (record.originalTranscript ?? '') : record.text);
-  const workDate = editedWorkDate ?? record.confirmedPayload?.workDate ?? '';
-  const activityId =
-    selectedActivityId !== undefined
+  const workDate = locked
+    ? (record.confirmedPayload?.workDate ?? '')
+    : (editedWorkDate ?? record.confirmedPayload?.workDate ?? '');
+  const activityId = locked
+    ? (record.confirmedPayload?.activityId ?? null)
+    : selectedActivityId !== undefined
       ? selectedActivityId
       : (record.confirmedPayload?.activityId ?? null);
   const ready =
-    record.state === 'needs_confirmation' &&
-    (record.kind !== 'voice' || !!record.originalTranscript);
+    record.submissionRejected ||
+    (record.kind === 'report' && record.manifest.files.length === 0) ||
+    (record.state === 'needs_confirmation' &&
+      (record.kind !== 'voice' || !!record.originalTranscript));
 
   return (
     <ShellPage title="Check your report" eyebrow="FIELD · CHECK · SEND">
@@ -195,14 +244,18 @@ function AccountConfirmation({
           reconnecting.
         </Text>
       )}
-      {!!message && (
+      {(submitted || record.submissionRejected || !!message) && (
         <Text accessibilityLiveRegion="polite" style={styles.notice}>
-          {message}
+          {submitted
+            ? 'Sent for review. Planner acceptance is still pending.'
+            : record.submissionRejected
+              ? 'Check the activity and confirm the corrected report.'
+              : message}
         </Text>
       )}
-      {!!error && (
+      {!!((submitted ? '' : error) || record.lastError) && (
         <Text accessibilityRole="alert" style={styles.error}>
-          {error}
+          {(submitted ? '' : error) || record.lastError}
         </Text>
       )}
       {record.kind === 'voice' && (
@@ -229,7 +282,7 @@ function AccountConfirmation({
           <Text style={styles.label}>Confirmed report wording</Text>
           <TextInput
             accessibilityLabel="Confirmed report wording"
-            editable={!locked}
+            editable={!locked && !busy}
             multiline
             maxLength={10_000}
             onChangeText={setEditedText}
@@ -245,7 +298,7 @@ function AccountConfirmation({
           <Text style={styles.label}>Work date</Text>
           <TextInput
             accessibilityLabel="Work date"
-            editable={!locked}
+            editable={!locked && !busy}
             onChangeText={setEditedWorkDate}
             placeholder="YYYY-MM-DD (optional)"
             style={[styles.input, locked && styles.locked]}
@@ -257,7 +310,7 @@ function AccountConfirmation({
           <Pressable
             accessibilityRole="radio"
             accessibilityState={{ checked: activityId === null }}
-            disabled={locked}
+            disabled={locked || busy}
             onPress={() => setSelectedActivityId(null)}
             style={[styles.choice, activityId === null && styles.selected]}
           >
@@ -269,11 +322,25 @@ function AccountConfirmation({
           {!auth.offline && activities.isPending && (
             <Text style={styles.help}>Loading authorized activities…</Text>
           )}
+          {activityId &&
+            !activities.data?.some(
+              (activity) => activity.id === activityId,
+            ) && (
+              <View style={[styles.choice, styles.selected]}>
+                <Text style={styles.choiceTitle}>Selected activity</Text>
+                <Text style={styles.help}>
+                  {record.confirmedActivityLabel || activityId}
+                </Text>
+                <Text style={styles.help}>
+                  Saved selection. Current activity details are unavailable.
+                </Text>
+              </View>
+            )}
           {activities.data?.map((activity) => (
             <Pressable
               accessibilityRole="radio"
               accessibilityState={{ checked: activityId === activity.id }}
-              disabled={locked}
+              disabled={locked || busy}
               key={activity.id}
               onPress={() => setSelectedActivityId(activity.id)}
               style={[
@@ -298,6 +365,7 @@ function AccountConfirmation({
             <Pressable
               accessibilityRole="checkbox"
               accessibilityState={{ checked }}
+              disabled={busy}
               onPress={() => setChecked((value) => !value)}
               style={styles.check}
             >
@@ -374,7 +442,7 @@ const styles = StyleSheet.create({
   },
   multiline: { minHeight: 150, textAlignVertical: 'top' },
   locked: { backgroundColor: '#e7edf0' },
-  help: { color: '#627786', fontSize: 14, lineHeight: 22, marginTop: 6 },
+  help: { color: '#586c7a', fontSize: 14, lineHeight: 22, marginTop: 6 },
   quote: { color: '#17354c', fontSize: 17, lineHeight: 27 },
   notice: {
     color: '#17354c',

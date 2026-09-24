@@ -1,3 +1,6 @@
+import { withDraftMutation } from './draftMutations';
+import { notifyOutboxWork } from './outboxEvents';
+
 export const MAX_REPORT_TEXT = 10_000;
 export const MAX_PHOTOS = 3;
 export const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
@@ -110,7 +113,20 @@ export class ReportDraftStore {
   constructor(
     private index: ReportDraftIndex,
     private files: ReportDraftFiles,
+    private beforeDiscard: (
+      userId: string,
+      id: string,
+    ) => Promise<void> = async () => {},
   ) {}
+
+  // Reject overlap instead of queueing a stale retry behind a completed discard.
+  private async mutate(
+    userId: string,
+    id: string,
+    action: () => Promise<void>,
+  ) {
+    return withDraftMutation(userId, id, action);
+  }
 
   async list(userId: string): Promise<LocalReportDraft[]> {
     const rows = await this.index.list(userId);
@@ -133,6 +149,16 @@ export class ReportDraftStore {
   }
 
   async save(
+    draft: ReportDraft,
+    prepared: PreparedDraftPhoto[],
+  ): Promise<void> {
+    await this.mutate(draft.userId, draft.id, () =>
+      this.persist(draft, prepared),
+    );
+    notifyOutboxWork(draft.userId);
+  }
+
+  private async persist(
     draft: ReportDraft,
     prepared: PreparedDraftPhoto[],
   ): Promise<void> {
@@ -187,10 +213,14 @@ export class ReportDraftStore {
   }
 
   async discard(userId: string, id: string): Promise<void> {
-    const draft = await this.index.get(userId, id);
-    if (!draft) throw new Error('This draft is unavailable for this account.');
-    await this.index.setState(userId, id, 'deleting');
-    for (const photo of draft.photos) await this.files.remove(draft, photo);
-    await this.index.remove(userId, id);
+    return this.mutate(userId, id, async () => {
+      await this.beforeDiscard(userId, id);
+      const draft = await this.index.get(userId, id);
+      if (!draft)
+        throw new Error('This draft is unavailable for this account.');
+      await this.index.setState(userId, id, 'deleting');
+      for (const photo of draft.photos) await this.files.remove(draft, photo);
+      await this.index.remove(userId, id);
+    });
   }
 }

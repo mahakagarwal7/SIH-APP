@@ -29,6 +29,7 @@ const claimSchema = z.object({
     'unplanned',
     'superseded',
     'withdrawn',
+    'observed',
   ]),
 });
 
@@ -44,11 +45,12 @@ export type MyReportItem = {
   createdAt: string;
   kind: 'voice' | 'report' | 'remote';
   summary: string;
-  mediaCount: number;
+  mediaCount: number | null;
   status: string;
   detail: string;
   canSync: boolean;
   canConfirm: boolean;
+  canOpenConfirmation: boolean;
 };
 
 export class ReportsReadError extends Error {
@@ -59,8 +61,20 @@ export class ReportsReadError extends Error {
 
 function outboxStatus(record: OutboxRecord) {
   if (record.submissionState === 'submitted')
-    return ['Awaiting review', 'Submitted to the production project.'] as const;
-  if (record.submissionState === 'pending')
+    return [
+      'Awaiting review',
+      record.lastError || 'Submitted to the production project.',
+    ] as const;
+  if (record.submissionRejected)
+    return [
+      'Check report',
+      record.lastError || 'Check the report before confirming again.',
+    ] as const;
+  if (
+    record.submissionState === 'pending' &&
+    record.state !== 'paused' &&
+    record.state !== 'failed'
+  )
     return [
       'Sending for review',
       'Confirmed wording is locked until the server receipt is verified.',
@@ -99,15 +113,18 @@ function submittedStatus(report: RemoteReport) {
   if (report.lifecycle === 'draft') return 'Server draft';
   const claims = report.claims.filter((claim) => claim.state !== 'superseded');
   if (!claims.length) return 'Awaiting review';
-  if (claims.every((claim) => claim.state === 'accepted')) return 'Accepted';
-  if (claims.some((claim) => claim.state === 'accepted'))
-    return 'Partly accepted';
+  if (claims.every((claim) => claim.state === 'withdrawn')) return 'Withdrawn';
+  if (claims.some((claim) => claim.state === 'disputed'))
+    return 'Needs planner attention';
   if (claims.some((claim) => claim.state === 'clarification'))
     return 'Answer needed';
   if (claims.some((claim) => claim.state === 'verification'))
     return 'Supervisor check';
-  if (claims.some((claim) => claim.state === 'disputed'))
-    return 'Needs planner attention';
+  if (claims.every((claim) => claim.state === 'accepted')) return 'Accepted';
+  if (claims.some((claim) => claim.state === 'accepted'))
+    return 'Partly accepted';
+  if (claims.every((claim) => claim.state === 'observed'))
+    return 'Observed — schedule unchanged';
   if (claims.every((claim) => claim.state === 'rejected')) return 'Rejected';
   if (claims.every((claim) => claim.state === 'unplanned'))
     return 'Kept as unplanned';
@@ -135,20 +152,53 @@ export async function loadRemoteReports(
     throw new ReportsReadError();
   if (!parsed.data.length) return [];
   const ids = parsed.data.map((report) => report.id);
-  let claimsQuery = client
-    .from('claims')
-    .select('report_id,state')
-    .in('report_id', ids)
-    .limit(2000);
-  if (signal) claimsQuery = claimsQuery.abortSignal(signal);
-  const claims = await claimsQuery;
-  if (claims.error) throw new ReportsReadError();
-  const parsedClaims = z.array(claimSchema).safeParse(claims.data);
-  if (!parsedClaims.success) throw new ReportsReadError();
+  const claims = await loadClaims(client, ids, signal);
   return parsed.data.map((report) => ({
     ...report,
-    claims: parsedClaims.data.filter((claim) => claim.report_id === report.id),
+    claims: claims.filter((claim) => claim.report_id === report.id),
   }));
+}
+
+async function loadClaims(
+  client: SupabaseClient<Database>,
+  ids: string[],
+  signal?: AbortSignal,
+) {
+  const rows: z.infer<typeof claimSchema>[] = [];
+  const seen = new Set<string>();
+  let expected: number | undefined;
+  while (rows.length < 10000) {
+    let query = client
+      .from('claims')
+      .select('id,report_id,state', { count: 'exact' })
+      .in('report_id', ids)
+      .order('id')
+      .range(rows.length, rows.length + 199);
+    if (signal) query = query.abortSignal(signal);
+    const result = await query;
+    if (
+      result.error ||
+      result.count === null ||
+      result.count > 10000 ||
+      (expected !== undefined && result.count !== expected)
+    )
+      throw new ReportsReadError();
+    expected = result.count;
+    const page = z
+      .array(claimSchema.extend({ id: z.string().uuid() }))
+      .safeParse(result.data);
+    if (!page.success) throw new ReportsReadError();
+    for (const row of page.data) {
+      if (seen.has(row.id) || !ids.includes(row.report_id))
+        throw new ReportsReadError();
+      seen.add(row.id);
+      rows.push({ report_id: row.report_id, state: row.state });
+    }
+    if (rows.length === expected) return rows;
+    if (!page.data.length || rows.length > expected)
+      throw new ReportsReadError();
+  }
+  throw new ReportsReadError();
 }
 
 export function getReportsClient() {
@@ -189,14 +239,26 @@ export function mergeMyReports(
       status,
       detail,
       canSync:
-        row.submissionState === 'pending' ||
-        (row.submissionState === 'unconfirmed' &&
-          (row.state === 'paused' || row.state === 'failed')),
+        !row.submissionRejected &&
+        (row.submissionState === 'submitted'
+          ? !row.evidenceReleased
+          : row.state === 'paused' ||
+            (row.state === 'failed' &&
+              (row.retryable || row.lastErrorKind === 'local')) ||
+            (row.submissionState === 'pending' && row.state !== 'failed')),
       canConfirm:
         (!server || server.lifecycle === 'draft') &&
-        row.state === 'needs_confirmation' &&
-        row.submissionState === 'unconfirmed' &&
-        (row.kind !== 'voice' || !!row.originalTranscript),
+        (row.submissionRejected ||
+          (row.submissionState === 'unconfirmed' &&
+            ((row.kind === 'report' && row.manifest.files.length === 0) ||
+              (row.state === 'needs_confirmation' &&
+                (row.kind !== 'voice' || !!row.originalTranscript))))),
+      canOpenConfirmation:
+        !!row.confirmedPayload ||
+        ((!server || server.lifecycle === 'draft') &&
+          ((row.kind === 'report' && row.manifest.files.length === 0) ||
+            (row.state === 'needs_confirmation' &&
+              (row.kind !== 'voice' || !!row.originalTranscript)))),
     });
     remoteByCapture.delete(row.captureId);
   }
@@ -217,6 +279,7 @@ export function mergeMyReports(
         : 'Recording bytes are missing or incomplete.',
       canSync: row.available,
       canConfirm: false,
+      canOpenConfirmation: false,
     });
   }
   for (const row of reports) {
@@ -236,6 +299,7 @@ export function mergeMyReports(
         : 'One or more saved photos are missing.',
       canSync: row.available,
       canConfirm: false,
+      canOpenConfirmation: false,
     });
   }
   for (const row of remoteByCapture.values())
@@ -247,7 +311,7 @@ export function mergeMyReports(
       createdAt: row.received_at,
       kind: 'remote',
       summary: '',
-      mediaCount: 0,
+      mediaCount: null,
       status: submittedStatus(row),
       detail:
         row.lifecycle === 'draft'
@@ -255,6 +319,7 @@ export function mergeMyReports(
           : 'Submitted to the production project.',
       canSync: false,
       canConfirm: false,
+      canOpenConfirmation: false,
     });
   return items.sort(
     (left, right) =>

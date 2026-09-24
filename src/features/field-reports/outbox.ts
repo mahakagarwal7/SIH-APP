@@ -47,6 +47,8 @@ export type OutboxRecord = {
   uploadedFiles: string[];
   originalTranscript: string | null;
   confirmedPayload: ConfirmedPayload | null;
+  confirmedActivityLabel: string | null;
+  submissionRejected: boolean;
   submissionState: SubmissionState;
   submittedAt: string | null;
   evidenceReleased: boolean;
@@ -54,6 +56,7 @@ export type OutboxRecord = {
   attemptCount: number;
   lastErrorKind: OutboxErrorKind | null;
   lastError: string | null;
+  retryable: boolean;
   updatedAt: string;
 };
 
@@ -89,6 +92,17 @@ export class OutboxSyncError extends Error {
     public readonly retryable: boolean,
   ) {
     super(message);
+  }
+}
+
+// This RPC error is emitted only after checking submitted-report replay.
+export class SubmissionRejectedError extends OutboxSyncError {
+  constructor() {
+    super(
+      'The selected activity is no longer available. Check the report and choose another activity or leave it unselected.',
+      'access',
+      false,
+    );
   }
 }
 

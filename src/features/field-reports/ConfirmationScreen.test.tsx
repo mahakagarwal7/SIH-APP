@@ -1,11 +1,16 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import {
+  notifyManager,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
 
 import { ConfirmationScreen } from './ConfirmationScreen.native';
 import { loadConfirmationActivities } from './confirmationService';
 import { getNativeOutbox } from './nativeOutbox';
+import { notifyOutboxChanged } from './outboxEvents';
 
 import type { OutboxRecord } from './outbox';
 import type { AuthViewState } from '@/features/auth/AuthProvider';
@@ -45,6 +50,8 @@ const record: OutboxRecord = {
   uploadedFiles: [],
   originalTranscript: 'Two of eight complete.',
   confirmedPayload: null,
+  confirmedActivityLabel: null,
+  submissionRejected: false,
   submissionState: 'unconfirmed',
   submittedAt: null,
   evidenceReleased: false,
@@ -52,6 +59,7 @@ const record: OutboxRecord = {
   attemptCount: 1,
   lastErrorKind: null,
   lastError: null,
+  retryable: true,
   updatedAt: '2026-09-24T00:00:00Z',
 };
 
@@ -68,29 +76,41 @@ function App() {
 
 const confirm = jest.fn();
 const sync = jest.fn();
+let stored: OutboxRecord;
+beforeAll(() => notifyManager.setScheduler((callback) => callback()));
+afterAll(() =>
+  notifyManager.setScheduler((callback) => setTimeout(callback, 0)),
+);
 
 beforeEach(() => {
+  stored = structuredClone(record);
   jest.mocked(useAuth).mockReturnValue({
     status: 'signedIn',
     session: { user: { id: record.userId } },
     offline: false,
   } as AuthViewState);
-  confirm.mockResolvedValue({
-    ...record,
-    confirmedPayload: {
-      text: 'Two of eight complete; six remain unfinished.',
-      workDate: null,
-      activityId: null,
-    },
-    submissionState: 'pending',
-  });
-  sync.mockResolvedValue({
-    ...record,
-    submissionState: 'submitted',
-    submittedAt: '2026-09-24T01:00:00Z',
+  confirm
+    .mockReset()
+    .mockImplementation(async (_user, _capture, payload, label) => {
+      stored = {
+        ...stored,
+        confirmedPayload: payload,
+        confirmedActivityLabel: label,
+        submissionState: 'pending',
+        submissionRejected: false,
+      };
+      return structuredClone(stored);
+    });
+  sync.mockReset().mockImplementation(async () => {
+    stored = {
+      ...stored,
+      submissionState: 'submitted',
+      submittedAt: '2026-09-24T01:00:00Z',
+    };
+    return structuredClone(stored);
   });
   jest.mocked(getNativeOutbox).mockResolvedValue({
-    list: async () => [record],
+    list: async () => [structuredClone(stored)],
     confirm,
     sync,
   } as never);
@@ -110,11 +130,16 @@ it('shows the original transcript and requires an explicit wording check', async
   const enabledSend = screen.getByRole('button', { name: 'Confirm and send' });
   expect(enabledSend).toBeEnabled();
   await fireEvent.press(enabledSend);
-  expect(confirm).toHaveBeenCalledWith(record.userId, record.captureId, {
-    text: 'Two of eight complete; six remain unfinished.',
-    workDate: null,
-    activityId: null,
-  });
+  expect(confirm).toHaveBeenCalledWith(
+    record.userId,
+    record.captureId,
+    {
+      text: 'Two of eight complete; six remain unfinished.',
+      workDate: null,
+      activityId: null,
+    },
+    null,
+  );
   expect(
     await screen.findByText(
       'Sent for review. Planner acceptance is still pending.',
@@ -140,4 +165,118 @@ it('persists confirmation offline without claiming it was sent', async () => {
     ),
   ).toBeVisible();
   expect(sync).not.toHaveBeenCalled();
+  expect(screen.getByLabelText('Confirmed report wording').props.editable).toBe(
+    false,
+  );
+  expect(
+    screen.getByRole('button', { name: 'Check receipt / retry' }),
+  ).toBeDisabled();
+});
+
+it('freezes editing during a delayed confirmation and shows only the persisted wording afterward', async () => {
+  let finish!: () => void;
+  confirm.mockImplementationOnce(async (_user, _capture, payload) => {
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    stored = {
+      ...stored,
+      confirmedPayload: payload,
+      submissionState: 'pending',
+    };
+    return structuredClone(stored);
+  });
+  await render(<App />);
+  await screen.findByLabelText('Confirmed report wording');
+  await fireEvent.press(screen.getByRole('checkbox'));
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Confirm and send' }),
+  );
+  expect(screen.getByLabelText('Confirmed report wording').props.editable).toBe(
+    false,
+  );
+  expect(screen.getByLabelText('Work date').props.editable).toBe(false);
+  await act(async () => finish());
+  expect(screen.getByLabelText('Confirmed report wording').props.value).toBe(
+    stored.confirmedPayload?.text,
+  );
+  expect(
+    screen.getByRole('button', { name: 'Return to My reports' }),
+  ).toBeVisible();
+});
+
+it('updates an open confirmation when foreground sync records a receipt', async () => {
+  stored = {
+    ...stored,
+    submissionState: 'pending',
+    confirmedPayload: {
+      text: 'Checked wording',
+      workDate: null,
+      activityId: null,
+    },
+  };
+  await render(<App />);
+  await screen.findByRole('button', { name: 'Check receipt / retry' });
+  stored = {
+    ...stored,
+    submissionState: 'submitted',
+    submittedAt: '2026-09-24T01:00:00Z',
+  };
+  await act(() => notifyOutboxChanged(record.userId, record.captureId));
+  expect(
+    await screen.findByRole('button', { name: 'Return to My reports' }),
+  ).toBeVisible();
+  expect(
+    screen.getByText('Sent for review. Planner acceptance is still pending.'),
+  ).toBeVisible();
+});
+
+it('shows the saved activity label when restored offline', async () => {
+  stored = {
+    ...stored,
+    submissionState: 'pending',
+    confirmedPayload: {
+      text: 'Checked wording',
+      workDate: '2026-09-24',
+      activityId: '40000000-0000-4000-8000-000000000004',
+    },
+    confirmedActivityLabel: 'A-20 · Install supports',
+  };
+  jest.mocked(useAuth).mockReturnValue({
+    status: 'signedIn',
+    session: { user: { id: record.userId } },
+    offline: true,
+  } as AuthViewState);
+  await render(<App />);
+  expect(await screen.findByText('A-20 · Install supports')).toBeVisible();
+  expect(screen.getByLabelText('Work date').props.value).toBe('2026-09-24');
+  expect(screen.getByLabelText('Work date').props.editable).toBe(false);
+});
+
+it('shows access errors and permits correction after a definitive activity rejection', async () => {
+  sync.mockImplementationOnce(async () => {
+    stored = {
+      ...stored,
+      state: 'paused',
+      submissionRejected: true,
+      lastErrorKind: 'access',
+      lastError: 'The selected activity is no longer available.',
+    };
+    return structuredClone(stored);
+  });
+  await render(<App />);
+  await screen.findByLabelText('Confirmed report wording');
+  await fireEvent.press(screen.getByRole('checkbox'));
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Confirm and send' }),
+  );
+  expect(
+    await screen.findByText('The selected activity is no longer available.'),
+  ).toBeVisible();
+  expect(screen.getByLabelText('Confirmed report wording').props.editable).toBe(
+    true,
+  );
+  expect(
+    screen.getByRole('button', { name: 'Confirm and send' }),
+  ).toBeDisabled();
 });

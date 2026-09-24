@@ -1,5 +1,11 @@
 import { normalizeConfirmation } from './confirmation';
-import { OutboxSyncError, sameFrozenCapture, validateManifest } from './outbox';
+import {
+  OutboxSyncError,
+  SubmissionRejectedError,
+  sameFrozenCapture,
+  validateManifest,
+} from './outbox';
+import { notifyOutboxChanged, notifyOutboxWork } from './outboxEvents';
 
 import type {
   OutboxFileReader,
@@ -32,10 +38,29 @@ function asSyncError(error: unknown, fallbackKind: 'local' | 'server') {
 }
 
 export class OutboxService {
+  private readonly mutations = new Map<string, Promise<unknown>>();
+
+  private mutate<T>(
+    userId: string,
+    captureId: string,
+    action: () => Promise<T>,
+  ): Promise<T> {
+    const key = JSON.stringify([userId, captureId]);
+    const previous = this.mutations.get(key) ?? Promise.resolve();
+    const operation = previous
+      .catch(() => {})
+      .then(action)
+      .finally(() => {
+        if (this.mutations.get(key) === operation) this.mutations.delete(key);
+      });
+    this.mutations.set(key, operation);
+    return operation;
+  }
+
   constructor(
     private readonly index: OutboxIndex,
     private readonly files: OutboxFileReader,
-    private readonly transport: OutboxTransport,
+    private readonly transportForAccount: (userId: string) => OutboxTransport,
     private readonly sha256: (bytes: Uint8Array) => Promise<string>,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly releaseEvidence: (
@@ -61,6 +86,8 @@ export class OutboxService {
       uploadedFiles: [],
       originalTranscript: null,
       confirmedPayload: null,
+      confirmedActivityLabel: null,
+      submissionRejected: false,
       submissionState: 'unconfirmed',
       submittedAt: null,
       evidenceReleased: false,
@@ -68,6 +95,7 @@ export class OutboxService {
       attemptCount: 0,
       lastErrorKind: null,
       lastError: null,
+      retryable: true,
       updatedAt: this.now(),
     };
     const existing = await this.index.get(input.userId, input.captureId);
@@ -81,6 +109,8 @@ export class OutboxService {
       return existing;
     }
     await this.index.put(candidate);
+    notifyOutboxChanged(input.userId, input.captureId);
+    notifyOutboxWork(input.userId);
     return candidate;
   }
 
@@ -90,6 +120,7 @@ export class OutboxService {
   ): Promise<OutboxRecord> {
     const next = { ...record, ...patch, updatedAt: this.now() };
     await this.index.put(next);
+    notifyOutboxChanged(record.userId, record.captureId);
     return next;
   }
 
@@ -98,6 +129,7 @@ export class OutboxService {
       state,
       lastError: null,
       lastErrorKind: null,
+      retryable: true,
     });
   }
 
@@ -105,6 +137,20 @@ export class OutboxService {
     userId: string,
     captureId: string,
     input: ConfirmedPayload,
+    activityLabel: string | null = null,
+  ): Promise<OutboxRecord> {
+    const result = await this.mutate(userId, captureId, () =>
+      this.confirmRecord(userId, captureId, input, activityLabel),
+    );
+    notifyOutboxWork(userId);
+    return result;
+  }
+
+  private async confirmRecord(
+    userId: string,
+    captureId: string,
+    input: ConfirmedPayload,
+    activityLabel: string | null,
   ): Promise<OutboxRecord> {
     const record = await this.index.get(userId, captureId);
     if (!record)
@@ -114,7 +160,7 @@ export class OutboxService {
         false,
       );
     const payload = normalizeConfirmation(input);
-    if (record.confirmedPayload) {
+    if (record.confirmedPayload && !record.submissionRejected) {
       if (JSON.stringify(record.confirmedPayload) !== JSON.stringify(payload))
         throw new OutboxSyncError(
           'The confirmed wording is locked while its receipt is pending.',
@@ -123,7 +169,13 @@ export class OutboxService {
         );
       return record;
     }
-    if (record.state !== 'needs_confirmation' || !record.reportId)
+    const localText =
+      record.kind === 'report' && record.manifest.files.length === 0;
+    if (
+      !record.submissionRejected &&
+      !localText &&
+      (record.state !== 'needs_confirmation' || !record.reportId)
+    )
       throw new OutboxSyncError(
         'This report is not ready for confirmation.',
         'local',
@@ -137,9 +189,15 @@ export class OutboxService {
       );
     return this.save(record, {
       confirmedPayload: payload,
+      confirmedActivityLabel: payload.activityId
+        ? activityLabel?.trim().slice(0, 500) || null
+        : null,
+      submissionRejected: false,
       submissionState: 'pending',
+      state: record.reportId ? 'needs_confirmation' : 'queued',
       lastError: null,
       lastErrorKind: null,
+      retryable: true,
     });
   }
 
@@ -147,13 +205,24 @@ export class OutboxService {
     if (record.evidenceReleased) return record;
     try {
       await this.releaseEvidence(record);
-      return this.save(record, { evidenceReleased: true });
+      return await this.save(record, {
+        evidenceReleased: true,
+        lastError: null,
+        lastErrorKind: null,
+      });
     } catch {
-      return record;
+      return this.save(record, {
+        lastErrorKind: 'local',
+        lastError:
+          'Sent for review. Device evidence cleanup will retry while the app is open.',
+      });
     }
   }
 
-  private async submit(record: OutboxRecord): Promise<OutboxRecord> {
+  private async submit(
+    record: OutboxRecord,
+    transport: OutboxTransport,
+  ): Promise<OutboxRecord> {
     const payload = record.confirmedPayload;
     if (!payload || !record.reportId)
       throw new OutboxSyncError(
@@ -161,7 +230,7 @@ export class OutboxService {
         'local',
         false,
       );
-    const returned = await this.transport.submit(record.reportId, payload);
+    const returned = await transport.submit(record.reportId, payload);
     if (returned !== record.reportId)
       throw new OutboxSyncError(
         'The server returned an invalid submission receipt.',
@@ -182,6 +251,25 @@ export class OutboxService {
     captureId: string,
     options: { includePaused?: boolean } = {},
   ): Promise<OutboxRecord> {
+    const result = await this.mutate(userId, captureId, () =>
+      this.syncRecord(userId, captureId, options),
+    );
+    // A direct screen retry can finish after the automatic coordinator went idle.
+    // Automatic passes schedule their own backoff; only explicit retries wake it.
+    if (
+      options.includePaused &&
+      result.submissionState === 'submitted' &&
+      !result.evidenceReleased
+    )
+      notifyOutboxWork(userId);
+    return result;
+  }
+
+  private async syncRecord(
+    userId: string,
+    captureId: string,
+    options: { includePaused?: boolean },
+  ): Promise<OutboxRecord> {
     let record = await this.index.get(userId, captureId);
     if (!record)
       throw new OutboxSyncError(
@@ -190,11 +278,12 @@ export class OutboxService {
         false,
       );
     if (record.submissionState === 'submitted') return this.release(record);
+    if (record.submissionRejected) return record;
     if (record.state === 'paused' && !options.includePaused) return record;
     if (
       record.state === 'failed' &&
-      record.lastErrorKind === 'local' &&
-      !options.includePaused
+      !record.retryable &&
+      !(options.includePaused && record.lastErrorKind === 'local')
     )
       return record;
     record = await this.save(record, {
@@ -203,12 +292,28 @@ export class OutboxService {
       lastErrorKind: null,
     });
     try {
-      await this.transport.ensureAccess(record);
-      if (record.submissionState === 'pending')
-        return await this.submit(record);
+      const transport = this.transportForAccount(userId);
+      await transport.ensureAccess(record);
+      if (record.submissionState === 'pending') {
+        if (!record.reportId) {
+          if (record.kind !== 'report' || record.manifest.files.length)
+            throw new OutboxSyncError(
+              'Saved media must be verified before submission.',
+              'local',
+              false,
+            );
+          record = await this.phase(record, 'reserving');
+          const reportId = await transport.reserve(record);
+          record = await this.save(record, {
+            reportId,
+            state: 'needs_confirmation',
+          });
+        }
+        return await this.submit(record, transport);
+      }
       if (record.state === 'needs_confirmation') {
         if (record.kind !== 'voice' || record.originalTranscript) return record;
-        const result = await this.transport.inspect(record.reportId!);
+        const result = await transport.inspect(record.reportId!);
         if (result.status === 'ready')
           return this.save(record, {
             originalTranscript: result.originalTranscript,
@@ -223,7 +328,7 @@ export class OutboxService {
       }
       if (record.reportId && record.state === 'processing') {
         const reportId = record.reportId;
-        const result = await this.transport.inspect(reportId);
+        const result = await transport.inspect(reportId);
         if (result.status === 'ready')
           return this.save(record, {
             state: 'needs_confirmation',
@@ -235,12 +340,12 @@ export class OutboxService {
         if (result.status === 'failed')
           throw new OutboxSyncError(result.message, 'server', false);
         record = await this.phase(record, 'finalizing');
-        await this.transport.finalize(reportId);
+        await transport.finalize(reportId);
         return this.phase(record, 'processing');
       }
       if (!record.reportId) {
         record = await this.phase(record, 'reserving');
-        const reportId = await this.transport.reserve(record);
+        const reportId = await transport.reserve(record);
         record = await this.save(record, {
           reportId,
           state: 'uploading',
@@ -267,7 +372,7 @@ export class OutboxService {
             'local',
             false,
           );
-        await this.transport.upload(
+        await transport.upload(
           `${record.projectId}/${record.reportId}/${file.id}`,
           file,
           bytes,
@@ -277,9 +382,9 @@ export class OutboxService {
         });
       }
       record = await this.phase(record, 'finalizing');
-      await this.transport.finalize(record.reportId!);
+      await transport.finalize(record.reportId!);
       record = await this.phase(record, 'processing');
-      const result = await this.transport.inspect(record.reportId!);
+      const result = await transport.inspect(record.reportId!);
       if (result.status === 'ready')
         return this.save(record, {
           state: 'needs_confirmation',
@@ -301,6 +406,8 @@ export class OutboxService {
             : 'failed',
         lastErrorKind: failure.kind,
         lastError: failure.message,
+        retryable: failure.retryable,
+        submissionRejected: error instanceof SubmissionRejectedError,
       });
     }
   }

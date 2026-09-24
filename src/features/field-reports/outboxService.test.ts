@@ -46,7 +46,7 @@ function setup() {
   const service = new OutboxService(
     index,
     reader,
-    transport,
+    () => transport,
     async () => digest,
     () => `2026-09-24T00:00:0${clock++}.000Z`,
     releaseEvidence,
@@ -236,10 +236,56 @@ it('never uploads bytes that differ from the frozen manifest', async () => {
       put: async () => {},
     },
     { read: async () => new Uint8Array([9, 9, 9]) },
-    transport,
+    () => transport,
     async () => 'b'.repeat(64),
   );
   const failed = await mismatched.sync('user-one', captureId);
   expect(failed).toMatchObject({ state: 'failed', lastErrorKind: 'local' });
   expect(transport.upload).not.toHaveBeenCalled();
+});
+
+it('persists retryability and stops retrying terminal worker failures', async () => {
+  const { service, input, setInspected, transport } = setup();
+  setInspected({ status: 'failed', message: 'media_retry_limit' });
+  await service.enqueue(input);
+  await expect(service.sync('user-one', captureId)).resolves.toMatchObject({
+    state: 'failed',
+    retryable: false,
+  });
+  await service.syncAll('user-one');
+  await service.syncAll('user-one', { includePaused: true });
+  expect(transport.finalize).toHaveBeenCalledTimes(1);
+});
+
+it('retains transient network failures for automatic retry', async () => {
+  const { service, input, transport } = setup();
+  jest
+    .mocked(transport.upload)
+    .mockRejectedValueOnce(
+      new OutboxSyncError('Connection interrupted.', 'network', true),
+    );
+  await service.enqueue(input);
+  await expect(service.sync('user-one', captureId)).resolves.toMatchObject({
+    state: 'failed',
+    retryable: true,
+  });
+  await service.syncAll('user-one');
+  expect(transport.upload).toHaveBeenCalledTimes(2);
+});
+
+it('allows an explicit retry after local evidence becomes readable again', async () => {
+  const { service, input, reader, transport } = setup();
+  jest
+    .mocked(reader.read)
+    .mockRejectedValueOnce(new Error('Device storage temporarily unavailable'));
+  await service.enqueue(input);
+  await expect(service.sync('user-one', captureId)).resolves.toMatchObject({
+    state: 'failed',
+    lastErrorKind: 'local',
+    retryable: false,
+  });
+  await service.syncAll('user-one');
+  expect(reader.read).toHaveBeenCalledTimes(1);
+  await service.syncAll('user-one', { includePaused: true });
+  expect(transport.upload).toHaveBeenCalledTimes(1);
 });

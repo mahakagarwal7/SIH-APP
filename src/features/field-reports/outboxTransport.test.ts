@@ -1,4 +1,9 @@
-import { SupabaseOutboxTransport } from './outboxTransport';
+import { SubmissionRejectedError } from './outbox';
+import { OutboxService } from './outboxService';
+import {
+  createAccountOutboxTransport,
+  SupabaseOutboxTransport,
+} from './outboxTransport';
 
 import type { OutboxRecord } from './outbox';
 import type { Database } from '@/types/database';
@@ -36,6 +41,8 @@ function record(): OutboxRecord {
     uploadedFiles: [],
     originalTranscript: null,
     confirmedPayload: null,
+    confirmedActivityLabel: null,
+    submissionRejected: false,
     submissionState: 'unconfirmed',
     submittedAt: null,
     evidenceReleased: false,
@@ -43,6 +50,7 @@ function record(): OutboxRecord {
     attemptCount: 0,
     lastErrorKind: null,
     lastError: null,
+    retryable: true,
     updatedAt: '2026-09-24T00:00:00Z',
   };
 }
@@ -166,3 +174,122 @@ it('submits the locked payload through the existing production RPC', async () =>
     p_activity: '40000000-0000-4000-8000-000000000004',
   });
 });
+
+it.each([
+  ['42501', 'Activity access denied', true],
+  ['42501', 'Author required', false],
+  ['42501', 'Access changed', false],
+  ['40001', 'CAPTURE_ID_REUSED', false],
+  ['22023', 'Invalid capture submission', false],
+] as const)(
+  'classifies %s/%s as safely editable only for a definite activity rejection',
+  async (code, message, rejected) => {
+    const transport = new SupabaseOutboxTransport({
+      rpc: async () => ({ data: null, error: { code, message } }),
+    } as unknown as SupabaseClient<Database>);
+    try {
+      await transport.submit('report', {
+        text: 'Work completed',
+        workDate: null,
+        activityId: null,
+      });
+      throw new Error('Expected rejection');
+    } catch (error) {
+      expect(error instanceof SubmissionRejectedError).toBe(rejected);
+      expect(error).toHaveProperty('kind');
+    }
+  },
+);
+
+it.each(['membership', 'reservation'] as const)(
+  'pauses when accounts change after %s without sending another account token',
+  async (phase) => {
+    const draft = record();
+    draft.manifest.files = [
+      {
+        id: '40000000-0000-4000-8000-000000000004',
+        name: 'voice.wav',
+        kind: 'audio',
+        mime: 'audio/wav',
+        bytes: 3,
+        sha256: 'a'.repeat(64),
+        caption: '',
+      },
+    ];
+    let owner = draft.userId;
+    const requests: { path: string; authorization: string | null }[] = [];
+    const authClient = {
+      auth: {
+        getSession: async () => ({
+          data: {
+            session: {
+              user: { id: owner },
+              access_token:
+                owner === draft.userId ? 'alice-token' : 'bob-token',
+            },
+          },
+          error: null,
+        }),
+      },
+    } as unknown as SupabaseClient<Database>;
+    const transport = createAccountOutboxTransport(
+      draft.userId,
+      {
+        url: 'https://example.supabase.co',
+        key: 'synthetic-public-key',
+      },
+      authClient,
+      async (input, init) => {
+        const path = new URL(String(input)).pathname;
+        requests.push({
+          path,
+          authorization: new Headers(init?.headers).get('authorization'),
+        });
+        const data = path.endsWith('/project_members')
+          ? [
+              {
+                project_id: draft.projectId,
+                user_id: draft.userId,
+                active: true,
+              },
+            ]
+          : '50000000-0000-4000-8000-000000000005';
+        if (
+          (phase === 'membership' && path.endsWith('/project_members')) ||
+          (phase === 'reservation' && path.endsWith('/reserve_field_capture'))
+        )
+          owner = 'bob';
+        return new Response(JSON.stringify(data), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    );
+    let stored: OutboxRecord | null = null;
+    const service = new OutboxService(
+      {
+        get: async () => stored,
+        list: async () => (stored ? [stored] : []),
+        put: async (row) => {
+          stored = row;
+        },
+      },
+      { read: async () => new Uint8Array([1, 2, 3]) },
+      () => transport,
+      async () => 'a'.repeat(64),
+    );
+    await service.enqueue(draft);
+    const result = await service.sync(draft.userId, draft.captureId);
+    expect(result).toMatchObject({
+      state: 'paused',
+      lastErrorKind: 'auth',
+      userId: draft.userId,
+    });
+    expect(requests).toHaveLength(phase === 'membership' ? 1 : 2);
+    expect(
+      requests.every(
+        (request) => request.authorization === 'Bearer alice-token',
+      ),
+    ).toBe(true);
+  },
+);

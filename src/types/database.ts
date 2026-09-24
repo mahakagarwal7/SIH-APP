@@ -83,7 +83,8 @@ export type ClaimRow = {
     | 'rejected'
     | 'unplanned'
     | 'superseded'
-    | 'withdrawn';
+    | 'withdrawn'
+    | 'observed';
 };
 export type Database = {
   public: {

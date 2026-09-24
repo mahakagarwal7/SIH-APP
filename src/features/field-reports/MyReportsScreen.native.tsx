@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
@@ -54,6 +54,13 @@ function AccountReports({ userId }: { userId: string }) {
   const auth = useAuth();
   const router = useRouter();
   const mounted = useRef(true);
+  const syncingRef = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState('');
   const local = useQuery({
@@ -79,12 +86,8 @@ function AccountReports({ userId }: { userId: string }) {
   const remoteRefetch = remote.refetch;
   useFocusEffect(
     useCallback(() => {
-      mounted.current = true;
       void localRefetch();
       if (!auth.offline) void remoteRefetch();
-      return () => {
-        mounted.current = false;
-      };
     }, [auth.offline, localRefetch, remoteRefetch]),
   );
   const items = useMemo(
@@ -99,7 +102,13 @@ function AccountReports({ userId }: { userId: string }) {
   );
 
   async function sync() {
-    if (syncing || auth.offline || AppState.currentState !== 'active') return;
+    if (
+      syncingRef.current ||
+      auth.offline ||
+      AppState.currentState !== 'active'
+    )
+      return;
+    syncingRef.current = true;
     setSyncing(true);
     setMessage('Syncing saved reports…');
     try {
@@ -114,6 +123,7 @@ function AccountReports({ userId }: { userId: string }) {
       if (mounted.current)
         setMessage('Sync could not start. Saved device copies are unchanged.');
     } finally {
+      syncingRef.current = false;
       if (mounted.current) setSyncing(false);
     }
   }
@@ -190,21 +200,24 @@ function AccountReports({ userId }: { userId: string }) {
                 : item.kind === 'remote'
                   ? 'Production report'
                   : 'Text/photo report'}{' '}
-              · {item.mediaCount} {item.mediaCount === 1 ? 'file' : 'files'}
+              ·{' '}
+              {item.mediaCount === null
+                ? 'Attachment count unavailable'
+                : `${item.mediaCount} ${item.mediaCount === 1 ? 'file' : 'files'}`}
             </Text>
             <Text style={styles.detail}>
               {new Date(item.createdAt).toLocaleString()}
             </Text>
             <Text style={styles.detail}>{item.detail}</Text>
-            {item.canConfirm && (
+            {item.canOpenConfirmation && (
               <Action
-                label="Check and send"
+                label={item.canConfirm ? 'Check and send' : 'View confirmation'}
                 disabled={false}
                 onPress={() =>
                   router.push({
                     pathname: '/field-confirm/[captureId]',
                     params: { captureId: item.captureId },
-                  } as unknown as Href)
+                  } as Href)
                 }
               />
             )}
@@ -251,7 +264,7 @@ const styles = StyleSheet.create({
   message: { color: '#17354c', fontSize: 14, lineHeight: 22, marginBottom: 12 },
   error: { color: '#9d3434', fontSize: 15, lineHeight: 23, marginBottom: 12 },
   loading: { marginTop: 24, gap: 12, alignItems: 'flex-start' },
-  empty: { color: '#627786', paddingVertical: 28, fontSize: 16 },
+  empty: { color: '#586c7a', paddingVertical: 28, fontSize: 16 },
   status: { color: '#266b8c', fontWeight: '700', fontSize: 13, lineHeight: 21 },
   detail: { color: '#627786', fontSize: 13, lineHeight: 21 },
   retry: { color: '#76541d', fontSize: 14, lineHeight: 22, fontWeight: '600' },
