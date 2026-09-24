@@ -28,6 +28,7 @@ jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('./androidMicrophone', () => ({ androidMicrophone: jest.fn() }));
 jest.mock('./nativeDraftStore', () => ({ getVoiceDraftStore: jest.fn() }));
+jest.mock('./ReportMethodLinks', () => ({ ReportMethodLinks: () => null }));
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'draft-id' }));
 const mockPlayer = {
   pause: jest.fn(),
