@@ -15,7 +15,7 @@ import {
   readRememberedProjectContext,
   rememberProjectContext,
 } from './captureProjectStore';
-import { loadActiveProjects } from './myWorkService';
+import { loadActiveProjects, WorkReadError } from './myWorkService';
 import { useProjectSelection } from './useProjectSelection';
 
 import type { ProjectContext } from './myWorkService';
@@ -88,6 +88,7 @@ function Consumer() {
   return (
     <View>
       <Text>{selection.data?.project.name ?? 'No selection'}</Text>
+      <Text>{selection.error?.message ?? 'No selection error'}</Text>
       <Pressable
         accessibilityRole="button"
         onPress={() => void selection.select(two.project.id)}
@@ -186,3 +187,26 @@ it('restores same-account context offline without querying Supabase', async () =
   expect(await screen.findByText(two.project.name)).toBeVisible();
   expect(loadActiveProjects).not.toHaveBeenCalled();
 });
+
+it.each(['access', 'unavailable'] as const)(
+  'does not use remembered access after an online %s failure',
+  async (kind) => {
+    const error = new WorkReadError(kind);
+    jest.mocked(readRememberedProjectContext).mockResolvedValue(two);
+    jest.mocked(loadActiveProjects).mockRejectedValue(error);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    });
+
+    await render(<Consumer />, {
+      wrapper: ({ children }) => (
+        <Provider client={client}>{children}</Provider>
+      ),
+    });
+
+    expect(await screen.findByText('No selection')).toBeVisible();
+    expect(await screen.findByText(error.message)).toBeVisible();
+    expect(rememberProjectContext).not.toHaveBeenCalled();
+    client.clear();
+  },
+);
