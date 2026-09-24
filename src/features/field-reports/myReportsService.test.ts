@@ -121,6 +121,19 @@ it('labels early voice Send intent while transcription is pending', () => {
   });
 });
 
+it.each(['queued', 'reserving', 'uploading', 'finalizing'] as const)(
+  'labels the %s delivery phase as Uploading',
+  (state) => {
+    expect(mergeMyReports([], [], [{ ...outbox, state }], [])[0]).toMatchObject(
+      {
+        status: 'Uploading',
+        detail:
+          'Saved on device. Upload continues in the background and resumes after reconnecting.',
+      },
+    );
+  },
+);
+
 it('labels durable cancellation intent ahead of ordinary sync failures', () => {
   expect(
     mergeMyReports(

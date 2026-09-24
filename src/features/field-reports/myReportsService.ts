@@ -117,7 +117,10 @@ function outboxStatus(record: OutboxRecord) {
     case 'reserving':
     case 'uploading':
     case 'finalizing':
-      return ['Syncing', 'Keep the app open while evidence uploads.'] as const;
+      return [
+        'Uploading',
+        'Saved on device. Upload continues in the background and resumes after reconnecting.',
+      ] as const;
     case 'processing':
       return [
         'Processing evidence',

@@ -796,6 +796,15 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   'Photo capture': 'फोटो कैप्चर',
   'Photo ready to save with this draft.':
     'फ़ोटो इस ड्राफ़्ट के साथ सहेजने के लिए तैयार है.',
+  'Photo attached. Compression continues in the background.':
+    'फ़ोटो जोड़ दी गई है। संपीड़न पृष्ठभूमि में जारी है।',
+  'Photo compressed and ready to save.':
+    'फ़ोटो संपीड़ित होकर सहेजने के लिए तैयार है।',
+  'Photo compression failed.': 'फ़ोटो संपीड़न विफल रहा।',
+  'Compressing photo…': 'फ़ोटो संपीड़ित की जा रही है…',
+  'Compressing…': 'संपीड़ित किया जा रहा है…',
+  'Compression failed': 'संपीड़न विफल रहा',
+  'Could not compress photo.': 'फ़ोटो संपीड़ित नहीं की जा सकी।',
   'Planned activities': 'नियोजित गतिविधियाँ',
   'Planned finish cannot precede planned start.':
     'नियोजित समापन नियोजित शुरुआत से पहले नहीं हो सकता।',
@@ -867,6 +876,10 @@ export const hiTranslations: Readonly<Record<string, string>> = {
     'सिंक पास समाप्त हो गया. ऐप खुला रहने पर डिलीवरी की स्थिति अपडेट हो जाएगी।',
   'Syncing saved reports…': 'सहेजी गई रिपोर्ट समन्वयित हो रही है...',
   'Syncing…': 'सिंक हो रहा है...',
+  Uploading: 'अपलोड हो रहा है',
+  'Upload status: Uploading': 'अपलोड स्थिति: अपलोड हो रहा है',
+  'Saved on device. Upload continues in the background and resumes after reconnecting.':
+    'डिवाइस पर सहेजा गया। अपलोड पृष्ठभूमि में जारी रहता है और दोबारा कनेक्ट होने पर फिर शुरू होता है।',
   'TYPE REPORT': 'रिपोर्ट टाइप करें',
   'Take photo': 'फ़ोटो लें',
   Task: 'कार्य',

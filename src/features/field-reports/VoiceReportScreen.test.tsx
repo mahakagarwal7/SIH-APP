@@ -15,7 +15,7 @@ import { androidMicrophone } from './androidMicrophone';
 import { saveCombinedVoiceDraft } from './combinedDraftStore';
 import { getVoiceDraftStore } from './nativeDraftStore';
 import { assertLocalDraftCanBeDiscarded } from './nativeOutbox';
-import { choosePhoto } from './nativePhotoPicker';
+import { choosePhoto, preparePickedPhoto } from './nativePhotoPicker';
 import { VoiceReportScreen } from './VoiceReportScreen.android';
 
 import type { VoiceDraftStore } from './draftStore';
@@ -37,6 +37,7 @@ jest.mock('./nativeDraftStore', () => ({ getVoiceDraftStore: jest.fn() }));
 jest.mock('./nativePhotoPicker', () => ({
   takePhoto: jest.fn(),
   choosePhoto: jest.fn(),
+  preparePickedPhoto: jest.fn(),
 }));
 jest.mock('./nativeOutbox', () => ({
   assertLocalDraftCanBeDiscarded: jest.fn(async () => {}),
@@ -131,6 +132,15 @@ beforeEach(() => {
     .mocked(saveCombinedVoiceDraft)
     .mockImplementation(async (draft, bytes) => save(draft, bytes));
   jest.mocked(choosePhoto).mockReset().mockResolvedValue(null);
+  jest.mocked(preparePickedPhoto).mockResolvedValue({
+    uri: 'cache/evidence.jpg',
+    width: 100,
+    height: 80,
+    byteLength: 4,
+    sourceByteLength: 40,
+    mimeType: 'image/jpeg',
+    bytes: new Uint8Array([1, 2, 3, 4]),
+  });
   list.mockReset().mockResolvedValue([]);
   jest.mocked(assertLocalDraftCanBeDiscarded).mockResolvedValue(undefined);
   jest
@@ -140,12 +150,10 @@ beforeEach(() => {
 
 it('freezes voice, typed text and a selected photo as one capture', async () => {
   jest.mocked(choosePhoto).mockResolvedValue({
-    uri: 'cache/evidence.jpg',
+    uri: 'cache/evidence-source.jpg',
     width: 100,
     height: 80,
-    byteLength: 4,
-    mimeType: 'image/jpeg',
-    bytes: new Uint8Array([1, 2, 3, 4]),
+    fileSize: 40,
   });
   await render(<App />);
   await screen.findByText('No voice drafts saved yet.');
@@ -176,6 +184,45 @@ it('freezes voice, typed text and a selected photo as one capture', async () => 
       ],
     }),
   );
+});
+
+it('shows supporting photo immediately and keeps recording blocked only until compression finishes', async () => {
+  let finish!: (photo: Awaited<ReturnType<typeof preparePickedPhoto>>) => void;
+  jest.mocked(choosePhoto).mockResolvedValue({
+    uri: 'cache/site-source.jpg',
+    width: 4000,
+    height: 3000,
+    fileSize: 4_000_000,
+  });
+  jest.mocked(preparePickedPhoto).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await render(<App />);
+  await screen.findByText('No voice drafts saved yet.');
+  await fireEvent.press(screen.getByRole('button', { name: 'Choose photo' }));
+  expect(await screen.findByLabelText('Selected photo 1')).toBeVisible();
+  expect(screen.getByText('Compressing photo…')).toBeVisible();
+  expect(screen.getByLabelText('Report details')).toBeEnabled();
+  expect(
+    screen.getByRole('button', { name: 'Record voice report' }),
+  ).toBeDisabled();
+  await act(async () =>
+    finish({
+      uri: 'cache/site-compressed.jpg',
+      width: 1600,
+      height: 1200,
+      byteLength: 400_000,
+      sourceByteLength: 4_000_000,
+      mimeType: 'image/jpeg',
+      bytes: new Uint8Array(400_000),
+    }),
+  );
+  expect(
+    await screen.findByRole('button', { name: 'Record voice report' }),
+  ).toBeEnabled();
 });
 
 function renameProject() {
