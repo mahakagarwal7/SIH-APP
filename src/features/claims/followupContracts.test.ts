@@ -95,3 +95,136 @@ it('summarizes the exact recorded structured reply', () => {
     }),
   ).toBe('Unit 2');
 });
+
+it('accepts each supported question type only in its required answer shape', () => {
+  const scope = { ...question, reason_code: 'scope' as const, options: [] };
+  expect(
+    replyIsComplete(scope, {
+      answer: 'yes',
+      text: '',
+      activityIds: [],
+      eventDate: null,
+    }),
+  ).toBe(true);
+  expect(
+    replyIsComplete(scope, {
+      answer: 'yes',
+      text: 'Only part of it',
+      activityIds: [],
+      eventDate: null,
+    }),
+  ).toBe(false);
+  expect(
+    replyIsComplete(scope, {
+      answer: 'no',
+      text: 'Only the north run',
+      activityIds: [],
+      eventDate: null,
+    }),
+  ).toBe(true);
+
+  const assignment = {
+    ...question,
+    reason_code: 'assignment' as const,
+    options: [],
+  };
+  expect(
+    replyIsComplete(assignment, {
+      answer: 'yes',
+      text: 'Assigned to my crew',
+      activityIds: [],
+      eventDate: null,
+    }),
+  ).toBe(true);
+  expect(
+    replyIsComplete(assignment, {
+      answer: 'yes',
+      text: '',
+      activityIds: [],
+      eventDate: null,
+    }),
+  ).toBe(false);
+
+  const detail = { ...question, reason_code: 'detail' as const, options: [] };
+  expect(
+    replyIsComplete(detail, {
+      answer: 'answer',
+      text: 'NDT still pending',
+      activityIds: [],
+      eventDate: null,
+    }),
+  ).toBe(true);
+  expect(
+    replyIsComplete(detail, {
+      answer: 'answer',
+      text: '',
+      activityIds: [],
+      eventDate: null,
+    }),
+  ).toBe(false);
+});
+
+it('accepts an explicit uncertain reply for every supported question type', () => {
+  for (const reason of [
+    'location',
+    'date',
+    'scope',
+    'assignment',
+    'detail',
+  ] as const) {
+    expect(
+      replyIsComplete(
+        { ...question, reason_code: reason },
+        { answer: 'not_sure', text: '', activityIds: [], eventDate: null },
+      ),
+    ).toBe(true);
+  }
+});
+
+it('summarizes uncertain, yes/no and dated replies without inventing progress', () => {
+  const base = {
+    id,
+    request_id: id,
+    project_id: id,
+    actor_id: id,
+    question_version: 2,
+    resulting_report_version: null,
+    created_at: '2026-09-24T00:01:00+00:00',
+  };
+  expect(
+    replySummary(question, {
+      ...base,
+      input: { answer: 'not_sure', activityIds: [], text: '' },
+    }),
+  ).toBe('Not sure');
+  expect(
+    replySummary(
+      { ...question, reason_code: 'scope', options: [] },
+      { ...base, input: { answer: 'yes', activityIds: [], text: '' } },
+    ),
+  ).toBe('Yes');
+  expect(
+    replySummary(
+      { ...question, reason_code: 'scope', options: [] },
+      {
+        ...base,
+        input: { answer: 'no', activityIds: [], text: 'Only the north run' },
+      },
+    ),
+  ).toBe('No · Only the north run');
+  expect(
+    replySummary(
+      { ...question, reason_code: 'date', options: [] },
+      {
+        ...base,
+        input: { answer: 'answer', activityIds: [], eventDate: '2026-09-23' },
+      },
+    ),
+  ).toBe('2026-09-23');
+  expect(
+    replySummary(
+      { ...question, reason_code: 'detail', options: [] },
+      { ...base, input: { answer: 'answer', activityIds: [], text: '' } },
+    ),
+  ).toBe('Reply recorded');
+});

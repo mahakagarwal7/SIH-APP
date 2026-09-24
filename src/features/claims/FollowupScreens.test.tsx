@@ -799,3 +799,46 @@ it('keeps checks from a previous schedule revision read-only', async () => {
     screen.queryByRole('button', { name: 'Record supervisor check' }),
   ).toBeNull();
 });
+
+it('records a cannot-confirm assignment and a need-details work check', async () => {
+  jest.mocked(decideVerification).mockResolvedValue({
+    verificationId: requestId,
+    status: 'denied',
+    version: 2,
+  });
+  await render(<VerificationScreen requestId={requestId} />);
+  await fireEvent.press(
+    screen.getByRole('radio', { name: 'Assignment check: Cannot confirm' }),
+  );
+  await fireEvent.press(
+    screen.getByRole('radio', { name: 'Work check: Need details' }),
+  );
+  await fireEvent.changeText(
+    screen.getByLabelText('Reason and evidence checked'),
+    'Assignment register lists another crew; quantity evidence missing.',
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole('button', { name: 'Record supervisor check' }),
+    ).toBeEnabled(),
+  );
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Record supervisor check' }),
+  );
+  await waitFor(() =>
+    expect(decideVerification).toHaveBeenCalledWith(
+      {},
+      requestId,
+      expect.objectContaining({
+        expectedVersion: 1,
+        allocation: 'denied',
+        work: 'needs_info',
+        reason:
+          'Assignment register lists another crew; quantity evidence missing.',
+      }),
+    ),
+  );
+  expect(
+    await screen.findByText(/planner still makes the schedule decision/),
+  ).toBeVisible();
+});
