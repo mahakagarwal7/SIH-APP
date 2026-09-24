@@ -246,6 +246,18 @@ function AccountReports({ userId }: { userId: string }) {
                 }
               />
             )}
+            {item.canOpen && item.reportId && (
+              <Action
+                label="Open report and questions"
+                disabled={false}
+                onPress={() =>
+                  router.push({
+                    pathname: '/field-report/[reportId]',
+                    params: { reportId: item.reportId! },
+                  } as unknown as Href)
+                }
+              />
+            )}
             {item.canSync && (
               <Text style={styles.retry}>Use Sync now to retry this item.</Text>
             )}

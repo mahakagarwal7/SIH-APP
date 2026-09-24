@@ -71,6 +71,7 @@ it('deduplicates local/outbox/server identity and prefers accepted server status
     summary: 'Installed two supports',
     canSync: false,
     canConfirm: false,
+    canOpen: true,
   });
 });
 
@@ -80,6 +81,7 @@ it('opens confirmation only for a ready, still-unsubmitted outbox record', () =>
     status: 'Needs confirmation',
     canConfirm: true,
     canSync: false,
+    canOpen: false,
   });
 });
 

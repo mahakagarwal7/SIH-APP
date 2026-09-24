@@ -8,12 +8,13 @@ import {
   View,
 } from 'react-native';
 
-import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
+import { NavLink, ShellPage, shellStyles } from '@/features/navigation/shellUi';
 
 import { groupMyWork, siteToday } from './myWork';
 import { useMyWork } from './useMyWork';
 
 import type { WorkActivity, WorkItem } from './myWork';
+import type { Href } from 'expo-router';
 
 function dateLabel(date: string | null) {
   if (!date) return 'Not recorded';
@@ -177,6 +178,15 @@ export function MyWorkScreen() {
             {context.member.display_name || 'Name not recorded'} · Selected
             project
           </Text>
+          {['supervisor', 'planner', 'manager'].includes(
+            context.member.role,
+          ) && (
+            <NavLink
+              href={'/field-verifications' as Href}
+              label="Supervisor checks"
+              detail="Open independent work checks assigned to you in this project."
+            />
+          )}
           {!data ? (
             <View style={styles.state}>
               {!offline && <ActivityIndicator color="#266b8c" />}

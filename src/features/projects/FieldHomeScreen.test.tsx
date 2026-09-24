@@ -87,6 +87,7 @@ beforeEach(() => {
         canSync: false,
         canConfirm: false,
         canOpenConfirmation: false,
+        canOpen: true,
       },
     ],
     error: null,

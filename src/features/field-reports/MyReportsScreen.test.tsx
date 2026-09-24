@@ -39,9 +39,10 @@ jest.mock('./myReportsService', () => {
     loadRemoteReports: jest.fn(),
   };
 });
+const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
   useFocusEffect: jest.fn(),
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 const originalAppState = AppState.currentState;
@@ -218,4 +219,11 @@ it('shows server processing as distinct from planner review', async () => {
     ),
   ).toBeVisible();
   expect(screen.queryByText('Awaiting review')).toBeNull();
+  fireEvent.press(
+    screen.getByRole('button', { name: 'Open report and questions' }),
+  );
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/field-report/[reportId]',
+    params: { reportId: '40000000-0000-4000-8000-000000000004' },
+  });
 });

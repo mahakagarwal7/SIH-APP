@@ -68,6 +68,7 @@ export type MyReportItem = {
   canSync: boolean;
   canConfirm: boolean;
   canOpenConfirmation: boolean;
+  canOpen: boolean;
 };
 
 export class ReportsReadError extends Error {
@@ -313,6 +314,7 @@ export function mergeMyReports(
           ((row.kind === 'report' && row.manifest.files.length === 0) ||
             (row.state === 'needs_confirmation' &&
               (row.kind !== 'voice' || !!row.originalTranscript)))),
+      canOpen: server?.lifecycle === 'submitted',
     });
     remoteByCapture.delete(row.captureId);
   }
@@ -334,6 +336,7 @@ export function mergeMyReports(
       canSync: row.available,
       canConfirm: false,
       canOpenConfirmation: false,
+      canOpen: false,
     });
   }
   for (const row of reports) {
@@ -354,6 +357,7 @@ export function mergeMyReports(
       canSync: row.available,
       canConfirm: false,
       canOpenConfirmation: false,
+      canOpen: false,
     });
   }
   for (const row of remoteByCapture.values()) {
@@ -372,6 +376,7 @@ export function mergeMyReports(
       canSync: false,
       canConfirm: false,
       canOpenConfirmation: false,
+      canOpen: true,
     });
   }
   return items.sort(
