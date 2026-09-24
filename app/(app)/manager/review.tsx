@@ -1,10 +1,5 @@
-import { PlaceholderScreen } from '@/features/navigation/PlaceholderScreen';
+import { ReviewQueueScreen } from '@/features/claims/ReviewQueueScreen';
+
 export default function Review() {
-  return (
-    <PlaceholderScreen
-      title="Review queue"
-      workspace="Manager"
-      description="Review original evidence and proposed changes before making a decision."
-    />
-  );
+  return <ReviewQueueScreen />;
 }

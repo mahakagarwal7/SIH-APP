@@ -21,7 +21,11 @@ function client() {
   return result;
 }
 
-const projectScopedQueries = new Set(['my-work', 'project-recent-reports']);
+const projectScopedQueries = new Set([
+  'my-work',
+  'project-recent-reports',
+  'review-queue',
+]);
 
 export function useProjectSelection() {
   const auth = useAuth();

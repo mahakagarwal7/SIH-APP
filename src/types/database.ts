@@ -84,6 +84,10 @@ export type ClaimRow = {
   project_id: string;
   report_id: string;
   report_version: number;
+  run_id: string;
+  ordinal: number;
+  facts: Json;
+  validation_flags: string[];
   state:
     | 'pending'
     | 'clarification'
@@ -94,8 +98,35 @@ export type ClaimRow = {
     | 'observed'
     | 'unplanned'
     | 'superseded'
-    | 'withdrawn'
-    | 'observed';
+    | 'withdrawn';
+  version: number;
+  plan_revision_id: string;
+  policy_version: number;
+  parent_claim_id: string | null;
+  root_claim_id: string | null;
+  followup_round: number;
+  manual_review: boolean;
+  correction_of_event_id: string | null;
+};
+export type ReportVersionRow = {
+  report_id: string;
+  version: number;
+  source_text: string;
+  work_date: string | null;
+  selected_activity_id: string | null;
+  content_hash: string;
+  context: Json;
+  created_at: string;
+};
+export type CandidateMatchRow = {
+  claim_id: string;
+  project_id: string;
+  activity_id: string;
+  revision_id: string;
+  rank: number;
+  score: number;
+  features: Json;
+  mismatch_flags: string[];
 };
 export type Database = {
   public: {
@@ -109,6 +140,8 @@ export type Database = {
       media_results: ReadTable<MediaResultRow>;
       jobs: ReadTable<ReportJobRow>;
       claims: ReadTable<ClaimRow>;
+      report_versions: ReadTable<ReportVersionRow>;
+      candidate_matches: ReadTable<CandidateMatchRow>;
     };
     Views: { [_ in never]: never };
     Functions: {
