@@ -86,6 +86,10 @@ implemented before 1.4. Each numbered item remains its own tested PR.
   answer the current structured question from My reports, and the routed
   supervisor records assignment and work checks separately from My work.
   This is approved delivery-plan slice 9; it adds no Alerts dependency.
+- **3.4** Execution history: replace the approved History placeholder with
+  completed-work context and queryable accepted field records from the existing
+  production contracts. Preserve correction status, evidence and audit
+  references; do not infer productivity or completion from quantities.
 
 ## Phase 4 — Feature 1: Schedule (read-only)
 
