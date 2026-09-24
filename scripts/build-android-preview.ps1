@@ -52,6 +52,23 @@ function Get-PreviewArtifactName {
   return 'nirmaan-field-preview-arm64-setup-unavailable.apk'
 }
 
+function Remove-StalePreviewArtifacts {
+  param([string]$OutputDirectory)
+
+  foreach ($artifactName in @(
+    'nirmaan-field-preview-arm64.apk'
+    'nirmaan-field-preview-arm64-setup-unavailable.apk'
+  )) {
+    $artifactPath = Join-Path $OutputDirectory $artifactName
+    if (Test-Path -LiteralPath $artifactPath -PathType Leaf) {
+      Remove-Item -LiteralPath $artifactPath -Force
+      if (Test-Path -LiteralPath $artifactPath) {
+        throw "Could not remove stale preview artifact '$artifactName'."
+      }
+    }
+  }
+}
+
 function Import-PublicEnvironment {
   param(
     [string]$Path,
@@ -153,6 +170,8 @@ function Invoke-Checked {
 $originalEnvironment = Save-ProcessEnvironment -Names $buildEnvironmentNames
 Push-Location $projectRoot
 try {
+  $outputDirectory = Join-Path $projectRoot 'dist'
+  Remove-StalePreviewArtifacts -OutputDirectory $outputDirectory
   $hasPublicConfig = Import-PublicEnvironment `
     -Path $localEnvironment `
     -AllowMissingPublicConfig:$AllowMissingPublicConfig
@@ -239,7 +258,6 @@ try {
   Assert-ApprovedDebugCertificate -SignatureReport $signatureReport
   $signatureReport | Write-Output
 
-  $outputDirectory = Join-Path $projectRoot 'dist'
   New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
   $artifactName = Get-PreviewArtifactName -HasPublicConfig $hasPublicConfig
   $outputApk = Join-Path $outputDirectory $artifactName
