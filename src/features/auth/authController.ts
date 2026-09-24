@@ -109,7 +109,9 @@ export class AuthController {
       (this.state.session?.expires_at ?? 0) * 1000 > Date.now();
     if (!hasValidSession) {
       clearTimeout(this.expiryTimer);
-      this.update({ status: 'loading', session: null, message: null });
+      // Keep an established sign-in form mounted while a resume check is pending.
+      if (this.state.status !== 'signedOut')
+        this.update({ status: 'loading', session: null, message: null });
     }
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -163,7 +165,8 @@ export class AuthController {
       return;
     }
     const lifetime = this.lifetime;
-    const revision = this.revision;
+    // An older resume check cannot replace the result of this sign-in attempt.
+    const revision = ++this.revision;
     this.update({ busy: true, message: null });
     try {
       const result = await this.api.signInWithPassword({

@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
     paddingVertical: 36,
   },
   eyebrow: {
-    color: '#627786',
+    color: '#586c7a',
     fontSize: 12,
     lineHeight: 20,
     letterSpacing: 1,
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
     lineHeight: 42,
     marginBottom: 12,
   },
-  body: { color: '#627786', fontSize: 16, lineHeight: 26 },
+  body: { color: '#586c7a', fontSize: 16, lineHeight: 26 },
   form: { marginTop: 28 },
   label: {
     color: '#17354c',
@@ -341,5 +341,5 @@ const styles = StyleSheet.create({
   },
   account: { color: '#17354c', fontSize: 17, lineHeight: 27 },
   indicator: { alignSelf: 'flex-start', marginVertical: 16 },
-  preview: { color: '#627786', fontSize: 13, lineHeight: 21, marginTop: 28 },
+  preview: { color: '#586c7a', fontSize: 13, lineHeight: 21, marginTop: 28 },
 });

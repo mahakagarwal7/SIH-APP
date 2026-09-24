@@ -139,6 +139,46 @@ it('shows accepted quantity separately from completion and missing actual dates'
   expect(screen.getByText('Site project')).toBeVisible();
 });
 
+it.each([
+  {
+    acceptedQuantity: 0.0004,
+    targetQuantity: 8.0004,
+    unit: 't',
+    label: '0.0004 of 8.0004 t accepted',
+  },
+  {
+    acceptedQuantity: 0.12345678901234566,
+    targetQuantity: 1234567.8901234567,
+    unit: 'm',
+    label: '0.12345678901234566 of 12,34,567.8901234567 m accepted',
+  },
+  {
+    acceptedQuantity: 0.0000001,
+    targetQuantity: null,
+    unit: null,
+    label:
+      '0.0000001 (unit not recorded) accepted · Planned quantity not recorded',
+  },
+  {
+    acceptedQuantity: 0,
+    targetQuantity: 8,
+    unit: 'spools',
+    label: '0 of 8 spools accepted',
+  },
+])('preserves recorded quantity precision: $label', async (testCase) => {
+  const { label, ...quantities } = testCase;
+  jest.mocked(loadMyWork).mockResolvedValue({
+    ...work,
+    snapshot: {
+      ...work.snapshot,
+      activities: [{ ...activity, ...quantities }],
+    },
+  });
+  await render(<App />);
+  expect(await screen.findByText(label)).toBeVisible();
+  expect(screen.queryByText('Complete')).toBeNull();
+});
+
 it('provides a loading state and an explicit no-access state', async () => {
   let finish!: (result: null) => void;
   jest.mocked(loadDefaultProject).mockReturnValue(

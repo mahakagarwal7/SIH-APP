@@ -1,6 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import { requestRecordingPermissionsAsync } from 'expo-audio';
+import {
+  createAudioPlayer,
+  requestRecordingPermissionsAsync,
+} from 'expo-audio';
+import { useFocusEffect } from 'expo-router';
+import { useState } from 'react';
 import { Alert, AppState } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -13,6 +18,7 @@ import { VoiceReportScreen } from './VoiceReportScreen.android';
 import type { VoiceDraftStore } from './draftStore';
 import type { PcmBuffer } from './pcmWav';
 import type { AuthViewState } from '@/features/auth/AuthProvider';
+import type { AppStateStatus } from 'react-native';
 
 jest.mock('@/features/auth/AuthProvider', () => ({ useAuth: jest.fn() }));
 jest.mock('@/features/projects/useMyWork', () => ({
@@ -24,9 +30,17 @@ jest.mock('./androidMicrophone', () => ({ androidMicrophone: jest.fn() }));
 jest.mock('./nativeDraftStore', () => ({ getVoiceDraftStore: jest.fn() }));
 jest.mock('./ReportMethodLinks', () => ({ ReportMethodLinks: () => null }));
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'draft-id' }));
-const mockPlayer = { pause: jest.fn(), replace: jest.fn(), play: jest.fn() };
+const mockPlayer = {
+  pause: jest.fn(),
+  replace: jest.fn(),
+  play: jest.fn(),
+  remove: jest.fn(),
+  release: jest.fn(),
+  addListener: jest.fn(),
+};
 jest.mock('expo-audio', () => ({
   requestRecordingPermissionsAsync: jest.fn(),
+  createAudioPlayer: jest.fn(() => mockPlayer),
   useAudioPlayer: () => mockPlayer,
   useAudioPlayerStatus: () => ({ playing: false }),
 }));
@@ -46,9 +60,12 @@ function signedIn(userId = 'alice', offline = false) {
   } as AuthViewState);
 }
 function App() {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 } },
-  });
+  const [client] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: { queries: { retry: false, gcTime: 0 } },
+      }),
+  );
   return (
     <QueryClientProvider client={client}>
       <VoiceReportScreen />
@@ -58,6 +75,7 @@ function App() {
 beforeEach(() => {
   jest.useFakeTimers();
   AppState.currentState = 'active';
+  mockPlayer.addListener.mockReturnValue({ remove: jest.fn() });
   signedIn();
   jest.mocked(useDefaultProject).mockReturnValue({
     data: {
@@ -82,6 +100,183 @@ beforeEach(() => {
     .mocked(getVoiceDraftStore)
     .mockResolvedValue({ save, list } as unknown as VoiceDraftStore);
 });
+
+function renameProject() {
+  const current = jest.mocked(useDefaultProject).mock.results.at(-1)!.value;
+  jest.mocked(useDefaultProject).mockReturnValue({
+    ...current,
+    data: {
+      ...current.data,
+      project: { ...current.data.project, name: 'Renamed site' },
+    },
+  });
+}
+async function recordOneSecond() {
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Record voice report' }),
+  );
+  await act(() =>
+    feed({
+      data: new Int16Array(16000).fill(2048).buffer,
+      sampleRate: 16000,
+      channels: 1,
+    }),
+  );
+}
+it('keeps the active recording operable when project metadata refreshes', async () => {
+  const view = await render(<App />);
+  await recordOneSecond();
+  renameProject();
+  await view.rerender(<App />);
+  expect(save).not.toHaveBeenCalled();
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Stop and save recording' }),
+  );
+  expect(
+    await screen.findByText('Saved on device. Not sent for review.'),
+  ).toBeVisible();
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(save.mock.calls[0][0].projectName).toBe('Renamed site');
+  await recordOneSecond();
+  expect(androidMicrophone).toHaveBeenCalledTimes(2);
+});
+it('retries the same recording and draft after a project-name refresh', async () => {
+  save.mockRejectedValueOnce(new Error('Storage full'));
+  const view = await render(<App />);
+  await recordOneSecond();
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Stop and save recording' }),
+  );
+  expect(
+    await screen.findByRole('button', { name: 'Retry save' }),
+  ).toBeEnabled();
+  renameProject();
+  await view.rerender(<App />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Retry save' }));
+  expect(save).toHaveBeenCalledTimes(2);
+  expect(save.mock.calls[1][0]).toBe(save.mock.calls[0][0]);
+  expect(save.mock.calls[1][1]).toBe(save.mock.calls[0][1]);
+  expect(
+    await screen.findByText('Saved on device. Not sent for review.'),
+  ).toBeVisible();
+});
+
+function playableDraft() {
+  list.mockResolvedValue([
+    {
+      id: 'playable',
+      projectName: 'Site project',
+      createdAt: '2026-09-23T00:00:00Z',
+      duration: 1,
+      state: 'saved',
+      available: true,
+    },
+  ]);
+  const playbackUri = jest.fn().mockResolvedValue('file:///voice.wav');
+  jest.mocked(getVoiceDraftStore).mockResolvedValue({
+    save,
+    list,
+    playbackUri,
+  } as unknown as VoiceDraftStore);
+  return playbackUri;
+}
+it('removes native playback on background so Android cannot resume it invisibly', async () => {
+  playableDraft();
+  const listeners = new Set<(state: AppStateStatus) => void>();
+  jest
+    .spyOn(AppState, 'addEventListener')
+    .mockImplementation((_event, listener) => {
+      listeners.add(listener);
+      return { remove: () => listeners.delete(listener) };
+    });
+  await render(<App />);
+  await fireEvent.press(await screen.findByRole('button', { name: 'Listen' }));
+  expect(mockPlayer.play).toHaveBeenCalledTimes(1);
+  await act(() => listeners.forEach((listener) => listener('background')));
+  expect(mockPlayer.remove).toHaveBeenCalledTimes(1);
+  expect(mockPlayer.release).toHaveBeenCalledTimes(1);
+  await act(() => listeners.forEach((listener) => listener('active')));
+  expect(mockPlayer.play).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('button', { name: 'Listen' })).toBeEnabled();
+  await fireEvent.press(screen.getByRole('button', { name: 'Listen' }));
+  expect(createAudioPlayer).toHaveBeenCalledTimes(2);
+});
+it('releases playback when its account screen unmounts', async () => {
+  playableDraft();
+  const view = await render(<App />);
+  await fireEvent.press(await screen.findByRole('button', { name: 'Listen' }));
+  await view.unmount();
+  expect(mockPlayer.remove).toHaveBeenCalledTimes(1);
+  expect(mockPlayer.release).toHaveBeenCalledTimes(1);
+});
+it('cancels a pending playback lookup when leaving the screen', async () => {
+  const playbackUri = playableDraft();
+  let finish!: (uri: string) => void;
+  playbackUri.mockImplementation(
+    () =>
+      new Promise<string>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await render(<App />);
+  await fireEvent.press(await screen.findByRole('button', { name: 'Listen' }));
+  const focus = jest.mocked(useFocusEffect).mock.calls.at(-1)![0];
+  let blur: void | (() => void);
+  await act(() => {
+    blur = focus();
+  });
+  await act(() => {
+    blur?.();
+  });
+  await act(() => finish('file:///late.wav'));
+  expect(mockPlayer.play).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Listen' })).toBeEnabled();
+});
+it('releases playback before opening the microphone', async () => {
+  playableDraft();
+  await render(<App />);
+  await fireEvent.press(await screen.findByRole('button', { name: 'Listen' }));
+  jest.mocked(androidMicrophone).mockImplementation(() => {
+    expect(mockPlayer.remove).toHaveBeenCalledTimes(1);
+    expect(mockPlayer.release).toHaveBeenCalledTimes(1);
+    return { start: async () => {}, stop: jest.fn(), release: jest.fn() };
+  });
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Record voice report' }),
+  );
+  expect(androidMicrophone).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('button', { name: 'Listen' })).toBeDisabled();
+});
+it.each(['finished', 'error'])(
+  'clears and releases a %s playback session',
+  async (outcome) => {
+    playableDraft();
+    await render(<App />);
+    await fireEvent.press(
+      await screen.findByRole('button', { name: 'Listen' }),
+    );
+    const listener = mockPlayer.addListener.mock.calls.at(-1)![1];
+    await act(() =>
+      listener({
+        didJustFinish: outcome === 'finished',
+        error: outcome === 'error' ? 'decode failed' : null,
+        isLoaded: true,
+      }),
+    );
+    expect(mockPlayer.release).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Listen' })).toBeEnabled();
+    if (outcome === 'error')
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        /could not be played/,
+      );
+    await fireEvent.press(screen.getByRole('button', { name: 'Listen' }));
+    // Ignore a status event already queued by the released native session.
+    await act(() =>
+      listener({ didJustFinish: true, error: null, isLoaded: true }),
+    );
+    expect(screen.getByRole('button', { name: 'Stop playback' })).toBeEnabled();
+  },
+);
 afterEach(() => jest.useRealTimers());
 it('does not label a recording saved while the durable write is pending', async () => {
   let finish!: () => void;

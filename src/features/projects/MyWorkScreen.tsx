@@ -25,14 +25,17 @@ function dateLabel(date: string | null) {
   }).format(new Date(`${date}T12:00:00Z`));
 }
 
+// Preserve the supplied number's significant digits instead of rounding to three decimals.
+const quantityFormatter = new Intl.NumberFormat('en-IN', {
+  maximumSignificantDigits: 21,
+});
+
 function quantityLabel(activity: WorkActivity) {
-  const accepted = new Intl.NumberFormat('en-IN').format(
-    activity.acceptedQuantity,
-  );
+  const accepted = quantityFormatter.format(activity.acceptedQuantity);
   const unit = activity.unit ? ` ${activity.unit}` : ' (unit not recorded)';
   if (activity.targetQuantity === null)
     return `${accepted}${unit} accepted · Planned quantity not recorded`;
-  return `${accepted} of ${new Intl.NumberFormat('en-IN').format(activity.targetQuantity)}${unit} accepted`;
+  return `${accepted} of ${quantityFormatter.format(activity.targetQuantity)}${unit} accepted`;
 }
 
 function WorkCard({ item }: { item: WorkItem }) {
@@ -254,7 +257,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   disabled: { opacity: 0.55 },
-  detail: { color: '#627786', fontSize: 14, lineHeight: 22 },
+  detail: { color: '#586c7a', fontSize: 14, lineHeight: 22 },
   notice: {
     backgroundColor: '#e8eff3',
     color: '#17354c',
@@ -310,10 +313,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   empty: {
-    color: '#627786',
+    color: '#586c7a',
     fontSize: 15,
     lineHeight: 24,
     paddingVertical: 16,
   },
-  footer: { color: '#627786', fontSize: 14, lineHeight: 24, marginTop: 28 },
+  footer: { color: '#586c7a', fontSize: 14, lineHeight: 24, marginTop: 28 },
 });
