@@ -376,7 +376,7 @@ export function mergeMyReports(
       canSync: false,
       canConfirm: false,
       canOpenConfirmation: false,
-      canOpen: true,
+      canOpen: row.lifecycle === 'submitted',
     });
   }
   return items.sort(

@@ -20,6 +20,8 @@ const requestId = '10000000-0000-4000-8000-000000000006';
 const activityId = '10000000-0000-4000-8000-000000000007';
 const revisionId = '10000000-0000-4000-8000-000000000008';
 const commandId = '10000000-0000-4000-8000-000000000009';
+const secondClaimId = '10000000-0000-4000-8000-000000000010';
+const secondQuestionId = '10000000-0000-4000-8000-000000000011';
 const member = {
   project_id: projectId,
   user_id: userId,
@@ -107,13 +109,24 @@ const verification = {
   created_at: '2026-09-24T00:02:00+00:00',
 };
 
-function response(data: unknown, count?: number) {
+function response(data: unknown, count?: number, offset = 0) {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  if (count !== undefined)
-    headers['Content-Range'] = `0-${Math.max(0, count - 1)}/${count}`;
+  if (count !== undefined) {
+    const range =
+      Array.isArray(data) && data.length
+        ? `${offset}-${offset + data.length - 1}`
+        : '*';
+    headers['Content-Range'] = `${range}/${count}`;
+  }
   return new Response(JSON.stringify(data), { status: 200, headers });
+}
+
+function pageResponse(rows: unknown[], url: URL) {
+  const offset = Number(url.searchParams.get('offset') ?? 0);
+  const limit = Number(url.searchParams.get('limit') ?? rows.length);
+  return response(rows.slice(offset, offset + limit), rows.length, offset);
 }
 
 function client(fetcher: typeof fetch) {
@@ -131,7 +144,27 @@ function client(fetcher: typeof fetch) {
   );
 }
 
-it('loads only the signed-in reporter report and its complete question history', async () => {
+it('loads complete question history after another claim reply advances the report', async () => {
+  const secondClaim = { ...claim, id: secondClaimId };
+  const secondQuestion = {
+    ...question,
+    id: secondQuestionId,
+    claim_id: secondClaimId,
+    reason_code: 'detail' as const,
+    options: [],
+    created_at: '2026-09-24T00:02:00+00:00',
+  };
+  const advancedReport = { ...report, current_version: 2 };
+  const firstReply = {
+    id: '10000000-0000-4000-8000-000000000012',
+    request_id: question.id,
+    project_id: projectId,
+    actor_id: userId,
+    question_version: 1,
+    input: { answer: 'answer' as const, activityIds: [activityId], text: '' },
+    resulting_report_version: 2,
+    created_at: '2026-09-24T00:01:30+00:00',
+  };
   const calls: URL[] = [];
   const fetcher = jest.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input));
@@ -139,16 +172,20 @@ it('loads only the signed-in reporter report and its complete question history',
     if (url.pathname.endsWith('/reports')) {
       return response(
         url.searchParams.get('select') === 'id,current_version,lifecycle'
-          ? [{ id: reportId, current_version: 1, lifecycle: 'submitted' }]
-          : [report],
+          ? [{ id: reportId, current_version: 2, lifecycle: 'submitted' }]
+          : [advancedReport],
       );
     }
     if (url.pathname.endsWith('/report_versions')) return response([original]);
-    if (url.pathname.endsWith('/claims')) return response([claim], 1);
+    if (url.pathname.endsWith('/claims'))
+      return response(
+        [{ ...claim, state: 'pending', version: 3 }, secondClaim],
+        2,
+      );
     if (url.pathname.endsWith('/clarification_requests'))
-      return response([question], 1);
+      return response([{ ...question, status: 'answered' }, secondQuestion], 2);
     if (url.pathname.endsWith('/clarification_responses'))
-      return response([], 0);
+      return response([firstReply], 1);
     if (url.pathname.endsWith('/project_members')) return response([member]);
     throw new Error(`Unexpected URL ${url.pathname}`);
   });
@@ -158,7 +195,13 @@ it('loads only the signed-in reporter report and its complete question history',
     reportId,
     new AbortController().signal,
   );
-  expect(result.questions).toEqual([question]);
+  expect(result.report.current_version).toBe(2);
+  expect(result.questions.map((row) => row.status)).toEqual([
+    'answered',
+    'open',
+  ]);
+  expect(result.questions[1]?.report_version).toBe(1);
+  expect(result.responses).toEqual([firstReply]);
   expect(
     calls
       .find((url) => url.pathname.endsWith('/reports'))
@@ -167,6 +210,188 @@ it('loads only the signed-in reporter report and its complete question history',
   expect(calls.every((url) => url.hostname === 'example.supabase.co')).toBe(
     true,
   );
+});
+
+it('rejects two open questions for the same claim', async () => {
+  const fetcher = jest.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('/reports'))
+      return response(
+        url.searchParams.get('select') === 'id,current_version,lifecycle'
+          ? [{ id: reportId, current_version: 1, lifecycle: 'submitted' }]
+          : [report],
+      );
+    if (url.pathname.endsWith('/report_versions')) return response([original]);
+    if (url.pathname.endsWith('/claims')) return response([claim], 1);
+    if (url.pathname.endsWith('/clarification_requests'))
+      return response([question, { ...question, id: secondQuestionId }], 2);
+    if (url.pathname.endsWith('/clarification_responses'))
+      return response([], 0);
+    if (url.pathname.endsWith('/project_members')) return response([member]);
+    throw new Error(`Unexpected URL ${url.pathname}`);
+  });
+  await expect(
+    loadReportFollowups(
+      client(fetcher as typeof fetch),
+      userId,
+      reportId,
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({ kind: 'changed' });
+});
+
+it('rejects an open question whose claim snapshot has advanced', async () => {
+  const fetcher = jest.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('/reports'))
+      return response(
+        url.searchParams.get('select') === 'id,current_version,lifecycle'
+          ? [{ id: reportId, current_version: 1, lifecycle: 'submitted' }]
+          : [report],
+      );
+    if (url.pathname.endsWith('/report_versions')) return response([original]);
+    if (url.pathname.endsWith('/claims'))
+      return response([{ ...claim, version: claim.version + 1 }], 1);
+    if (url.pathname.endsWith('/clarification_requests'))
+      return response([question], 1);
+    if (url.pathname.endsWith('/clarification_responses'))
+      return response([], 0);
+    if (url.pathname.endsWith('/project_members')) return response([member]);
+    throw new Error(`Unexpected URL ${url.pathname}`);
+  });
+  await expect(
+    loadReportFollowups(
+      client(fetcher as typeof fetch),
+      userId,
+      reportId,
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({ kind: 'changed' });
+});
+
+it('rejects a question that changes while its responses are loading', async () => {
+  let claimReads = 0;
+  let questionReads = 0;
+  const reply = {
+    id: '10000000-0000-4000-8000-000000000012',
+    request_id: questionId,
+    project_id: projectId,
+    actor_id: userId,
+    question_version: 1,
+    input: { answer: 'not_sure' as const, text: '' },
+    resulting_report_version: null,
+    created_at: '2026-09-24T00:01:30+00:00',
+  };
+  const fetcher = jest.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('/reports'))
+      return response(
+        url.searchParams.get('select') === 'id,current_version,lifecycle'
+          ? [{ id: reportId, current_version: 1, lifecycle: 'submitted' }]
+          : [report],
+      );
+    if (url.pathname.endsWith('/report_versions')) return response([original]);
+    if (url.pathname.endsWith('/claims')) {
+      claimReads += 1;
+      return response(
+        [
+          claimReads === 1
+            ? claim
+            : { ...claim, state: 'pending', version: claim.version + 1 },
+        ],
+        1,
+      );
+    }
+    if (url.pathname.endsWith('/clarification_requests')) {
+      questionReads += 1;
+      return response(
+        [
+          questionReads === 1
+            ? question
+            : { ...question, status: 'answered', version: 2 },
+        ],
+        1,
+      );
+    }
+    if (url.pathname.endsWith('/clarification_responses'))
+      return response([reply], 1);
+    if (url.pathname.endsWith('/project_members')) return response([member]);
+    throw new Error(`Unexpected URL ${url.pathname}`);
+  });
+
+  await expect(
+    loadReportFollowups(
+      client(fetcher as typeof fetch),
+      userId,
+      reportId,
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({ kind: 'changed' });
+  expect(claimReads).toBe(2);
+  expect(questionReads).toBe(2);
+});
+
+it('loads report histories beyond one PostgREST page', async () => {
+  const uuid = (value: number) =>
+    `10000000-0000-4000-8000-${String(value).padStart(12, '0')}`;
+  const claims = Array.from({ length: 101 }, (_, index) => ({
+    ...claim,
+    id: uuid(100 + index),
+    state: 'pending' as const,
+  }));
+  const questions = claims.map((row, index) => ({
+    ...question,
+    id: uuid(300 + index),
+    claim_id: row.id,
+    reason_code: 'detail' as const,
+    question_text: `Earlier question ${index}`,
+    options: [],
+    status: 'answered' as const,
+  }));
+  const replies = questions.map((row, index) => ({
+    id: uuid(500 + index),
+    request_id: row.id,
+    project_id: projectId,
+    actor_id: userId,
+    question_version: 1,
+    input: { answer: 'answer' as const, text: `Reply ${index}` },
+    resulting_report_version: null,
+    created_at: `2026-09-${String(1 + (index % 24)).padStart(2, '0')}T00:00:00+00:00`,
+  }));
+  const fetcher = jest.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('/reports'))
+      return response(
+        url.searchParams.get('select') === 'id,current_version,lifecycle'
+          ? [{ id: reportId, current_version: 1, lifecycle: 'submitted' }]
+          : [report],
+      );
+    if (url.pathname.endsWith('/report_versions')) return response([original]);
+    if (url.pathname.endsWith('/claims')) return pageResponse(claims, url);
+    if (url.pathname.endsWith('/clarification_requests'))
+      return pageResponse(questions, url);
+    if (url.pathname.endsWith('/clarification_responses')) {
+      const requestIds = new Set(
+        url.searchParams.get('request_id')?.match(/[0-9a-f-]{36}/g) ?? [],
+      );
+      return pageResponse(
+        replies.filter((reply) => requestIds.has(reply.request_id)),
+        url,
+      );
+    }
+    if (url.pathname.endsWith('/project_members')) return response([member]);
+    throw new Error(`Unexpected URL ${url.pathname}`);
+  });
+
+  const result = await loadReportFollowups(
+    client(fetcher as typeof fetch),
+    userId,
+    reportId,
+    new AbortController().signal,
+  );
+  expect(result.claims).toHaveLength(101);
+  expect(result.questions).toHaveLength(101);
+  expect(result.responses).toHaveLength(101);
 });
 
 it('rejects inconsistent question ownership and changed reports', async () => {
@@ -215,19 +440,37 @@ it('loads exact assigned supervisor checks with evidence and reporter context', 
     const url = new URL(String(input));
     if (url.pathname.endsWith('/verification_requests'))
       return response([verification], 1);
-    if (url.pathname.endsWith('/rpc/verification_context'))
-      return response([
-        { request_id: requestId, reporter_name: 'Site reporter' },
-      ]);
+    if (url.pathname.endsWith('/rpc/verification_context_v2'))
+      return response(
+        [
+          {
+            request_id: requestId,
+            reporter_name: 'Site reporter',
+            assignment_is_current: true,
+          },
+        ],
+        1,
+      );
     if (url.pathname.endsWith('/report_versions'))
       return response([original], 1);
     if (url.pathname.endsWith('/claims'))
-      return response([{ ...claim, state: 'verification' }]);
+      return response([{ ...claim, state: 'verification' }], 1);
     if (url.pathname.endsWith('/verification_decisions'))
       return response([], 0);
+    if (url.pathname.endsWith('/reports'))
+      return response(
+        [{ id: reportId, project_id: projectId, lifecycle: 'submitted' }],
+        1,
+      );
+    if (url.pathname.endsWith('/assignment_versions'))
+      return response(
+        [{ project_id: projectId, activity_id: activityId, version: 4 }],
+        1,
+      );
     if (url.pathname.endsWith('/rpc/schedule_snapshot'))
       return response({
         projectId,
+        policyVersion: 1,
         revisionId,
         activities: [
           {
@@ -253,9 +496,435 @@ it('loads exact assigned supervisor checks with evidence and reporter context', 
     {
       reporterName: 'Site reporter',
       activity: { externalId: 'PIP-1201' },
+      scheduleIsCurrent: true,
+      requestIsCurrent: true,
       request: { id: requestId, verifier_id: userId },
     },
   ]);
+  expect(
+    fetcher.mock.calls.some(([input]) =>
+      new URL(String(input)).pathname.endsWith('/assignment_versions'),
+    ),
+  ).toBe(false);
+});
+
+it('keeps completed verification checks as history after the claim advances', async () => {
+  const completedRequest = {
+    ...verification,
+    claim_version: claim.version + 1,
+    status: 'confirmed',
+    version: 2,
+  };
+  const decision = {
+    id: '10000000-0000-4000-8000-000000000013',
+    request_id: requestId,
+    project_id: projectId,
+    actor_id: userId,
+    request_version: 1,
+    allocation: 'confirmed',
+    work: 'confirmed',
+    reason: 'Checked the assignment record and observed the work.',
+    created_at: '2026-09-24T00:03:00+00:00',
+  };
+  const fetcher = jest.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('/verification_requests'))
+      return response([completedRequest], 1);
+    if (url.pathname.endsWith('/rpc/verification_context_v2'))
+      return response(
+        [
+          {
+            request_id: requestId,
+            reporter_name: 'Site reporter',
+            assignment_is_current: true,
+          },
+        ],
+        1,
+      );
+    if (url.pathname.endsWith('/report_versions'))
+      return response([original], 1);
+    if (url.pathname.endsWith('/claims'))
+      return response(
+        [{ ...claim, version: claim.version + 1, state: 'pending' }],
+        1,
+      );
+    if (url.pathname.endsWith('/verification_decisions'))
+      return response([decision], 1);
+    if (url.pathname.endsWith('/reports'))
+      return response(
+        [{ id: reportId, project_id: projectId, lifecycle: 'submitted' }],
+        1,
+      );
+    if (url.pathname.endsWith('/rpc/schedule_snapshot'))
+      return response({
+        projectId,
+        policyVersion: 1,
+        revisionId,
+        activities: [],
+      });
+    if (url.pathname.endsWith('/project_members')) return response([member]);
+    throw new Error(`Unexpected URL ${url.pathname}`);
+  });
+
+  await expect(
+    loadVerificationAssignments(
+      client(fetcher as typeof fetch),
+      context,
+      new AbortController().signal,
+    ),
+  ).resolves.toMatchObject([
+    {
+      requestIsCurrent: true,
+      request: { status: 'confirmed' },
+      claim: { state: 'pending', version: claim.version + 1 },
+      decisions: [decision],
+    },
+  ]);
+});
+
+it('marks a verification from an older schedule read-only', async () => {
+  const currentRevisionId = '10000000-0000-4000-8000-000000000012';
+  const fetcher = jest.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('/verification_requests'))
+      return response([verification], 1);
+    if (url.pathname.endsWith('/rpc/verification_context_v2'))
+      return response(
+        [
+          {
+            request_id: requestId,
+            reporter_name: 'Site reporter',
+            assignment_is_current: true,
+          },
+        ],
+        1,
+      );
+    if (url.pathname.endsWith('/report_versions'))
+      return response([original], 1);
+    if (url.pathname.endsWith('/claims'))
+      return response([{ ...claim, state: 'verification' }], 1);
+    if (url.pathname.endsWith('/verification_decisions'))
+      return response([], 0);
+    if (url.pathname.endsWith('/reports'))
+      return response(
+        [{ id: reportId, project_id: projectId, lifecycle: 'submitted' }],
+        1,
+      );
+    if (url.pathname.endsWith('/assignment_versions'))
+      return response(
+        [{ project_id: projectId, activity_id: activityId, version: 4 }],
+        1,
+      );
+    if (url.pathname.endsWith('/rpc/schedule_snapshot'))
+      return response({
+        projectId,
+        policyVersion: 1,
+        revisionId: currentRevisionId,
+        activities: [
+          {
+            id: activityId,
+            projectId,
+            revisionId: currentRevisionId,
+            externalId: 'PIP-1201-new',
+            name: 'Install revised supports',
+            location: 'Unit 3',
+          },
+        ],
+      });
+    if (url.pathname.endsWith('/project_members')) return response([member]);
+    throw new Error(`Unexpected URL ${url.pathname}`);
+  });
+  await expect(
+    loadVerificationAssignments(
+      client(fetcher as typeof fetch),
+      context,
+      new AbortController().signal,
+    ),
+  ).resolves.toMatchObject([
+    { scheduleIsCurrent: false, requestIsCurrent: false, activity: null },
+  ]);
+});
+
+it('marks checks read-only when claim, policy, assignment, or report context is stale', async () => {
+  const scenarios = [
+    {
+      claimRow: { ...claim, state: 'clarification', version: 3 },
+      policyVersion: 1,
+      assignmentVersion: 4,
+      assignmentIsCurrent: true,
+      reportLifecycle: 'submitted',
+    },
+    {
+      claimRow: { ...claim, state: 'verification' },
+      policyVersion: 2,
+      assignmentVersion: 4,
+      assignmentIsCurrent: true,
+      reportLifecycle: 'submitted',
+    },
+    {
+      claimRow: { ...claim, state: 'verification' },
+      policyVersion: 1,
+      assignmentVersion: 4,
+      assignmentIsCurrent: false,
+      reportLifecycle: 'submitted',
+    },
+    {
+      claimRow: { ...claim, state: 'verification' },
+      policyVersion: 1,
+      assignmentVersion: 4,
+      assignmentIsCurrent: true,
+      reportLifecycle: 'withdrawn',
+    },
+  ] as const;
+
+  for (const scenario of scenarios) {
+    const fetcher = jest.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/verification_requests'))
+        return response([verification], 1);
+      if (url.pathname.endsWith('/rpc/verification_context_v2'))
+        return response(
+          [
+            {
+              request_id: requestId,
+              reporter_name: 'Site reporter',
+              assignment_is_current: scenario.assignmentIsCurrent,
+            },
+          ],
+          1,
+        );
+      if (url.pathname.endsWith('/report_versions'))
+        return response([original], 1);
+      if (url.pathname.endsWith('/claims'))
+        return response([scenario.claimRow], 1);
+      if (url.pathname.endsWith('/verification_decisions'))
+        return response([], 0);
+      if (url.pathname.endsWith('/reports'))
+        return response(
+          [
+            {
+              id: reportId,
+              project_id: projectId,
+              lifecycle: scenario.reportLifecycle,
+            },
+          ],
+          1,
+        );
+      if (url.pathname.endsWith('/assignment_versions'))
+        return response(
+          [
+            {
+              project_id: projectId,
+              activity_id: activityId,
+              version: scenario.assignmentVersion,
+            },
+          ],
+          1,
+        );
+      if (url.pathname.endsWith('/rpc/schedule_snapshot'))
+        return response({
+          projectId,
+          policyVersion: scenario.policyVersion,
+          revisionId,
+          activities: [],
+        });
+      if (url.pathname.endsWith('/project_members')) return response([member]);
+      throw new Error(`Unexpected URL ${url.pathname}`);
+    });
+
+    const result = await loadVerificationAssignments(
+      client(fetcher as typeof fetch),
+      context,
+      new AbortController().signal,
+    );
+    expect(result[0]?.scheduleIsCurrent).toBe(true);
+    expect(result[0]?.requestIsCurrent).toBe(false);
+  }
+});
+
+it('rejects verification history beyond the current request version', async () => {
+  const terminalRequest = {
+    ...verification,
+    claim_version: claim.version + 1,
+    status: 'confirmed',
+    version: 2,
+  };
+  const decision = {
+    id: '10000000-0000-4000-8000-000000000013',
+    request_id: requestId,
+    project_id: projectId,
+    actor_id: userId,
+    request_version: 2,
+    allocation: 'confirmed',
+    work: 'confirmed',
+    reason: 'Checked the assignment record and observed the work.',
+    created_at: '2026-09-24T00:03:00+00:00',
+  };
+  const fetcher = jest.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('/verification_requests'))
+      return response([terminalRequest], 1);
+    if (url.pathname.endsWith('/rpc/verification_context_v2'))
+      return response(
+        [
+          {
+            request_id: requestId,
+            reporter_name: 'Site reporter',
+            assignment_is_current: true,
+          },
+        ],
+        1,
+      );
+    if (url.pathname.endsWith('/report_versions'))
+      return response([original], 1);
+    if (url.pathname.endsWith('/claims'))
+      return response(
+        [{ ...claim, version: claim.version + 1, state: 'pending' }],
+        1,
+      );
+    if (url.pathname.endsWith('/verification_decisions'))
+      return response([decision], 1);
+    if (url.pathname.endsWith('/reports'))
+      return response(
+        [{ id: reportId, project_id: projectId, lifecycle: 'submitted' }],
+        1,
+      );
+    if (url.pathname.endsWith('/assignment_versions'))
+      return response(
+        [{ project_id: projectId, activity_id: activityId, version: 4 }],
+        1,
+      );
+    if (url.pathname.endsWith('/rpc/schedule_snapshot'))
+      return response({
+        projectId,
+        policyVersion: 1,
+        revisionId,
+        activities: [],
+      });
+    if (url.pathname.endsWith('/project_members')) return response([member]);
+    throw new Error(`Unexpected URL ${url.pathname}`);
+  });
+  await expect(
+    loadVerificationAssignments(
+      client(fetcher as typeof fetch),
+      context,
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({ kind: 'changed' });
+});
+
+it('loads assigned verification and decision histories beyond one page', async () => {
+  const uuid = (value: number) =>
+    `10000000-0000-4000-8000-${String(value).padStart(12, '0')}`;
+  const requests = Array.from({ length: 101 }, (_, index) => ({
+    ...verification,
+    id: uuid(1000 + index),
+    claim_id: uuid(2000 + index),
+    report_id: uuid(3000 + index),
+    status: 'needs_info' as const,
+    claim_version: 3,
+    version: 2,
+    created_at: `2026-09-24T00:${String(index % 60).padStart(2, '0')}:00+00:00`,
+  }));
+  const contexts = requests.map((request) => ({
+    request_id: request.id,
+    reporter_name: 'Site reporter',
+    assignment_is_current: true,
+  }));
+  const versions = requests.map((request) => ({
+    report_id: request.report_id,
+    version: 1,
+    source_text: original.source_text,
+    work_date: original.work_date,
+  }));
+  const claims = requests.map((request) => ({
+    ...claim,
+    id: request.claim_id,
+    report_id: request.report_id,
+    version: 3,
+    state: 'verification' as const,
+  }));
+  const decisions = requests.map((request, index) => ({
+    id: uuid(4000 + index),
+    request_id: request.id,
+    project_id: projectId,
+    actor_id: userId,
+    request_version: 1,
+    allocation: 'confirmed' as const,
+    work: 'needs_info' as const,
+    reason: 'The record needs another check.',
+    created_at: '2026-09-24T00:03:00+00:00',
+  }));
+  const reports = requests.map((request) => ({
+    id: request.report_id,
+    project_id: projectId,
+    lifecycle: 'submitted',
+  }));
+  const fetcher = jest.fn(async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    if (url.pathname.endsWith('/verification_requests'))
+      return pageResponse(requests, url);
+    if (url.pathname.endsWith('/rpc/verification_context_v2'))
+      return pageResponse(contexts, url);
+    if (url.pathname.endsWith('/report_versions')) {
+      const reportIds = new Set(
+        url.searchParams.get('report_id')?.match(/[0-9a-f-]{36}/g) ?? [],
+      );
+      return pageResponse(
+        versions.filter((version) => reportIds.has(version.report_id)),
+        url,
+      );
+    }
+    if (url.pathname.endsWith('/claims')) {
+      const claimIds = new Set(
+        url.searchParams.get('id')?.match(/[0-9a-f-]{36}/g) ?? [],
+      );
+      return pageResponse(
+        claims.filter((row) => claimIds.has(row.id)),
+        url,
+      );
+    }
+    if (url.pathname.endsWith('/verification_decisions')) {
+      const requestIds = new Set(
+        url.searchParams.get('request_id')?.match(/[0-9a-f-]{36}/g) ?? [],
+      );
+      return pageResponse(
+        decisions.filter((decision) => requestIds.has(decision.request_id)),
+        url,
+      );
+    }
+    if (url.pathname.endsWith('/reports')) {
+      const reportIds = new Set(
+        url.searchParams.get('id')?.match(/[0-9a-f-]{36}/g) ?? [],
+      );
+      return pageResponse(
+        reports.filter((report) => reportIds.has(report.id)),
+        url,
+      );
+    }
+    if (url.pathname.endsWith('/assignment_versions'))
+      return response(
+        [{ project_id: projectId, activity_id: activityId, version: 4 }],
+        1,
+      );
+    if (url.pathname.endsWith('/rpc/schedule_snapshot'))
+      return response({
+        projectId,
+        policyVersion: 1,
+        revisionId,
+        activities: [],
+      });
+    if (url.pathname.endsWith('/project_members')) return response([member]);
+    throw new Error(`Unexpected URL ${url.pathname}`);
+  });
+
+  const result = await loadVerificationAssignments(
+    client(fetcher as typeof fetch),
+    context,
+    new AbortController().signal,
+  );
+  expect(result).toHaveLength(101);
+  expect(result[100]?.decisions).toHaveLength(1);
 });
 
 it('rejects a verification routed to another account before loading evidence', async () => {

@@ -14,8 +14,9 @@ export default function AppLayout() {
         <Stack.Screen name="workspaces" />
         <Stack.Screen name="field" />
         <Stack.Screen name="field-confirm/[captureId]" />
-        <Stack.Screen name="field-report" />
+        <Stack.Screen name="field-report/[reportId]" />
         <Stack.Screen name="field-verifications" />
+        <Stack.Screen name="field-verifications/[requestId]" />
         <Stack.Screen name="manager" />
         <Stack.Screen name="account" />
         <Stack.Screen name="projects" />

@@ -228,6 +228,14 @@ export type Database = {
         Args: { p_project: string };
         Returns: { request_id: string; reporter_name: string }[];
       };
+      verification_context_v2: {
+        Args: { p_project: string };
+        Returns: {
+          request_id: string;
+          reporter_name: string;
+          assignment_is_current: boolean;
+        }[];
+      };
       reserve_field_capture: {
         Args: {
           p_project: string;

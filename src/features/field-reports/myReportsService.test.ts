@@ -75,6 +75,20 @@ it('deduplicates local/outbox/server identity and prefers accepted server status
   });
 });
 
+it.each(['draft', 'withdrawn'] as const)(
+  'does not open a remote-only %s report that the detail loader rejects',
+  (lifecycle) => {
+    expect(
+      mergeMyReports(
+        [],
+        [],
+        [],
+        [{ ...remote, lifecycle, claims: [], jobs: [] }],
+      )[0],
+    ).toMatchObject({ canOpen: false });
+  },
+);
+
 it('opens confirmation only for a ready, still-unsubmitted outbox record', () => {
   const [item] = mergeMyReports([], [], [outbox], []);
   expect(item).toMatchObject({

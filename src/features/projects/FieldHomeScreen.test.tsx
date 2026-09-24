@@ -122,6 +122,7 @@ it('warns when recent report data may be stale even if cached items exist', asyn
         canSync: false,
         canConfirm: false,
         canOpenConfirmation: false,
+        canOpen: false,
       },
     ],
     error: new Error('Network unavailable'),

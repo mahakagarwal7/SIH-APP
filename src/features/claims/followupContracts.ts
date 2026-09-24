@@ -21,7 +21,7 @@ export const clarificationRequestSchema = z.object({
   version: z.number().int().positive(),
   reason_code: z.enum(['location', 'date', 'scope', 'assignment', 'detail']),
   question_text: z.string().min(1),
-  options: z.array(clarificationOptionSchema).max(8),
+  options: z.array(clarificationOptionSchema),
   automatic: z.boolean(),
   status: z.enum(['open', 'answered', 'resolved', 'superseded', 'cancelled']),
   created_at: z.iso.datetime({ offset: true }),
@@ -119,6 +119,7 @@ export const verificationDecisionSchema = z.object({
 export const verificationContextSchema = z.object({
   request_id: id,
   reporter_name: z.string(),
+  assignment_is_current: z.boolean(),
 });
 
 export const replyCommandSchema = z
@@ -188,6 +189,7 @@ export function replyIsComplete(
   question: ClarificationRequest,
   input: Pick<ReplyCommand, 'answer' | 'text' | 'activityIds' | 'eventDate'>,
 ) {
+  if (input.activityIds.length > 8) return false;
   if (input.answer === 'not_sure') return true;
   switch (question.reason_code) {
     case 'date':

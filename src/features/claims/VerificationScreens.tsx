@@ -126,11 +126,13 @@ function CheckChoices({
   title,
   name,
   value,
+  disabled,
   setValue,
 }: {
   title: string;
   name: string;
   value: CheckValue | '';
+  disabled: boolean;
   setValue: (value: CheckValue) => void;
 }) {
   return (
@@ -141,11 +143,16 @@ function CheckChoices({
           key={choice.value}
           accessibilityLabel={`${name}: ${choice.label}`}
           accessibilityRole="radio"
-          accessibilityState={{ selected: value === choice.value }}
+          accessibilityState={{
+            selected: value === choice.value,
+            disabled,
+          }}
+          disabled={disabled}
           onPress={() => setValue(choice.value)}
           style={[
             styles.choice,
             value === choice.value && styles.selectedChoice,
+            disabled && styles.disabled,
           ]}
         >
           <Text style={styles.choiceText}>{choice.label}</Text>
@@ -174,12 +181,22 @@ export function VerificationScreen({ requestId }: { requestId: string }) {
     (candidate) => candidate.request.id === requestId,
   );
   const actionable =
-    item && ['open', 'needs_info'].includes(item.request.status);
+    item &&
+    item.requestIsCurrent &&
+    ['open', 'needs_info'].includes(item.request.status);
   const complete = !!allocation && !!work && !!reason.trim();
 
   async function submit() {
     const client = getSupabase();
-    if (!item || !allocation || !work || !reason.trim() || !client || busy)
+    if (
+      !item ||
+      project.offline ||
+      !allocation ||
+      !work ||
+      !reason.trim() ||
+      !client ||
+      busy
+    )
       return;
     const payload: AttestationPayload = {
       expectedVersion: item.request.version,
@@ -196,6 +213,10 @@ export function VerificationScreen({ requestId }: { requestId: string }) {
         ...stable.payload,
         commandId: stable.id,
       });
+      setAllocation('');
+      setWork('');
+      setReason('');
+      command.current = null;
       setMessage(
         'Supervisor check recorded. The planner still makes the schedule decision separately.',
       );
@@ -249,9 +270,13 @@ export function VerificationScreen({ requestId }: { requestId: string }) {
               <Text style={styles.detail}>Version {item.request.version}</Text>
             </View>
             <Text accessibilityRole="header" style={shellStyles.cardTitle}>
-              {item.activity
-                ? `${item.activity.externalId} · ${item.activity.name}`
-                : 'Activity unavailable in the active schedule'}
+              {!item.scheduleIsCurrent
+                ? 'Schedule changed since this check was assigned'
+                : !item.requestIsCurrent
+                  ? 'Evidence changed since this check was assigned'
+                  : item.activity
+                    ? `${item.activity.externalId} · ${item.activity.name}`
+                    : 'Activity unavailable in the active schedule'}
             </Text>
             <Text style={styles.detail}>Reported by {item.reporterName}</Text>
             <Text style={styles.detail}>
@@ -267,6 +292,13 @@ export function VerificationScreen({ requestId }: { requestId: string }) {
             Confirm each point separately. Assignment authority does not prove
             completion, and this check does not accept the claim.
           </Text>
+          {!item.requestIsCurrent && (
+            <Text accessibilityRole="alert" style={styles.notice}>
+              The claim, report, policy, assignment, or schedule changed after
+              this check was assigned. It is read-only. Ask the planner for a
+              fresh check against the current evidence.
+            </Text>
+          )}
           {item.decisions.map((decision) => (
             <View key={decision.id} style={styles.history}>
               <Text style={styles.historyTitle}>
@@ -282,19 +314,22 @@ export function VerificationScreen({ requestId }: { requestId: string }) {
           {actionable ? (
             <View style={styles.form}>
               <CheckChoices
-                title="Did this person also work at this location?"
+                title="Was this reporter assigned or authorized to carry out work on this activity?"
                 name="Assignment check"
                 value={allocation}
+                disabled={busy}
                 setValue={setAllocation}
               />
               <CheckChoices
                 title="Can you confirm this exact reported work and date?"
                 name="Work check"
                 value={work}
+                disabled={busy}
                 setValue={setWork}
               />
               <TextInput
                 accessibilityLabel="Reason and evidence checked"
+                editable={!busy}
                 multiline
                 maxLength={1000}
                 onChangeText={setReason}
@@ -304,23 +339,25 @@ export function VerificationScreen({ requestId }: { requestId: string }) {
               />
               <Pressable
                 accessibilityRole="button"
-                accessibilityState={{ disabled: busy || !complete }}
-                disabled={busy || !complete}
+                accessibilityState={{
+                  disabled: project.offline || busy || !complete,
+                }}
+                disabled={project.offline || busy || !complete}
                 onPress={() => void submit()}
                 style={[
                   styles.primaryButton,
-                  (busy || !complete) && styles.disabled,
+                  (project.offline || busy || !complete) && styles.disabled,
                 ]}
               >
                 <Text style={styles.primaryText}>Record supervisor check</Text>
               </Pressable>
             </View>
-          ) : (
+          ) : item.requestIsCurrent ? (
             <Text style={styles.notice}>
               This recorded check is retained. The planner makes the schedule
               decision separately.
             </Text>
-          )}
+          ) : null}
         </>
       )}
       {!!message && (

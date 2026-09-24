@@ -41,6 +41,24 @@ it('requires exactly one supported location answer mode', () => {
   ).toBe(false);
 });
 
+it('accepts all offered locations but caps an individual reply at eight', () => {
+  const options = Array.from({ length: 9 }, (_, index) => ({
+    activityId: `10000000-0000-4000-8000-${String(index + 10).padStart(12, '0')}`,
+    label: `Unit ${index + 1}`,
+  }));
+  expect(
+    clarificationRequestSchema.parse({ ...question, options }).options,
+  ).toHaveLength(9);
+  expect(
+    replyIsComplete(question, {
+      answer: 'answer',
+      text: '',
+      activityIds: options.map((option) => option.activityId),
+      eventDate: null,
+    }),
+  ).toBe(false);
+});
+
 it('rejects impossible calendar dates and supports an explicit uncertain reply', () => {
   expect(
     replyIsComplete(

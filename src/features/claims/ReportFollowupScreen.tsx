@@ -22,46 +22,77 @@ import { FollowupWriteError, respondToClarification } from './followupService';
 import { stableCommand } from './reviewContracts';
 import { useReportFollowups } from './useFollowups';
 
-import type { ReplyCommand } from './followupContracts';
+import type { ClarificationRequest, ReplyCommand } from './followupContracts';
 import type { StableCommand } from './reviewContracts';
 
 type ReplyPayload = Omit<ReplyCommand, 'commandId'>;
+type ReplyDraft = {
+  text: string;
+  date: string;
+  activityIds: string[];
+  answer: 'yes' | 'no' | '';
+};
+const emptyReplyDraft: ReplyDraft = {
+  text: '',
+  date: '',
+  activityIds: [],
+  answer: '',
+};
 
 function Choice({
   label,
   selected,
+  disabled,
   onPress,
 }: {
   label: string;
   selected: boolean;
+  disabled: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, disabled }}
+      disabled={disabled}
       onPress={onPress}
-      style={[styles.choice, selected && styles.selectedChoice]}
+      style={[
+        styles.choice,
+        selected && styles.selectedChoice,
+        disabled && styles.disabled,
+      ]}
     >
       <Text style={styles.choiceText}>{label}</Text>
     </Pressable>
   );
 }
 
+function replyDraftSummary(question: ClarificationRequest, draft: ReplyDraft) {
+  const selected = question.options
+    .filter((option) => draft.activityIds.includes(option.activityId))
+    .map((option) => option.label);
+  const answer =
+    draft.answer === 'yes' ? 'Yes' : draft.answer === 'no' ? 'No' : '';
+  return (
+    [answer, ...selected, draft.date, draft.text].filter(Boolean).join(' · ') ||
+    'No details entered'
+  );
+}
+
 export function ReportFollowupScreen({ reportId }: { reportId: string }) {
   const { report, offline, refresh, finish } = useReportFollowups(reportId);
-  const [text, setText] = useState('');
-  const [date, setDate] = useState('');
-  const [activityIds, setActivityIds] = useState<string[]>([]);
-  const [answer, setAnswer] = useState<'yes' | 'no' | ''>('');
+  const [drafts, setDrafts] = useState<Record<string, ReplyDraft>>({});
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const command = useRef<StableCommand<ReplyPayload> | null>(null);
+  const command = useRef<{
+    questionId: string;
+    value: StableCommand<ReplyPayload>;
+  } | null>(null);
 
   useFocusEffect(
     useCallback(() => {
-      void refresh();
-    }, [refresh]),
+      if (!offline) void refresh();
+    }, [offline, refresh]),
   );
 
   const data = report.data;
@@ -69,17 +100,27 @@ export function ReportFollowupScreen({ reportId }: { reportId: string }) {
   const questionClaim = data?.claims.find(
     (claim) => claim.id === question?.claim_id,
   );
+  const draft = question
+    ? (drafts[question.id] ?? emptyReplyDraft)
+    : emptyReplyDraft;
+  const updateDraft = (patch: Partial<ReplyDraft>) => {
+    if (!question) return;
+    setDrafts((current) => ({
+      ...current,
+      [question.id]: { ...(current[question.id] ?? emptyReplyDraft), ...patch },
+    }));
+  };
   const responseAnswer: ReplyCommand['answer'] =
     question?.reason_code === 'scope' || question?.reason_code === 'assignment'
-      ? answer || 'answer'
+      ? draft.answer || 'answer'
       : 'answer';
   const payload: ReplyPayload | null = question
     ? {
         expectedQuestionVersion: question.version,
         answer: responseAnswer,
-        text: text.trim(),
-        activityIds,
-        eventDate: date.trim() || null,
+        text: draft.text.trim(),
+        activityIds: draft.activityIds,
+        eventDate: draft.date.trim() || null,
       }
     : null;
   const complete =
@@ -87,7 +128,7 @@ export function ReportFollowupScreen({ reportId }: { reportId: string }) {
 
   async function send(notSure = false) {
     const client = getSupabase();
-    if (!question || !payload || !client || busy) return;
+    if (!question || !payload || !client || offline || busy) return;
     const request: ReplyPayload = notSure
       ? {
           expectedQuestionVersion: question.version,
@@ -97,8 +138,12 @@ export function ReportFollowupScreen({ reportId }: { reportId: string }) {
           eventDate: null,
         }
       : payload;
-    const stable = stableCommand(command.current, request, randomUUID);
-    command.current = stable;
+    const previous =
+      command.current?.questionId === question.id
+        ? command.current.value
+        : null;
+    const stable = stableCommand(previous, request, randomUUID);
+    command.current = { questionId: question.id, value: stable };
     setBusy(true);
     setMessage('');
     try {
@@ -109,6 +154,12 @@ export function ReportFollowupScreen({ reportId }: { reportId: string }) {
       setMessage(
         'Answer recorded. It is a new proposal for review and does not approve schedule progress.',
       );
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[question.id];
+        return next;
+      });
+      command.current = null;
       await finish();
     } catch (error) {
       setMessage(
@@ -190,15 +241,28 @@ export function ReportFollowupScreen({ reportId }: { reportId: string }) {
             const response = data.responses.find(
               (candidate) => candidate.request_id === item.id,
             );
+            const unsentDraft = drafts[item.id];
             return item.id === question?.id ? null : (
               <View key={item.id} style={styles.history}>
-                <Text style={styles.historyStatus}>{item.status}</Text>
+                <Text style={styles.historyStatus}>
+                  {item.status === 'open'
+                    ? 'Waiting for the current question'
+                    : item.status}
+                </Text>
                 <Text style={styles.question}>{item.question_text}</Text>
                 <Text style={styles.detail}>
-                  {response
-                    ? `Recorded reply: ${replySummary(item, response)}`
-                    : 'The earlier question remains part of the report record.'}
+                  {item.status === 'open'
+                    ? 'This question still needs your answer. It will appear after you answer the current question.'
+                    : response
+                      ? `Recorded reply: ${replySummary(item, response)}`
+                      : 'The earlier question remains part of the report record.'}
                 </Text>
+                {unsentDraft && (
+                  <Text selectable style={styles.detail}>
+                    Unsent draft (not sent):{' '}
+                    {replyDraftSummary(item, unsentDraft)}
+                  </Text>
+                )}
               </View>
             );
           })}
@@ -221,25 +285,39 @@ export function ReportFollowupScreen({ reportId }: { reportId: string }) {
                       Where did you work? You may choose more than one.
                     </Text>
                     {question.options.map((option) => {
-                      const selected = activityIds.includes(option.activityId);
+                      const selected = draft.activityIds.includes(
+                        option.activityId,
+                      );
                       return (
                         <Pressable
                           key={option.activityId}
                           accessibilityRole="checkbox"
-                          accessibilityState={{ checked: selected }}
+                          accessibilityState={{
+                            checked: selected,
+                            disabled: busy,
+                          }}
+                          disabled={busy}
                           onPress={() => {
-                            setText('');
-                            setActivityIds((current) =>
-                              selected
-                                ? current.filter(
+                            if (!selected && draft.activityIds.length >= 8) {
+                              setMessage(
+                                'Choose no more than eight work areas.',
+                              );
+                              return;
+                            }
+                            setMessage('');
+                            updateDraft({
+                              text: '',
+                              activityIds: selected
+                                ? draft.activityIds.filter(
                                     (id) => id !== option.activityId,
                                   )
-                                : [...current, option.activityId],
-                            );
+                                : [...draft.activityIds, option.activityId],
+                            });
                           }}
                           style={[
                             styles.choice,
                             selected && styles.selectedChoice,
+                            busy && styles.disabled,
                           ]}
                         >
                           <Text style={styles.choiceText}>{option.label}</Text>
@@ -252,11 +330,12 @@ export function ReportFollowupScreen({ reportId }: { reportId: string }) {
                 <TextInput
                   accessibilityLabel="Work date"
                   autoCapitalize="none"
+                  editable={!busy}
                   maxLength={10}
-                  onChangeText={setDate}
+                  onChangeText={(value) => updateDraft({ date: value })}
                   placeholder="YYYY-MM-DD"
                   style={styles.input}
-                  value={date}
+                  value={draft.date}
                 />
               )}
               {(question.reason_code === 'scope' ||
@@ -268,17 +347,23 @@ export function ReportFollowupScreen({ reportId }: { reportId: string }) {
                       : 'Is the reported location correct?'}
                   </Text>
                   <Choice
+                    disabled={busy}
                     label="Yes"
-                    selected={answer === 'yes'}
+                    selected={draft.answer === 'yes'}
                     onPress={() => {
-                      setAnswer('yes');
-                      if (question.reason_code === 'scope') setText('');
+                      updateDraft({
+                        answer: 'yes',
+                        ...(question.reason_code === 'scope'
+                          ? { text: '' }
+                          : {}),
+                      });
                     }}
                   />
                   <Choice
+                    disabled={busy}
                     label="No"
-                    selected={answer === 'no'}
-                    onPress={() => setAnswer('no')}
+                    selected={draft.answer === 'no'}
+                    onPress={() => updateDraft({ answer: 'no' })}
                   />
                 </View>
               )}
@@ -294,11 +379,13 @@ export function ReportFollowupScreen({ reportId }: { reportId: string }) {
                           : 'Other details'
                   }
                   multiline
+                  editable={!busy}
                   maxLength={1000}
                   onChangeText={(value) => {
-                    setText(value);
+                    setMessage('');
                     if (value && question.reason_code === 'location')
-                      setActivityIds([]);
+                      updateDraft({ text: value, activityIds: [] });
+                    else updateDraft({ text: value });
                   }}
                   placeholder={
                     question.reason_code === 'assignment'
@@ -310,28 +397,33 @@ export function ReportFollowupScreen({ reportId }: { reportId: string }) {
                           : 'Record the missing detail'
                   }
                   style={styles.input}
-                  value={text}
+                  value={draft.text}
                 />
               )}
               <View style={styles.actions}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: busy || !complete }}
-                  disabled={busy || !complete}
+                  accessibilityState={{
+                    disabled: offline || busy || !complete,
+                  }}
+                  disabled={offline || busy || !complete}
                   onPress={() => void send(false)}
                   style={[
                     styles.primaryButton,
-                    (busy || !complete) && styles.disabled,
+                    (offline || busy || !complete) && styles.disabled,
                   ]}
                 >
                   <Text style={styles.primaryText}>Send answer</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: busy }}
-                  disabled={busy}
+                  accessibilityState={{ disabled: offline || busy }}
+                  disabled={offline || busy}
                   onPress={() => void send(true)}
-                  style={[styles.secondaryButton, busy && styles.disabled]}
+                  style={[
+                    styles.secondaryButton,
+                    (offline || busy) && styles.disabled,
+                  ]}
                 >
                   <Text style={shellStyles.linkText}>Not sure</Text>
                 </Pressable>
