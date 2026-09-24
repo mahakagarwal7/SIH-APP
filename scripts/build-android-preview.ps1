@@ -7,6 +7,50 @@ Set-StrictMode -Version Latest
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $localEnvironment = Join-Path $projectRoot '.env.local'
+$buildEnvironmentNames = @(
+  'EXPO_NO_DOTENV'
+  'NEXT_PUBLIC_SUPABASE_URL'
+  'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'
+  'ANDROID_HOME'
+  'ANDROID_SDK_ROOT'
+  'JAVA_HOME'
+  'NODE_ENV'
+  'JAVA_TOOL_OPTIONS'
+)
+
+function Save-ProcessEnvironment {
+  param([string[]]$Names)
+
+  $processEnvironment = [Environment]::GetEnvironmentVariables('Process')
+  $snapshot = @{}
+  foreach ($name in $Names) {
+    $snapshot[$name] = [pscustomobject]@{
+      Exists = $processEnvironment.Contains($name)
+      Value = [Environment]::GetEnvironmentVariable($name, 'Process')
+    }
+  }
+  return $snapshot
+}
+
+function Restore-ProcessEnvironment {
+  param([System.Collections.IDictionary]$Snapshot)
+
+  foreach ($name in $Snapshot.Keys) {
+    $entry = $Snapshot[$name]
+    if ($entry.Exists) {
+      [Environment]::SetEnvironmentVariable($name, [string]$entry.Value, 'Process')
+    } else {
+      Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+    }
+  }
+}
+
+function Get-PreviewArtifactName {
+  param([bool]$HasPublicConfig)
+
+  if ($HasPublicConfig) { return 'nirmaan-field-preview-arm64.apk' }
+  return 'nirmaan-field-preview-arm64-setup-unavailable.apk'
+}
 
 function Import-PublicEnvironment {
   param(
@@ -19,7 +63,7 @@ function Import-PublicEnvironment {
   Remove-Item Env:NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY -ErrorAction SilentlyContinue
 
   if (-not (Test-Path -LiteralPath $Path)) {
-    if ($AllowMissingPublicConfig) { return }
+    if ($AllowMissingPublicConfig) { return $false }
     throw 'Create .env.local with the production Supabase public configuration before building a preview.'
   }
 
@@ -33,9 +77,11 @@ function Import-PublicEnvironment {
 
   $hasUrl = -not [string]::IsNullOrWhiteSpace($env:NEXT_PUBLIC_SUPABASE_URL)
   $hasKey = -not [string]::IsNullOrWhiteSpace($env:NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)
-  if (-not $AllowMissingPublicConfig -and (-not $hasUrl -or -not $hasKey)) {
+  if (-not $hasUrl -or -not $hasKey) {
+    if ($AllowMissingPublicConfig) { return $false }
     throw '.env.local must define NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.'
   }
+  return $true
 }
 
 function Assert-ApprovedDebugCertificate {
@@ -104,9 +150,10 @@ function Invoke-Checked {
   }
 }
 
+$originalEnvironment = Save-ProcessEnvironment -Names $buildEnvironmentNames
 Push-Location $projectRoot
 try {
-  Import-PublicEnvironment `
+  $hasPublicConfig = Import-PublicEnvironment `
     -Path $localEnvironment `
     -AllowMissingPublicConfig:$AllowMissingPublicConfig
   $androidSdk = Resolve-AndroidToolchain
@@ -194,7 +241,8 @@ try {
 
   $outputDirectory = Join-Path $projectRoot 'dist'
   New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
-  $outputApk = Join-Path $outputDirectory 'nirmaan-field-preview-arm64.apk'
+  $artifactName = Get-PreviewArtifactName -HasPublicConfig $hasPublicConfig
+  $outputApk = Join-Path $outputDirectory $artifactName
   Copy-Item -LiteralPath $builtApk -Destination $outputApk -Force
 
   $hash = (Get-FileHash -LiteralPath $outputApk -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -205,5 +253,9 @@ try {
   Write-Output "Size: $size bytes"
   Write-Output "SHA-256: $hash"
 } finally {
-  Pop-Location
+  try {
+    Restore-ProcessEnvironment -Snapshot $originalEnvironment
+  } finally {
+    Pop-Location
+  }
 }
