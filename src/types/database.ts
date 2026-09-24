@@ -148,6 +148,42 @@ export type VerificationRequestRow = {
   version: number;
   created_at: string;
 };
+export type ClarificationRequestRow = {
+  id: string;
+  project_id: string;
+  claim_id: string;
+  report_id: string;
+  claim_version: number;
+  report_version: number;
+  version: number;
+  reason_code: 'location' | 'date' | 'scope' | 'assignment' | 'detail';
+  question_text: string;
+  options: Json;
+  automatic: boolean;
+  status: 'open' | 'answered' | 'resolved' | 'superseded' | 'cancelled';
+  created_at: string;
+};
+export type ClarificationResponseRow = {
+  id: string;
+  request_id: string;
+  project_id: string;
+  actor_id: string;
+  question_version: number;
+  input: Json;
+  resulting_report_version: number | null;
+  created_at: string;
+};
+export type VerificationDecisionRow = {
+  id: string;
+  request_id: string;
+  project_id: string;
+  actor_id: string;
+  request_version: number;
+  allocation: 'confirmed' | 'denied' | 'needs_info';
+  work: 'confirmed' | 'denied' | 'needs_info';
+  reason: string;
+  created_at: string;
+};
 export type Database = {
   public: {
     Tables: {
@@ -162,7 +198,10 @@ export type Database = {
       claims: ReadTable<ClaimRow>;
       report_versions: ReadTable<ReportVersionRow>;
       candidate_matches: ReadTable<CandidateMatchRow>;
+      clarification_requests: ReadTable<ClarificationRequestRow>;
+      clarification_responses: ReadTable<ClarificationResponseRow>;
       verification_requests: ReadTable<VerificationRequestRow>;
+      verification_decisions: ReadTable<VerificationDecisionRow>;
     };
     Views: { [_ in never]: never };
     Functions: {
@@ -176,6 +215,18 @@ export type Database = {
       request_verification: {
         Args: { p_claim: string; p_command: Json };
         Returns: Json;
+      };
+      respond_clarification: {
+        Args: { p_question: string; p_command: Json };
+        Returns: Json;
+      };
+      decide_verification: {
+        Args: { p_request: string; p_command: Json };
+        Returns: Json;
+      };
+      verification_context: {
+        Args: { p_project: string };
+        Returns: { request_id: string; reporter_name: string }[];
       };
       reserve_field_capture: {
         Args: {
