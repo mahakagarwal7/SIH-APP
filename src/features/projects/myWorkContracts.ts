@@ -30,6 +30,7 @@ const activitySchema = z.object({
   revisionId: id,
   externalId: z.string().min(1),
   name: z.string().min(1),
+  calendar: z.string().min(1).default('Source calendar not specified'),
   discipline: z.enum([
     'Civil',
     'Piping',
