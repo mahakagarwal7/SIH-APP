@@ -26,6 +26,7 @@ const projectScopedQueries = new Set([
   'project-recent-reports',
   'review-queue',
   'verification-assignments',
+  'execution-history',
 ]);
 
 export function useProjectSelection() {

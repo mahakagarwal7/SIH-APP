@@ -205,6 +205,7 @@ export type Database = {
     };
     Views: { [_ in never]: never };
     Functions: {
+      execution_history: { Args: { p_project: string }; Returns: Json };
       schedule_snapshot: { Args: { p_project: string }; Returns: Json };
       preview_claim: { Args: { p_command: Json }; Returns: Json };
       decide_claim: { Args: { p_command: Json }; Returns: Json };
