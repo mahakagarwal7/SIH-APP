@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-import { loadRemoteReports, mergeMyReports } from './myReportsService';
+import {
+  loadRemoteReports,
+  loadRemoteReportsForProject,
+  mergeMyReports,
+} from './myReportsService';
 import { needsReportPolling } from './reportStatus';
 
 import type { OutboxRecord } from './outbox';
@@ -199,7 +203,7 @@ it('keeps saved, processing, paused and incomplete local states honest', () => {
   expect(items[0]?.detail).toBe('Project access changed.');
 });
 
-it('queries only the signed-in author and joins permitted claim statuses', async () => {
+it('queries only the signed-in author and selected project, then joins permitted statuses', async () => {
   const calls: URL[] = [];
   const fetcher = jest.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input));
@@ -231,8 +235,11 @@ it('queries only the signed-in author and joins permitted claim statuses', async
       global: { fetch: fetcher },
     },
   );
-  await expect(loadRemoteReports(client, userId)).resolves.toEqual([remote]);
+  await expect(
+    loadRemoteReportsForProject(client, userId, projectId),
+  ).resolves.toEqual([remote]);
   expect(calls[0]?.searchParams.get('author_id')).toBe(`eq.${userId}`);
+  expect(calls[0]?.searchParams.get('project_id')).toBe(`eq.${projectId}`);
   expect(calls[0]?.searchParams.get('limit')).toBe('100');
   expect(calls[1]?.searchParams.get('report_id')).toContain(reportId);
   expect(calls[2]?.pathname).toContain('/jobs');

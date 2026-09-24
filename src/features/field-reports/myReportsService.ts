@@ -177,6 +177,7 @@ export async function loadRemoteReports(
   client: SupabaseClient<Database>,
   userId: string,
   signal?: AbortSignal,
+  projectId?: string,
 ): Promise<RemoteReport[]> {
   let reportsQuery = client
     .from('reports')
@@ -186,11 +187,19 @@ export async function loadRemoteReports(
     .eq('author_id', userId)
     .order('received_at', { ascending: false })
     .limit(100);
+  if (projectId) reportsQuery = reportsQuery.eq('project_id', projectId);
   if (signal) reportsQuery = reportsQuery.abortSignal(signal);
   const reports = await reportsQuery;
   if (reports.error) throw new ReportsReadError();
   const parsed = z.array(reportSchema).safeParse(reports.data);
-  if (!parsed.success || parsed.data.some((row) => row.author_id !== userId))
+  if (
+    !parsed.success ||
+    parsed.data.some(
+      (row) =>
+        row.author_id !== userId ||
+        (projectId !== undefined && row.project_id !== projectId),
+    )
+  )
     throw new ReportsReadError();
   if (!parsed.data.length) return [];
   const ids = parsed.data.map((report) => report.id);
@@ -237,6 +246,15 @@ export async function loadRemoteReports(
     claims: claims.filter((claim) => claim.report_id === report.id),
     jobs: jobs.filter((job) => job.report_id === report.id),
   }));
+}
+
+export function loadRemoteReportsForProject(
+  client: SupabaseClient<Database>,
+  userId: string,
+  projectId: string,
+  signal?: AbortSignal,
+) {
+  return loadRemoteReports(client, userId, signal, projectId);
 }
 
 export function getReportsClient() {
