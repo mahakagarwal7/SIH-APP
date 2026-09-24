@@ -67,6 +67,7 @@ const activity = {
   revisionId: 'revision',
   externalId: 'PIP-1201',
   name: 'Line erection',
+  calendar: 'Mon–Sat; Sunday off; no holidays',
   discipline: 'Piping' as const,
   location: 'Unit 2',
   assignedReporterId: 'reporter',

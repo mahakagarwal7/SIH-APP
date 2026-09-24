@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 
 import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
+import { WorkReadError } from '@/features/projects/myWorkService';
 
 import {
   defaultHistoryFilters,
@@ -20,6 +21,7 @@ import {
 import {
   filterHistoryEntries,
   historyPage,
+  HistoryReadError,
   type HistoryActivity,
 } from './historyService';
 import { useExecutionHistory } from './useExecutionHistory';
@@ -46,6 +48,12 @@ function acceptedLabel(value: string) {
 function eventKindLabel(value: string) {
   const label = value.replaceAll('_', ' ').toLocaleLowerCase();
   return `${label.charAt(0).toLocaleUpperCase()}${label.slice(1)}`;
+}
+
+function sourceLabel(entry: ExecutionHistoryEntry) {
+  return (
+    entry.sourceId ?? (entry.media?.length ? 'Mobile capture' : 'Text report')
+  );
 }
 
 function completedMatches(activity: HistoryActivity, filters: HistoryFilters) {
@@ -124,6 +132,7 @@ function CompletedCard({
         </Text>
       </View>
       <Text style={styles.elapsed}>{elapsedLabel(activity)}</Text>
+      <Text style={styles.detail}>Calendar: {activity.calendar}</Text>
     </Pressable>
   );
 }
@@ -154,12 +163,50 @@ function HistoryCard({
       </View>
       <Text style={styles.detail}>
         {eventKindLabel(entry.eventKind)} · {dateLabel(entry.eventDate)} ·{' '}
-        {entry.sourceId ?? 'Text report'}
+        {sourceLabel(entry)}
       </Text>
       <Text style={styles.quote}>“{entry.quote}”</Text>
       <Text style={styles.detail}>{entry.location}</Text>
+      {entry.provenance && (
+        <View style={styles.provenance}>
+          <Text style={styles.detail}>
+            {entry.provenance.sourceRecordId} · {entry.provenance.sheet}, row{' '}
+            {entry.provenance.row}
+          </Text>
+          <Text style={styles.detail}>
+            Named in source:{' '}
+            {entry.provenance.reportedByLabel ?? 'Not supplied'}
+          </Text>
+          <Text style={styles.detail}>
+            Message time: {entry.provenance.sourceMessageAt ?? 'Not supplied'} ·{' '}
+            Work date: {entry.provenance.reportingWorkDate ?? 'Not supplied'}
+          </Text>
+        </View>
+      )}
+      {!!entry.media?.length && (
+        <View style={styles.media}>
+          <Text style={styles.auditLabel}>Captured evidence</Text>
+          {entry.media.map((item) => (
+            <View key={item.attachmentId} style={styles.mediaItem}>
+              {item.kind === 'audio' ? (
+                <>
+                  <Text style={styles.detail}>Original voice transcript</Text>
+                  <Text selectable style={styles.auditSource}>
+                    {item.originalTranscript ||
+                      'Verified transcript not available.'}
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.detail}>
+                  Photo caption: {item.caption || 'No caption supplied'}
+                </Text>
+              )}
+            </View>
+          ))}
+        </View>
+      )}
       <Text style={styles.detail}>
-        Accepted by {entry.reviewer ?? 'Name not recorded'} ·{' '}
+        Accepted by {entry.reviewer?.trim() || 'Name not recorded'} ·{' '}
         {acceptedLabel(entry.acceptedAt)}
       </Text>
       <Text style={styles.reason}>Decision: {entry.reason}</Text>
@@ -209,14 +256,21 @@ function HistoryCard({
 }
 
 export function HistoryScreen() {
-  const { project, history, refresh, authorized } = useExecutionHistory();
+  const { project, history, refresh, authorized, accessDenied } =
+    useExecutionHistory();
   const projectId = project.data?.project.id;
   const [view, setView] = useState<{
     projectId?: string;
     filters: HistoryFilters;
     page: number;
+    completedPage: number;
     expandedEventId: string | null;
-  }>({ filters: defaultHistoryFilters, page: 0, expandedEventId: null });
+  }>({
+    filters: defaultHistoryFilters,
+    page: 0,
+    completedPage: 0,
+    expandedEventId: null,
+  });
   const scoped =
     view.projectId === projectId
       ? view
@@ -224,6 +278,7 @@ export function HistoryScreen() {
           projectId,
           filters: defaultHistoryFilters,
           page: 0,
+          completedPage: 0,
           expandedEventId: null,
         };
   useFocusEffect(
@@ -245,6 +300,7 @@ export function HistoryScreen() {
       ),
     [data?.snapshot.activities, scoped.filters],
   );
+  const visibleCompleted = historyPage(completed, scoped.completedPage);
   const disciplines = useMemo(
     () =>
       [
@@ -258,13 +314,31 @@ export function HistoryScreen() {
     [data?.snapshot.activities, entries],
   );
   const busy = project.isFetching || history.isFetching;
-  const error = project.error || history.error;
+  const historyBlocksCache =
+    accessDenied ||
+    (history.error instanceof HistoryReadError &&
+      history.error.kind !== 'unavailable');
+  const error = accessDenied
+    ? new HistoryReadError('access')
+    : historyBlocksCache
+      ? history.error
+      : project.error || history.error;
+  const transientFailure =
+    !historyBlocksCache &&
+    ((error instanceof HistoryReadError && error.kind === 'unavailable') ||
+      (error instanceof WorkReadError && error.kind === 'unavailable'));
+  const canShowCachedHistory =
+    !!data &&
+    !!authorized &&
+    !historyBlocksCache &&
+    ((project.offline && !error) || transientFailure);
 
   const updateFilters = (next: Partial<HistoryFilters>) =>
     setView({
       ...scoped,
       filters: { ...scoped.filters, ...next },
       page: 0,
+      completedPage: 0,
       expandedEventId: null,
     });
 
@@ -291,12 +365,18 @@ export function HistoryScreen() {
       </View>
       {project.offline && (
         <Text accessibilityRole="alert" style={styles.notice}>
-          {data && !error
+          {data && (!error || canShowCachedHistory)
             ? 'Offline · Showing previously loaded history. Accepted records may have changed.'
             : 'Offline · Connect to load execution history.'}
         </Text>
       )}
-      {error ? (
+      {transientFailure && canShowCachedHistory && !project.offline && (
+        <Text accessibilityRole="alert" style={styles.notice}>
+          Refresh failed · Showing previously loaded history. It may be out of
+          date.
+        </Text>
+      )}
+      {error && !canShowCachedHistory ? (
         <View style={styles.state}>
           <Text accessibilityRole="alert" style={shellStyles.cardTitle}>
             Execution history unavailable
@@ -341,6 +421,7 @@ export function HistoryScreen() {
         <HistoryContent
           busy={busy}
           completed={completed}
+          completedPage={visibleCompleted}
           disciplines={disciplines}
           entries={filteredEntries}
           page={visible}
@@ -358,12 +439,14 @@ type ScopedView = {
   projectId?: string;
   filters: HistoryFilters;
   page: number;
+  completedPage: number;
   expandedEventId: string | null;
 };
 
 function HistoryContent({
   busy,
   completed,
+  completedPage,
   disciplines,
   entries,
   page,
@@ -374,6 +457,7 @@ function HistoryContent({
 }: {
   busy: boolean;
   completed: HistoryActivity[];
+  completedPage: ReturnType<typeof historyPage<HistoryActivity>>;
   disciplines: string[];
   entries: ExecutionHistoryEntry[];
   page: ReturnType<typeof historyPage<ExecutionHistoryEntry>>;
@@ -413,6 +497,7 @@ function HistoryContent({
               projectId,
               filters: defaultHistoryFilters,
               page: 0,
+              completedPage: 0,
               expandedEventId: null,
             })
           }
@@ -431,7 +516,7 @@ function HistoryContent({
           {completed.length === 1 ? 'activity' : 'activities'}
         </Text>
       </View>
-      {completed.map((activity) => (
+      {completedPage.rows.map((activity) => (
         <CompletedCard
           key={activity.id}
           activity={activity}
@@ -449,6 +534,54 @@ function HistoryContent({
           No completed activities match these work filters. Source IDs and field
           wording can still match accepted records below.
         </Text>
+      )}
+      {!!completed.length && (
+        <View style={styles.pagination}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: completedPage.page === 0 || busy }}
+            disabled={completedPage.page === 0 || busy}
+            onPress={() =>
+              setView({
+                ...scoped,
+                completedPage: completedPage.page - 1,
+                expandedEventId: null,
+              })
+            }
+            style={[
+              styles.pageButton,
+              (completedPage.page === 0 || busy) && styles.disabled,
+            ]}
+          >
+            <Text style={shellStyles.linkText}>Previous activities</Text>
+          </Pressable>
+          <Text style={styles.detail}>
+            {completedPage.from + 1}–
+            {Math.min(
+              completedPage.from + completedPage.rows.length,
+              completedPage.total,
+            )}{' '}
+            of {completedPage.total}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !completedPage.hasNext || busy }}
+            disabled={!completedPage.hasNext || busy}
+            onPress={() =>
+              setView({
+                ...scoped,
+                completedPage: completedPage.page + 1,
+                expandedEventId: null,
+              })
+            }
+            style={[
+              styles.pageButton,
+              (!completedPage.hasNext || busy) && styles.disabled,
+            ]}
+          >
+            <Text style={shellStyles.linkText}>Next activities</Text>
+          </Pressable>
+        </View>
       )}
       <Text style={styles.caution}>
         Date spans are not working durations or productivity. Valid calendars,
@@ -655,6 +788,9 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   completedSelected: { borderColor: '#266b8c', borderWidth: 2 },
+  provenance: { gap: 4, paddingVertical: 8 },
+  media: { gap: 8, paddingVertical: 8 },
+  mediaItem: { gap: 4 },
   identifier: { color: '#627786', fontSize: 13, lineHeight: 20 },
   dateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
   elapsed: {

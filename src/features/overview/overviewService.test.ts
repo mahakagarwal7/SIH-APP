@@ -126,7 +126,7 @@ const history = [
     sourceId: 'VOICE-41',
     source: 'Line erection started',
     sourceUrl: `/planner/review?claim=${claimId}`,
-    provenance: {},
+    provenance: null,
     media: [],
     matchScore: 0.94,
     matchReasons: { location: 1 },
