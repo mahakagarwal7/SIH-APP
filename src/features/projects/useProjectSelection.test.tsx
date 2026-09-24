@@ -141,6 +141,9 @@ it('switches to a verified membership and clears every project-scoped cache', as
     ['project-recent-reports', userId, one.project.id],
     ['one'],
   );
+  client.setQueryData(['manager-overview', userId, one.project.id, 1], {
+    private: 'overview one',
+  });
   await render(<Consumer />, {
     wrapper: ({ children }) => <Provider client={client}>{children}</Provider>,
   });
@@ -153,6 +156,9 @@ it('switches to a verified membership and clears every project-scoped cache', as
   ).toBeUndefined();
   expect(
     client.getQueryData(['project-recent-reports', userId, one.project.id]),
+  ).toBeUndefined();
+  expect(
+    client.getQueryData(['manager-overview', userId, one.project.id, 1]),
   ).toBeUndefined();
 });
 

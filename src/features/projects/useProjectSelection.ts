@@ -28,6 +28,7 @@ const projectScopedQueries = new Set([
   'verification-assignments',
   'execution-history',
   'manager-schedule',
+  'manager-overview',
   'task-hierarchy',
 ]);
 
