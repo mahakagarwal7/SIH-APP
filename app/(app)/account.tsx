@@ -1,8 +1,11 @@
 import { useRouter } from 'expo-router';
-import { Pressable, Text } from 'react-native';
+import { Pressable } from 'react-native';
+
+import { LocalizedText as Text } from '@/features/localization/LocalizedText';
 
 import { useAuth } from '@/features/auth/AuthProvider';
 import { AuthAccount } from '@/features/auth/AuthScreen';
+import { LanguageSelector } from '@/features/localization/LanguageSelector';
 import {
   BackButton,
   ShellPage,
@@ -16,6 +19,7 @@ export default function Account() {
     <ShellPage>
       <BackButton />
       <AuthAccount auth={auth} />
+      <LanguageSelector />
       <Pressable
         accessibilityRole="button"
         onPress={() => {

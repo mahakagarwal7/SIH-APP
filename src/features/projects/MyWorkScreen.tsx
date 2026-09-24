@@ -1,12 +1,15 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+
 import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+  LocalizedText as Text,
+  LocalizedPressable as Pressable,
+} from '@/features/localization/LocalizedText';
+import {
+  getActiveLocaleTag,
+  useLocalization,
+} from '@/features/localization/LocalizationProvider';
 
 import { NavLink, ShellPage, shellStyles } from '@/features/navigation/shellUi';
 
@@ -18,7 +21,7 @@ import type { Href } from 'expo-router';
 
 function dateLabel(date: string | null) {
   if (!date) return 'Not recorded';
-  return new Intl.DateTimeFormat('en-GB', {
+  return new Intl.DateTimeFormat(getActiveLocaleTag(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -27,11 +30,10 @@ function dateLabel(date: string | null) {
 }
 
 // Preserve the supplied number's significant digits instead of rounding to three decimals.
-const quantityFormatter = new Intl.NumberFormat('en-IN', {
-  maximumSignificantDigits: 21,
-});
-
 function quantityLabel(activity: WorkActivity) {
+  const quantityFormatter = new Intl.NumberFormat(getActiveLocaleTag(), {
+    maximumSignificantDigits: 21,
+  });
   const accepted = quantityFormatter.format(activity.acceptedQuantity);
   const unit = activity.unit ? ` ${activity.unit}` : ' (unit not recorded)';
   if (activity.targetQuantity === null)
@@ -95,6 +97,7 @@ function WorkCard({ item }: { item: WorkItem }) {
 }
 
 export function MyWorkScreen() {
+  useLocalization();
   const { project, work, refresh, offline } = useMyWork();
   const [today, setToday] = useState(siteToday);
   // Keep date-only grouping correct across midnight and tab re-entry, without polling the backend.

@@ -1,5 +1,7 @@
 import { usePathname } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+
+import { LocalizedText as Text } from '@/features/localization/LocalizedText';
 
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useProjectSelection } from '@/features/projects/useProjectSelection';

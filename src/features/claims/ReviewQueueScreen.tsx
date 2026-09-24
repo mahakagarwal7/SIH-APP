@@ -1,13 +1,15 @@
 import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
+import { ActivityIndicator, Linking, StyleSheet, View } from 'react-native';
+
 import {
-  ActivityIndicator,
-  Linking,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+  LocalizedText as Text,
+  LocalizedPressable as Pressable,
+} from '@/features/localization/LocalizedText';
+import {
+  getActiveLocaleTag,
+  useLocalization,
+} from '@/features/localization/LocalizationProvider';
 
 import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
 import { WorkReadError } from '@/features/projects/myWorkService';
@@ -26,7 +28,7 @@ function dateLabel(value: string | null) {
   const date = value.includes('T')
     ? new Date(value)
     : new Date(`${value}T12:00:00Z`);
-  return new Intl.DateTimeFormat('en-IN', {
+  return new Intl.DateTimeFormat(getActiveLocaleTag(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -350,6 +352,7 @@ function ReviewCard({
 }
 
 export function ReviewQueueScreen() {
+  useLocalization();
   const [requestedPage, setRequestedPage] = useState({
     projectId: undefined as string | undefined,
     value: 0,

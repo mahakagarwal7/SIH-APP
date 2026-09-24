@@ -3,17 +3,23 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 
+import {
+  LocalizedText as Text,
+  LocalizedPressable as Pressable,
+  LocalizedTextInput as TextInput,
+} from '@/features/localization/LocalizedText';
+
 import { useAuth } from './AuthProvider';
 
+import { LanguageSelector } from '@/features/localization/LanguageSelector';
+
 import type { AuthViewState } from './AuthProvider';
+import type { ComponentRef } from 'react';
 
 export default function AuthScreen() {
   const auth = useAuth();
@@ -98,6 +104,7 @@ export function AuthView({ auth }: { auth: AuthViewState }) {
               page.
             </Text>
           )}
+          {auth.status !== 'loading' && <LanguageSelector />}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -142,7 +149,7 @@ function SignInForm({ auth }: { auth: AuthViewState }) {
   // Form state disappears when another auth state unmounts this component.
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const passwordInput = useRef<TextInput>(null);
+  const passwordInput = useRef<ComponentRef<typeof TextInput>>(null);
 
   async function submit() {
     if (auth.busy || auth.offline) return;

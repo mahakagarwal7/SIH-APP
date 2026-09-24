@@ -1,6 +1,9 @@
 import Feather from '@expo/vector-icons/Feather';
 import { Tabs } from 'expo-router/js-tabs';
-import { Text, useWindowDimensions } from 'react-native';
+import { useWindowDimensions } from 'react-native';
+
+import { LocalizedText as Text } from '@/features/localization/LocalizedText';
+import { useLocalization } from '@/features/localization/LocalizationProvider';
 
 import type { ComponentProps } from 'react';
 
@@ -33,6 +36,7 @@ const tabs: Record<'field' | 'manager', Tab[]> = {
 
 export function WorkspaceTabs({ workspace }: { workspace: keyof typeof tabs }) {
   const { fontScale } = useWindowDimensions();
+  const { t } = useLocalization();
   return (
     <Tabs
       initialRouteName="index"
@@ -58,8 +62,8 @@ export function WorkspaceTabs({ workspace }: { workspace: keyof typeof tabs }) {
           name={tab.name}
           options={{
             href: tab.hidden ? null : undefined,
-            title: tab.label,
-            tabBarAccessibilityLabel: tab.label,
+            title: t(tab.label),
+            tabBarAccessibilityLabel: t(tab.label),
             tabBarLabel: ({ color }) => (
               <Text
                 style={{

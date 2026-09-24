@@ -1,14 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, StyleSheet, View } from 'react-native';
+
 import {
-  ActivityIndicator,
-  AppState,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+  formatDateTime,
+  LocalizedText as Text,
+  LocalizedPressable as Pressable,
+} from '@/features/localization/LocalizedText';
+import { useLocalization } from '@/features/localization/LocalizationProvider';
 
 import { useAuth } from '@/features/auth/AuthProvider';
 import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
@@ -53,6 +53,7 @@ function Action({
 }
 
 function AccountReports({ userId }: { userId: string }) {
+  useLocalization();
   const auth = useAuth();
   const router = useRouter();
   const mounted = useRef(true);
@@ -230,9 +231,7 @@ function AccountReports({ userId }: { userId: string }) {
                 ? 'Attachment count unavailable'
                 : `${item.mediaCount} ${item.mediaCount === 1 ? 'file' : 'files'}`}
             </Text>
-            <Text style={styles.detail}>
-              {new Date(item.createdAt).toLocaleString()}
-            </Text>
+            <Text style={styles.detail}>{formatDateTime(item.createdAt)}</Text>
             <Text style={styles.detail}>{item.detail}</Text>
             {item.canOpenConfirmation && (
               <Action

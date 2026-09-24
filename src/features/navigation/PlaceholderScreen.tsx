@@ -1,4 +1,6 @@
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+
+import { LocalizedText as Text } from '@/features/localization/LocalizedText';
 
 import { ShellPage, shellStyles } from './shellUi';
 

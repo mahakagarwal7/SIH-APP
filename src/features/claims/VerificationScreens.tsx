@@ -1,14 +1,15 @@
 import { randomUUID } from 'expo-crypto';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+
 import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+  formatDate,
+  LocalizedText as Text,
+  LocalizedPressable as Pressable,
+  LocalizedTextInput as TextInput,
+} from '@/features/localization/LocalizedText';
+import { useLocalization } from '@/features/localization/LocalizationProvider';
 
 import {
   BackButton,
@@ -39,6 +40,7 @@ function statusLabel(value: string) {
 }
 
 export function VerificationListScreen() {
+  useLocalization();
   const router = useRouter();
   const { project, assignments, refresh } = useVerificationAssignments();
   useFocusEffect(
@@ -100,7 +102,7 @@ export function VerificationListScreen() {
                 {statusLabel(item.request.status)}
               </Text>
               <Text style={styles.detail}>
-                {new Date(item.request.created_at).toLocaleDateString('en-IN')}
+                {formatDate(item.request.created_at)}
               </Text>
             </View>
             <Text accessibilityRole="header" style={shellStyles.cardTitle}>

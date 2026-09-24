@@ -1,6 +1,12 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+
+import { LocalizedText as Text } from '@/features/localization/LocalizedText';
+import {
+  getActiveLocaleTag,
+  useLocalization,
+} from '@/features/localization/LocalizationProvider';
 
 import { NavLink, ShellPage, shellStyles } from '@/features/navigation/shellUi';
 
@@ -9,7 +15,7 @@ import { useMyWork } from './useMyWork';
 import { useProjectRecentReports } from './useProjectRecentReports';
 
 function shortDate(value: string) {
-  return new Intl.DateTimeFormat('en-IN', {
+  return new Intl.DateTimeFormat(getActiveLocaleTag(), {
     day: 'numeric',
     month: 'short',
     timeZone: 'Asia/Kolkata',
@@ -17,6 +23,7 @@ function shortDate(value: string) {
 }
 
 export function FieldHomeScreen() {
+  useLocalization();
   const [focused, setFocused] = useState(false);
   const [today, setToday] = useState(siteToday);
   const { project, work, refresh, offline } = useMyWork();

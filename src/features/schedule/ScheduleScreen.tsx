@@ -1,12 +1,15 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+
 import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+  LocalizedText as Text,
+  LocalizedPressable as Pressable,
+} from '@/features/localization/LocalizedText';
+import {
+  getActiveLocaleTag,
+  useLocalization,
+} from '@/features/localization/LocalizationProvider';
 
 import { NavLink, ShellPage, shellStyles } from '@/features/navigation/shellUi';
 
@@ -24,7 +27,7 @@ import type { Href } from 'expo-router';
 
 function dateLabel(value: string | null) {
   if (!value) return 'Not recorded';
-  return new Intl.DateTimeFormat('en-GB', {
+  return new Intl.DateTimeFormat(getActiveLocaleTag(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -33,14 +36,14 @@ function dateLabel(value: string | null) {
 }
 
 function quantityLabel(activity: ScheduleActivity) {
-  const accepted = new Intl.NumberFormat('en-IN').format(
+  const accepted = new Intl.NumberFormat(getActiveLocaleTag()).format(
     activity.acceptedQuantity,
   );
   if (activity.targetQuantity === null)
     return activity.nodeKind === 'milestone'
       ? 'Milestone · no quantity'
       : `${accepted} accepted · planned quantity not recorded`;
-  return `${accepted} of ${new Intl.NumberFormat('en-IN').format(activity.targetQuantity)} ${activity.unit ?? 'unit not recorded'} accepted`;
+  return `${accepted} of ${new Intl.NumberFormat(getActiveLocaleTag()).format(activity.targetQuantity)} ${activity.unit ?? 'unit not recorded'} accepted`;
 }
 
 function Choice({
@@ -246,6 +249,7 @@ function ActivityCard({
 }
 
 export function ScheduleScreen() {
+  useLocalization();
   const { project, schedule, refresh, authorized } = useManagerSchedule();
   const data = schedule.data;
   const viewKey = `${project.data?.project.id ?? ''}:${data?.revisionId ?? ''}:${data?.scheduleVersion ?? ''}`;
