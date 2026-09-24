@@ -12,6 +12,14 @@ npm run android:preview
 
 The command generates the ignored Expo Android project, initializes Worklets CMake metadata, builds only `arm64-v8a` with Gradle project parallelism disabled, verifies the APK signature and bundled JavaScript, and writes the ignored artifact to `dist/nirmaan-field-preview-arm64.apk`. Serial Gradle execution avoids concurrent React Native CMake tasks. The wrapper grants unnamed Java modules native access for the build process so Android Prefab does not misclassify the JDK restricted-access warning as a CMake error. The command never prints either public connection value. Android Studio's JBR and the SDK under `%LOCALAPPDATA%\Android\Sdk` are used when `JAVA_HOME` and `ANDROID_HOME` are absent.
 
+Run the build-wrapper helper tests from PowerShell before changing its environment or signing checks:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\tests\build-android-preview.tests.ps1
+```
+
+The wrapper clears inherited Supabase values before loading `.env.local` and disables Expo's automatic dotenv loading, so another `.env*` file or stale shell variable cannot silently supply a missing key. CI runs the helper tests on Windows. The wrapper accepts exactly the recorded Android debug certificate fingerprint in addition to checking the package signature.
+
 For build-path validation before public configuration is available, run the script directly with `-AllowMissingPublicConfig`. That APK opens the application's honest setup-unavailable state and must not be presented as an acceptance build.
 
 Install the configured preview on a connected ARM64 device:
@@ -33,6 +41,8 @@ The preview does not require Metro. Release/store signing remains a separate del
 - Artifact: `dist/nirmaan-field-preview-arm64.apk`; 50,063,392 bytes.
 - SHA-256: `b988717a65505a5f841673ad03ca77edb8fff0f46a19dd9a5960df6c7da0a44c`.
 - `apksigner` verified APK Signature Scheme v2 with one signer. Certificate: Android Debug, RSA 2048, SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+
+The build-helper tests added during review passed under PowerShell 7.4.7 in a Linux container. The Android Studio/Gradle wrapper was not rerun on Windows after these validation changes.
 
 No physical device was connected during this check. The local production URL exists, but the publishable key is still empty, so login, restart, real media capture, offline recovery, web arrival and accepted-status evidence remain pending. The generated APK is therefore structural build evidence rather than an acceptance build.
 

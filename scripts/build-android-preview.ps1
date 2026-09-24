@@ -9,7 +9,14 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $localEnvironment = Join-Path $projectRoot '.env.local'
 
 function Import-PublicEnvironment {
-  param([string]$Path)
+  param(
+    [string]$Path,
+    [switch]$AllowMissingPublicConfig
+  )
+
+  $env:EXPO_NO_DOTENV = '1'
+  Remove-Item Env:NEXT_PUBLIC_SUPABASE_URL -ErrorAction SilentlyContinue
+  Remove-Item Env:NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY -ErrorAction SilentlyContinue
 
   if (-not (Test-Path -LiteralPath $Path)) {
     if ($AllowMissingPublicConfig) { return }
@@ -28,6 +35,29 @@ function Import-PublicEnvironment {
   $hasKey = -not [string]::IsNullOrWhiteSpace($env:NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)
   if (-not $AllowMissingPublicConfig -and (-not $hasUrl -or -not $hasKey)) {
     throw '.env.local must define NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.'
+  }
+}
+
+function Assert-ApprovedDebugCertificate {
+  param([string[]]$SignatureReport)
+
+  if (-not ($SignatureReport -match 'certificate DN: CN=Android Debug')) {
+    throw 'The preview APK was not signed with an Android debug certificate.'
+  }
+
+  $fingerprints = @(
+    foreach ($line in $SignatureReport) {
+      if ($line -match 'certificate SHA-256 digest:\s*([0-9a-fA-F]{64})\s*$') {
+        $Matches[1].ToLowerInvariant()
+      }
+    }
+  )
+  $approvedFingerprint = 'fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c'
+  if (
+    $fingerprints.Count -ne 1 -or
+    $fingerprints[0] -ne $approvedFingerprint
+  ) {
+    throw 'The preview APK was not signed with the approved Android debug certificate.'
   }
 }
 
@@ -76,7 +106,9 @@ function Invoke-Checked {
 
 Push-Location $projectRoot
 try {
-  Import-PublicEnvironment -Path $localEnvironment
+  Import-PublicEnvironment `
+    -Path $localEnvironment `
+    -AllowMissingPublicConfig:$AllowMissingPublicConfig
   $androidSdk = Resolve-AndroidToolchain
 
   Invoke-Checked -Executable 'npx.cmd' -Arguments @(
@@ -157,9 +189,7 @@ try {
   if ($LASTEXITCODE -ne 0) {
     throw 'apksigner could not verify the generated APK.'
   }
-  if (-not ($signatureReport -match 'certificate DN: CN=Android Debug')) {
-    throw 'The preview APK was not signed with the approved Android debug certificate.'
-  }
+  Assert-ApprovedDebugCertificate -SignatureReport $signatureReport
   $signatureReport | Write-Output
 
   $outputDirectory = Join-Path $projectRoot 'dist'
