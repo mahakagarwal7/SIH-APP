@@ -2,7 +2,7 @@
 
 The Expo companion to [IntelliGrid](https://intelligrid-sih122.vercel.app), using the existing production Supabase backend. The owner confirmed **Nirmaan** as the mobile name on 23 September 2026.
 
-Roadmap **1.6** completes the Field reporting loop with bounded foreground status polling. My reports now distinguishes production extraction, retry/failure, planner review, clarification, verification and final accepted/rejected/observed outcomes using existing RLS-readable jobs and claims. Offline confirmations still send on reconnect without collapsing submission into acceptance. Project switching and manager operations remain later slices.
+Roadmap **1.6** completes the Field reporting loop with bounded foreground status polling. My reports now distinguishes production extraction, retry/failure, planner review, clarification, verification and final accepted/rejected/observed outcomes using existing RLS-readable jobs and claims. Offline confirmations still send on reconnect without collapsing submission into acceptance. A reproducible ARM64 standalone preview build is now available for Field acceptance; project switching and manager operations remain later slices.
 
 ## Run locally
 
@@ -13,7 +13,7 @@ npm ci
 npm start
 ```
 
-Use `npm run android` to generate/build/install a local Android debug app with a compatible JDK, Android SDK and emulator/device. The approved package ID is `com.mahakagarwal.nirmaan`; debug signing is separate from release signing. Voice capture, outbox delivery, confirmation and status polling require the native build. Web shows unavailable states for these native flows. See [voice capture and build evidence](docs/VOICE_CAPTURE.md), the [text/photo persistence contract](docs/TEXT_PHOTO_CAPTURE.md), the [outbox contract](docs/OUTBOX_SYNC.md), the [confirmation contract](docs/CONFIRMATION_SUBMISSION.md) and the [status contract](docs/REPORT_STATUS.md).
+Use `npm run android` to generate/build/install a local Android debug app with a compatible JDK, Android SDK and emulator/device. Use `npm run android:preview` for the verified ARM64 standalone APK after both public production values are configured. The approved package ID is `com.mahakagarwal.nirmaan`; debug signing is separate from release signing. Voice capture, outbox delivery, confirmation and status polling require the native build. Web shows unavailable states for these native flows. See [Field preview build and acceptance](docs/FIELD_PREVIEW.md), [voice capture and build evidence](docs/VOICE_CAPTURE.md), the [text/photo persistence contract](docs/TEXT_PHOTO_CAPTURE.md), the [outbox contract](docs/OUTBOX_SYNC.md), the [confirmation contract](docs/CONFIRMATION_SUBMISSION.md) and the [status contract](docs/REPORT_STATUS.md).
 
 Configure the public connection below to sign in with an existing account. Without both values, the app displays an incomplete-setup message. Browser and Metro export checks do not prove installation or operation on a physical device.
 
@@ -64,6 +64,7 @@ The web checkout is `C:\Users\Mahak\SIH-122`. Its local file also has the owner-
 - `src/types/`: scoped database/RPC contract matching the production schema.
 - `src/lib/`: Supabase client, secure storage, request timeout and session-scoped query cache.
 - `docs/`: decisions, workflow and PR drafts.
+- `scripts/`: reproducible local delivery commands that operate on ignored generated native output.
 - `.github/workflows/ci.yml`: required checks.
 
 Feature folders are added when their roadmap slice needs them.
@@ -74,4 +75,4 @@ Read [AGENTS.md](AGENTS.md), [CODEX.md](CODEX.md), [RULES.md](RULES.md), [archit
 
 The [project review](docs/PROJECT_REVIEW.md) records verified backend contracts and unresolved decisions. The [development workflow](docs/DEVELOPMENT_WORKFLOW.md) supersedes the historical prohibitions on remote actions: signed commits, pushes and feature PRs are authorized; merges remain with the owner. Work stops after each requested slice.
 
-[Report status PR draft](docs/pr-drafts/1.6-report-status.md) records this slice's validation and manual checks. The [confirmation/submission draft](docs/pr-drafts/1.4-confirmation-submission.md), [outbox/My reports draft](docs/pr-drafts/1.5-outbox-my-reports.md), [text/photo draft](docs/pr-drafts/1.3-text-photo-capture.md), [voice draft](docs/pr-drafts/1.2-voice-capture.md), [My work draft](docs/pr-drafts/1.1-my-work.md) and [contract](docs/MY_WORK_CONTRACT.md), [navigation draft](docs/pr-drafts/0.3-navigation-shell.md), [auth draft](docs/pr-drafts/0.2-auth-session.md) and [foundation draft](docs/pr-drafts/0.1-project-foundation.md) record their respective scope. The supplied PDFs remain local design references: the Nirmaan book governs appearance; the SitePulse reference contributes interaction ideas only.
+[Field preview PR draft](docs/pr-drafts/1.7-field-preview-apk.md) records the standalone APK evidence and outstanding phone acceptance. The [report status draft](docs/pr-drafts/1.6-report-status.md), [confirmation/submission draft](docs/pr-drafts/1.4-confirmation-submission.md), [outbox/My reports draft](docs/pr-drafts/1.5-outbox-my-reports.md), [text/photo draft](docs/pr-drafts/1.3-text-photo-capture.md), [voice draft](docs/pr-drafts/1.2-voice-capture.md), [My work draft](docs/pr-drafts/1.1-my-work.md) and [contract](docs/MY_WORK_CONTRACT.md), [navigation draft](docs/pr-drafts/0.3-navigation-shell.md), [auth draft](docs/pr-drafts/0.2-auth-session.md) and [foundation draft](docs/pr-drafts/0.1-project-foundation.md) record their respective scope. The supplied PDFs remain local design references: the Nirmaan book governs appearance; the SitePulse reference contributes interaction ideas only.
