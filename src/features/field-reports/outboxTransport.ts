@@ -1,4 +1,7 @@
-import { getSupabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+import { withTimeout } from '@/lib/request';
+import { getSupabase, getSupabaseConnection } from '@/lib/supabase';
 
 import { OutboxSyncError } from './outbox';
 
@@ -26,6 +29,7 @@ function status(error: ApiError) {
 }
 
 function transportError(error: unknown, fallback: string): OutboxSyncError {
+  if (error instanceof OutboxSyncError) return error;
   const detail = (error ?? {}) as ApiError;
   const message = detail.message || detail.error || fallback;
   const http = status(detail);
@@ -177,21 +181,38 @@ export class SupabaseOutboxTransport implements OutboxTransport {
   }
 }
 
-export function getOutboxTransport() {
-  const client = getSupabase();
-  if (!client)
+export function createAccountOutboxTransport(
+  userId: string,
+  connection: { url: string; key: string },
+  authClient: SupabaseClient<Database>,
+  fetcher: typeof fetch = fetch,
+) {
+  // Each request obtains a token only for this outbox owner. The request keeps
+  // that token even if the shared auth client changes accounts before fetch.
+  const client = createClient<Database>(connection.url, connection.key, {
+    accessToken: async () => {
+      const { data, error } = await authClient.auth.getSession();
+      if (error || data.session?.user.id !== userId)
+        throw new OutboxSyncError(
+          'The current session does not belong to the account that saved this report. Sign in again.',
+          'auth',
+          false,
+        );
+      return data.session.access_token;
+    },
+    global: { fetch: withTimeout(fetcher) },
+  });
+  return new SupabaseOutboxTransport(client);
+}
+
+export function getOutboxTransport(userId: string): OutboxTransport {
+  const authClient = getSupabase();
+  const connection = getSupabaseConnection();
+  if (!authClient || !connection)
     throw new OutboxSyncError(
       'Production backend configuration is unavailable.',
       'server',
       false,
     );
-  return new SupabaseOutboxTransport(client);
+  return createAccountOutboxTransport(userId, connection, authClient);
 }
-
-export const lazyOutboxTransport: OutboxTransport = {
-  ensureAccess: (record) => getOutboxTransport().ensureAccess(record),
-  reserve: (record) => getOutboxTransport().reserve(record),
-  upload: (path, file, bytes) => getOutboxTransport().upload(path, file, bytes),
-  finalize: (reportId) => getOutboxTransport().finalize(reportId),
-  inspect: (reportId) => getOutboxTransport().inspect(reportId),
-};

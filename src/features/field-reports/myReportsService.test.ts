@@ -25,6 +25,7 @@ const outbox: OutboxRecord = {
   attemptCount: 1,
   lastErrorKind: null,
   lastError: null,
+  retryable: true,
   updatedAt: '2026-09-24T00:00:00Z',
 };
 
@@ -108,10 +109,13 @@ it('queries only the signed-in author and joins permitted claim statuses', async
     calls.push(url);
     const data = url.pathname.endsWith('/reports')
       ? [{ ...remote, claims: undefined }]
-      : remote.claims;
+      : remote.claims.map((claim) => ({
+          ...claim,
+          id: '50000000-0000-4000-8000-000000000005',
+        }));
     return new Response(JSON.stringify(data), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Content-Range': '0-0/1' },
     });
   });
   const client = createClient<Database>(
@@ -156,4 +160,120 @@ it('rejects server rows for another author instead of showing them', async () =>
   await expect(loadRemoteReports(client, userId)).rejects.toThrow(
     'Could not refresh reports',
   );
+});
+
+it.each([
+  ['clarification', 'Answer needed'],
+  ['verification', 'Supervisor check'],
+  ['disputed', 'Needs planner attention'],
+] as const)('prioritizes %s over partial acceptance', (state, status) => {
+  expect(
+    mergeMyReports(
+      [],
+      [],
+      [],
+      [
+        {
+          ...remote,
+          claims: [...remote.claims, { report_id: reportId, state }],
+        },
+      ],
+    )[0]?.status,
+  ).toBe(status);
+});
+
+it('does not invent attachment counts for reports loaded from another device', () => {
+  expect(
+    mergeMyReports(
+      [],
+      [],
+      [],
+      [
+        {
+          ...remote,
+          source_kind: 'voice',
+        },
+      ],
+    )[0]?.mediaCount,
+  ).toBeNull();
+});
+
+function reportClient(
+  claims: { id: string; report_id: string; state: string }[],
+  pageCap = 200,
+  mutateCount = false,
+) {
+  const offsets: number[] = [];
+  const client = createClient<Database>(
+    'https://example.supabase.co',
+    'synthetic-public-key',
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+      global: {
+        fetch: async (input) => {
+          const url = new URL(String(input));
+          if (url.pathname.endsWith('/reports'))
+            return new Response(
+              JSON.stringify([{ ...remote, claims: undefined }]),
+              { status: 200, headers: { 'Content-Type': 'application/json' } },
+            );
+          const offset = Number(url.searchParams.get('offset') || 0);
+          offsets.push(offset);
+          const page = claims.slice(offset, offset + pageCap);
+          return new Response(JSON.stringify(page), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Range': `${offset}-${offset + page.length - 1}/${claims.length + (mutateCount && offset > 0 ? 1 : 0)}`,
+            },
+          });
+        },
+      },
+    },
+  );
+  return { client, offsets };
+}
+
+it('accepts the production observed state and preserves its honest outcome', async () => {
+  const { client } = reportClient([
+    {
+      id: '50000000-0000-4000-8000-000000000005',
+      report_id: reportId,
+      state: 'observed',
+    },
+  ]);
+  const reports = await loadRemoteReports(client, userId);
+  expect(mergeMyReports([], [], [], reports)[0]?.status).toBe(
+    'Observed — schedule unchanged',
+  );
+});
+
+it('reads all claim pages even when the server caps pages below the requested size', async () => {
+  const claims = Array.from({ length: 201 }, (_, i) => ({
+    id: `${String(i).padStart(8, '0')}-0000-4000-8000-000000000005`,
+    report_id: reportId,
+    state: i === 200 ? 'rejected' : 'accepted',
+  }));
+  const { client, offsets } = reportClient(claims, 80);
+  const reports = await loadRemoteReports(client, userId);
+  expect(offsets).toEqual([0, 80, 160]);
+  expect(reports[0]?.claims).toHaveLength(201);
+  expect(mergeMyReports([], [], [], reports)[0]?.status).toBe(
+    'Partly accepted',
+  );
+});
+
+it('rejects a changing claim count instead of displaying partial acceptance evidence', async () => {
+  const claims = Array.from({ length: 3 }, (_, i) => ({
+    id: `${String(i).padStart(8, '0')}-0000-4000-8000-000000000005`,
+    report_id: reportId,
+    state: 'accepted',
+  }));
+  await expect(
+    loadRemoteReports(reportClient(claims, 2, true).client, userId),
+  ).rejects.toThrow('Could not refresh reports');
 });

@@ -9,7 +9,7 @@ const { DatabaseSync } = createRequire(__filename)(
   'node:sqlite',
 ) as typeof import('node:sqlite');
 
-it('persists the frozen manifest, upload progress and owner partition', async () => {
+it('persists and migrates retryability without losing manifests, progress or owner partitions', async () => {
   const sql = new DatabaseSync(':memory:');
   const db = {
     execAsync: async (source: string) => sql.exec(source),
@@ -55,6 +55,7 @@ it('persists the frozen manifest, upload progress and owner partition', async ()
       attemptCount: 0,
       lastErrorKind: null,
       lastError: null,
+      retryable: true,
       updatedAt: '2026-09-24T00:00:00Z',
     };
     await index.put(row);
@@ -85,6 +86,28 @@ it('persists the frozen manifest, upload progress and owner partition', async ()
     await expect(
       (await createOutboxIndex(db)).list('alice'),
     ).resolves.toHaveLength(1);
+    const persisted = (await index.get('alice', row.captureId))!;
+    await index.put({
+      ...persisted,
+      state: 'failed',
+      lastErrorKind: 'server',
+      retryable: false,
+    });
+    await expect(
+      (await createOutboxIndex(db)).get('alice', row.captureId),
+    ).resolves.toMatchObject({ retryable: false });
+    // Simulate the schema shipped by the original PR, then reopen it.
+    sql.exec(
+      "ALTER TABLE local_field_outbox DROP COLUMN retryable; UPDATE local_field_outbox SET lastErrorKind='local';",
+    );
+    const migrated = await createOutboxIndex(db);
+    await expect(migrated.get('alice', row.captureId)).resolves.toMatchObject({
+      retryable: false,
+      state: 'failed',
+      reportId: persisted.reportId,
+      uploadedFiles: persisted.uploadedFiles,
+      manifest: persisted.manifest,
+    });
   } finally {
     sql.close();
   }

@@ -1,4 +1,5 @@
 import { OutboxSyncError, sameFrozenCapture, validateManifest } from './outbox';
+import { notifyOutboxWork } from './outboxEvents';
 
 import type {
   OutboxFileReader,
@@ -33,7 +34,7 @@ export class OutboxService {
   constructor(
     private readonly index: OutboxIndex,
     private readonly files: OutboxFileReader,
-    private readonly transport: OutboxTransport,
+    private readonly transportForAccount: (userId: string) => OutboxTransport,
     private readonly sha256: (bytes: Uint8Array) => Promise<string>,
     private readonly now: () => string = () => new Date().toISOString(),
   ) {}
@@ -58,6 +59,7 @@ export class OutboxService {
       attemptCount: 0,
       lastErrorKind: null,
       lastError: null,
+      retryable: true,
       updatedAt: this.now(),
     };
     const existing = await this.index.get(input.userId, input.captureId);
@@ -71,6 +73,7 @@ export class OutboxService {
       return existing;
     }
     await this.index.put(candidate);
+    notifyOutboxWork(input.userId);
     return candidate;
   }
 
@@ -88,6 +91,7 @@ export class OutboxService {
       state,
       lastError: null,
       lastErrorKind: null,
+      retryable: true,
     });
   }
 
@@ -107,8 +111,8 @@ export class OutboxService {
     if (record.state === 'paused' && !options.includePaused) return record;
     if (
       record.state === 'failed' &&
-      record.lastErrorKind === 'local' &&
-      !options.includePaused
+      !record.retryable &&
+      !(options.includePaused && record.lastErrorKind === 'local')
     )
       return record;
     record = await this.save(record, {
@@ -117,22 +121,23 @@ export class OutboxService {
       lastErrorKind: null,
     });
     try {
-      await this.transport.ensureAccess(record);
+      const transport = this.transportForAccount(userId);
+      await transport.ensureAccess(record);
       if (record.reportId && record.state === 'processing') {
         const reportId = record.reportId;
-        const result = await this.transport.inspect(reportId);
+        const result = await transport.inspect(reportId);
         if (result.status === 'ready')
           return this.phase(record, 'needs_confirmation');
         if (result.status === 'processing') return record;
         if (result.status === 'failed')
           throw new OutboxSyncError(result.message, 'server', false);
         record = await this.phase(record, 'finalizing');
-        await this.transport.finalize(reportId);
+        await transport.finalize(reportId);
         return this.phase(record, 'processing');
       }
       if (!record.reportId) {
         record = await this.phase(record, 'reserving');
-        const reportId = await this.transport.reserve(record);
+        const reportId = await transport.reserve(record);
         record = await this.save(record, {
           reportId,
           state: 'uploading',
@@ -159,7 +164,7 @@ export class OutboxService {
             'local',
             false,
           );
-        await this.transport.upload(
+        await transport.upload(
           `${record.projectId}/${record.reportId}/${file.id}`,
           file,
           bytes,
@@ -169,9 +174,9 @@ export class OutboxService {
         });
       }
       record = await this.phase(record, 'finalizing');
-      await this.transport.finalize(record.reportId!);
+      await transport.finalize(record.reportId!);
       record = await this.phase(record, 'processing');
-      const result = await this.transport.inspect(record.reportId!);
+      const result = await transport.inspect(record.reportId!);
       if (result.status === 'ready')
         return this.phase(record, 'needs_confirmation');
       if (result.status === 'failed')
@@ -188,6 +193,7 @@ export class OutboxService {
             : 'failed',
         lastErrorKind: failure.kind,
         lastError: failure.message,
+        retryable: failure.retryable,
       });
     }
   }

@@ -1,4 +1,8 @@
-import { SupabaseOutboxTransport } from './outboxTransport';
+import { OutboxService } from './outboxService';
+import {
+  createAccountOutboxTransport,
+  SupabaseOutboxTransport,
+} from './outboxTransport';
 
 import type { OutboxRecord } from './outbox';
 import type { Database } from '@/types/database';
@@ -38,6 +42,7 @@ function record(): OutboxRecord {
     attemptCount: 0,
     lastErrorKind: null,
     lastError: null,
+    retryable: true,
     updatedAt: '2026-09-24T00:00:00Z',
   };
 }
@@ -132,3 +137,96 @@ it('requires current membership and distinguishes ready, retryable and terminal 
     status: 'ready',
   });
 });
+
+it.each(['membership', 'reservation'] as const)(
+  'pauses when accounts change after %s without sending another account token',
+  async (phase) => {
+    const draft = record();
+    draft.manifest.files = [
+      {
+        id: '40000000-0000-4000-8000-000000000004',
+        name: 'voice.wav',
+        kind: 'audio',
+        mime: 'audio/wav',
+        bytes: 3,
+        sha256: 'a'.repeat(64),
+        caption: '',
+      },
+    ];
+    let owner = draft.userId;
+    const requests: { path: string; authorization: string | null }[] = [];
+    const authClient = {
+      auth: {
+        getSession: async () => ({
+          data: {
+            session: {
+              user: { id: owner },
+              access_token:
+                owner === draft.userId ? 'alice-token' : 'bob-token',
+            },
+          },
+          error: null,
+        }),
+      },
+    } as unknown as SupabaseClient<Database>;
+    const transport = createAccountOutboxTransport(
+      draft.userId,
+      {
+        url: 'https://example.supabase.co',
+        key: 'synthetic-public-key',
+      },
+      authClient,
+      async (input, init) => {
+        const path = new URL(String(input)).pathname;
+        requests.push({
+          path,
+          authorization: new Headers(init?.headers).get('authorization'),
+        });
+        const data = path.endsWith('/project_members')
+          ? [
+              {
+                project_id: draft.projectId,
+                user_id: draft.userId,
+                active: true,
+              },
+            ]
+          : '50000000-0000-4000-8000-000000000005';
+        if (
+          (phase === 'membership' && path.endsWith('/project_members')) ||
+          (phase === 'reservation' && path.endsWith('/reserve_field_capture'))
+        )
+          owner = 'bob';
+        return new Response(JSON.stringify(data), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    );
+    let stored: OutboxRecord | null = null;
+    const service = new OutboxService(
+      {
+        get: async () => stored,
+        list: async () => (stored ? [stored] : []),
+        put: async (row) => {
+          stored = row;
+        },
+      },
+      { read: async () => new Uint8Array([1, 2, 3]) },
+      () => transport,
+      async () => 'a'.repeat(64),
+    );
+    await service.enqueue(draft);
+    const result = await service.sync(draft.userId, draft.captureId);
+    expect(result).toMatchObject({
+      state: 'paused',
+      lastErrorKind: 'auth',
+      userId: draft.userId,
+    });
+    expect(requests).toHaveLength(phase === 'membership' ? 1 : 2);
+    expect(
+      requests.every(
+        (request) => request.authorization === 'Bearer alice-token',
+      ),
+    ).toBe(true);
+  },
+);

@@ -42,6 +42,7 @@ export type OutboxRecord = {
   attemptCount: number;
   lastErrorKind: OutboxErrorKind | null;
   lastError: string | null;
+  retryable: boolean;
   updatedAt: string;
 };
 

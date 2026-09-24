@@ -11,7 +11,7 @@ Each local draft ID becomes its stable `captureId`. Before the first reservation
 - project/account identity, capture kind, language and local creation time;
 - server report ID and completed upload IDs as they become known.
 
-SQLite uses WAL and `synchronous = FULL`. Its upsert condition refuses to change project, owner, draft content or manifest for an existing capture ID. In-process preparation is serialized per account. A changed/missing private file fails locally before upload.
+SQLite uses WAL and `synchronous = FULL`. Its upsert condition refuses to change project, owner, draft content or manifest for an existing capture ID. In-process preparation is serialized per account. Saving, preparing and discarding a capture share one per-account/capture lock; the native store checks for outbox ownership inside that lock before deletion. A changed/missing private file fails locally before upload.
 
 ## Production sequence
 
@@ -21,7 +21,9 @@ SQLite uses WAL and `synchronous = FULL`. Its upsert condition refuses to change
 4. Call `finalize_field_media`. The server verifies object sizes and queues its media jobs.
 5. Read permitted attachment/job/result fields while the foreground app is active. Ready media becomes **Needs confirmation**. Voice is never sent for review without checking the server transcript.
 
-Foreground processing polls with bounded backoff and pauses offline/inactive. Sync now also retries paused access/auth items deliberately. Expired auth or revoked membership preserves local data and displays **Sync paused**. Terminal worker failure displays **Sync needs attention**. The app never calls worker-only RPCs or uses a service-role key.
+Each sync pass uses an account-bound transport. Every request obtains a token only for the saved capture's owner and retains that token for the request. Switching accounts during reservation/upload pauses subsequent requests rather than delivering evidence under the new account.
+
+Foreground processing polls with bounded backoff and pauses offline/inactive. Durable saves and enqueues wake an idle coordinator; completing an explicit sync resumes automatic polling. Transient failures persist their retryability across restarts. Sync now deliberately retries paused access/auth items and restored local-file failures, including when an automatic pass is already running. Expired auth or revoked membership preserves local data and displays **Sync paused**. Terminal worker failure displays **Sync needs attention** and is not repeatedly finalized. The app never calls worker-only RPCs or uses a service-role key.
 
 The binary upload follows the [Supabase ArrayBuffer upload contract](https://supabase.com/docs/reference/javascript/storage-from-upload). Private files use the SDK-matched [Expo FileSystem byte API](https://docs.expo.dev/versions/latest/sdk/filesystem/).
 
@@ -33,10 +35,12 @@ My reports merges account-scoped local drafts, outbox rows and the signed-in aut
 - **Syncing / Processing evidence**: reserved upload or server media work remains.
 - **Needs confirmation**: server media is ready, but nothing has been submitted.
 - **Awaiting review / Accepted / Partly accepted**: derived from an existing submitted report and its readable claims.
-- **Answer needed / Supervisor check / Needs planner attention / Rejected / Kept as unplanned / Withdrawn**: preserved rather than collapsed into success.
+- **Answer needed / Supervisor check / Needs planner attention / Rejected / Kept as unplanned / Withdrawn / Observed — schedule unchanged**: preserved rather than collapsed into success. Outstanding clarification, verification and dispute take precedence over partial acceptance, matching the web report summary.
 
-The last loaded server data can remain visible offline, clearly labeled stale by the offline banner. Local drafts survive logout but stay hidden from other accounts. Capture screens block local deletion after an item enters the outbox so retry/confirmation cannot lose its evidence.
+The server list currently reads the latest 100 authored reports. For those reports it pages through all readable claims using stable ID order and an exact count, advancing by the number actually returned so smaller server page caps are supported. Duplicate IDs, changing totals, incomplete pages or more than 10,000 claims fail visibly instead of producing a misleading acceptance summary. Remote-only attachment counts remain unknown and are labeled **Attachment count unavailable**.
+
+The last loaded server data can remain visible offline, clearly labeled stale by the offline banner. Remembered capture context is used only offline; an online access/load error is shown even when a previous project remains cached. Local drafts survive logout but stay hidden from other accounts. Capture screens and native stores block local deletion after an item enters the outbox so retry/confirmation cannot lose its evidence.
 
 ## Evidence limits
 
-Unit/integration tests cover interruption, restart, duplicate upload, manifest mutation, account isolation, revoked access, worker retry/terminal failure and local/server list merging. Android/iOS/web exports establish bundle compatibility. They do not prove the local publishable key, production membership, deployed worker, transcription quality, physical connectivity or RLS behavior on a live account.
+Unit/integration tests cover interruption, restart, duplicate upload, manifest mutation, account switches between network phases, deletion/preparation races, coordinator wakeups, revoked access, transient/terminal failures, claim pagination/status precedence, cached project errors and navigation during sync. The final local suite passes 206 tests in 36 suites. Android/iOS/web exports establish bundle compatibility when recorded in the PR validation notes. These checks do not prove the local publishable key, production membership, deployed worker, transcription quality, physical connectivity or RLS behavior on a live account.

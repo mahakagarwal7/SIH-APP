@@ -23,20 +23,28 @@ export function useCaptureProject() {
   });
   useEffect(() => {
     const context = live.data;
-    if (!userId || !context || context.member.user_id !== userId) return;
+    if (
+      !userId ||
+      live.error ||
+      !live.isSuccess ||
+      !context ||
+      context.member.user_id !== userId
+    )
+      return;
     void rememberProjectContext(userId, context)
       .then(() => client.setQueryData(['capture-project', userId], context))
       .catch(() => {});
-  }, [client, live.data, userId]);
+  }, [client, live.data, live.error, live.isSuccess, userId]);
   // A remembered membership permits capture only when the device is known offline.
   // An online denial/error must not be hidden behind stale local access.
-  const data = selectCaptureProject(live.data, remembered.data, auth.offline);
+  const liveContext = live.error ? undefined : live.data;
+  const data = selectCaptureProject(liveContext, remembered.data, auth.offline);
   return {
     ...live,
     data,
     error: data ? null : live.error,
     isPending: !data && (live.isPending || remembered.isPending),
     isFetching: live.isFetching || remembered.isFetching,
-    remembered: !live.data && !!remembered.data,
+    remembered: auth.offline && !liveContext && !!remembered.data,
   };
 }

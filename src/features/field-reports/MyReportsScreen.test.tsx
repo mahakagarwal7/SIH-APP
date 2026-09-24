@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { useFocusEffect } from 'expo-router';
 import { AppState } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
@@ -128,4 +129,51 @@ it('manually retries paused work and reports completion without claiming submiss
     ),
   ).toBeVisible();
   expect(screen.queryByText('Sent for review')).toBeNull();
+});
+
+it('re-enables Sync now when a pass finishes after the tab loses focus', async () => {
+  let finish!: () => void;
+  jest.mocked(syncNativeOutbox).mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = () => resolve([]);
+    }),
+  );
+  await render(<App />);
+  const focus = jest.mocked(useFocusEffect).mock.calls.at(-1)![0];
+  let blur: ReturnType<typeof focus>;
+  await act(() => {
+    blur = focus();
+  });
+  await fireEvent.press(screen.getByRole('button', { name: 'Sync now' }));
+  await act(() => {
+    if (typeof blur === 'function') blur();
+  });
+  await act(async () => {
+    finish();
+  });
+  await act(() => {
+    focus();
+  });
+  expect(await screen.findByRole('button', { name: 'Sync now' })).toBeEnabled();
+});
+
+it('labels unqueried server attachments as unavailable instead of zero files', async () => {
+  jest
+    .mocked(getVoiceDraftStore)
+    .mockResolvedValue({ list: async () => [] } as never);
+  jest.mocked(loadRemoteReports).mockResolvedValue([
+    {
+      id: 'report',
+      project_id: 'project',
+      author_id: 'alice',
+      capture_id: 'capture',
+      lifecycle: 'submitted',
+      received_at: '2026-09-24T00:00:00Z',
+      source_kind: 'voice',
+      claims: [],
+    },
+  ]);
+  await render(<App />);
+  expect(await screen.findByText(/Attachment count unavailable/)).toBeVisible();
+  expect(screen.queryByText(/0 files/)).toBeNull();
 });

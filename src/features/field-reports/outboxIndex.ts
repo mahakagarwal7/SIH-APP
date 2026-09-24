@@ -3,9 +3,13 @@ import { validateManifest } from './outbox';
 import type { CaptureManifest, OutboxIndex, OutboxRecord } from './outbox';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-type StoredOutbox = Omit<OutboxRecord, 'manifest' | 'uploadedFiles'> & {
+type StoredOutbox = Omit<
+  OutboxRecord,
+  'manifest' | 'uploadedFiles' | 'retryable'
+> & {
   manifest: string;
   uploadedFiles: string;
+  retryable: number;
 };
 
 function hydrate(row: StoredOutbox | null): OutboxRecord | null {
@@ -21,7 +25,7 @@ function hydrate(row: StoredOutbox | null): OutboxRecord | null {
     uploadedFiles.some((id) => !declared.has(id))
   )
     throw new Error('Invalid local upload progress.');
-  return { ...row, manifest, uploadedFiles };
+  return { ...row, manifest, uploadedFiles, retryable: row.retryable === 1 };
 }
 
 export async function createOutboxIndex(
@@ -44,9 +48,17 @@ export async function createOutboxIndex(
       attemptCount INTEGER NOT NULL,
       lastErrorKind TEXT CHECK(lastErrorKind IS NULL OR lastErrorKind IN ('auth','access','local','network','server')),
       lastError TEXT,
-      updatedAt TEXT NOT NULL
+      updatedAt TEXT NOT NULL,
+      retryable INTEGER NOT NULL DEFAULT 1 CHECK(retryable IN (0,1))
     );
     CREATE INDEX IF NOT EXISTS local_outbox_owner ON local_field_outbox(userId, createdAt);`);
+  const columns = await db.getAllAsync<{ name: string }>(
+    'PRAGMA table_info(local_field_outbox)',
+  );
+  if (!columns.some((column) => column.name === 'retryable')) {
+    await db.execAsync(`ALTER TABLE local_field_outbox ADD COLUMN retryable INTEGER NOT NULL DEFAULT 1 CHECK(retryable IN (0,1));
+      UPDATE local_field_outbox SET retryable=0 WHERE lastErrorKind IN ('auth','access','local');`);
+  }
   return {
     async get(userId, captureId) {
       return hydrate(
@@ -67,13 +79,13 @@ export async function createOutboxIndex(
     async put(record) {
       const result = await db.runAsync(
         `INSERT INTO local_field_outbox
-          (captureId,userId,projectId,projectName,kind,createdAt,text,manifest,reportId,uploadedFiles,state,attemptCount,lastErrorKind,lastError,updatedAt)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          (captureId,userId,projectId,projectName,kind,createdAt,text,manifest,reportId,uploadedFiles,state,attemptCount,lastErrorKind,lastError,updatedAt,retryable)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(captureId) DO UPDATE SET
           userId=excluded.userId,projectId=excluded.projectId,projectName=excluded.projectName,kind=excluded.kind,
           createdAt=excluded.createdAt,text=excluded.text,manifest=excluded.manifest,reportId=excluded.reportId,
           uploadedFiles=excluded.uploadedFiles,state=excluded.state,attemptCount=excluded.attemptCount,
-          lastErrorKind=excluded.lastErrorKind,lastError=excluded.lastError,updatedAt=excluded.updatedAt
+          lastErrorKind=excluded.lastErrorKind,lastError=excluded.lastError,updatedAt=excluded.updatedAt,retryable=excluded.retryable
          WHERE local_field_outbox.userId=excluded.userId
            AND local_field_outbox.projectId=excluded.projectId
            AND local_field_outbox.projectName=excluded.projectName
@@ -97,6 +109,7 @@ export async function createOutboxIndex(
         record.lastErrorKind,
         record.lastError,
         record.updatedAt,
+        record.retryable ? 1 : 0,
       );
       if (result.changes !== 1)
         throw new Error(
