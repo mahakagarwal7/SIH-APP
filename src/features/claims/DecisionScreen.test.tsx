@@ -278,6 +278,81 @@ it('records rejection with a reason without inventing an activity selection', as
   expect(finish).toHaveBeenCalledWith(true);
 });
 
+it('allows rejection when an optional corrected date is invalid', async () => {
+  await render(<DecisionScreen claimId={claimId} />);
+  await fireEvent.changeText(
+    screen.getByLabelText('Decision reason'),
+    'Evidence is not credible.',
+  );
+  await fireEvent.changeText(
+    screen.getByLabelText('Corrected work date'),
+    '2026-02-30',
+  );
+
+  const rejectButton = screen.getByRole('button', { name: 'Reject claim' });
+  expect(rejectButton).toBeEnabled();
+  await fireEvent.press(rejectButton);
+
+  await waitFor(() => expect(submitDecision).toHaveBeenCalledTimes(1));
+  expect(jest.mocked(submitDecision).mock.calls[0]?.[1]).toMatchObject({
+    action: 'reject',
+    correctedDate: null,
+  });
+});
+
+it('visibly marks selected reconciliation and clarification reasons', async () => {
+  const progressData = {
+    ...data,
+    claim: {
+      ...data.claim,
+      facts: { ...data.claim.facts, kind: 'ITEM_PROGRESS' as const },
+    },
+  };
+  jest
+    .mocked(useDecisionContext)
+    .mockReturnValue(hookState({ data: progressData }));
+  await render(<DecisionScreen claimId={claimId} />);
+
+  const reconciliation = screen.getByRole('radio', {
+    name: 'Equivalent reading already recorded',
+  });
+  await fireEvent.press(reconciliation);
+  expect(reconciliation).toHaveStyle({
+    backgroundColor: '#edf5f8',
+    borderColor: '#266b8c',
+    borderWidth: 2,
+  });
+
+  const clarification = screen.getByRole('radio', { name: 'Work location' });
+  await fireEvent.press(clarification);
+  expect(clarification).toHaveStyle({
+    backgroundColor: '#edf5f8',
+    borderColor: '#266b8c',
+    borderWidth: 2,
+  });
+});
+
+it('locks preview inputs until the current preview response arrives', async () => {
+  let resolvePreview!: (result: typeof preview) => void;
+  jest.mocked(previewDecision).mockReturnValue(
+    new Promise((resolve) => {
+      resolvePreview = resolve;
+    }),
+  );
+  await render(<DecisionScreen claimId={claimId} />);
+  await selectCandidateAndReason();
+  await fireEvent.press(screen.getByRole('button', { name: 'Preview change' }));
+
+  expect(screen.getByLabelText('Decision reason').props.editable).toBe(false);
+  expect(screen.getByLabelText('Corrected work date').props.editable).toBe(
+    false,
+  );
+  expect(screen.getByRole('radio', { name: /PIP-1201/ })).toBeDisabled();
+
+  resolvePreview(preview);
+  expect(await screen.findByText('Proposed schedule change')).toBeVisible();
+});
+
 it('requests a specific clarification without accepting the claim', async () => {
   await render(<DecisionScreen claimId={claimId} />);
   await fireEvent.press(screen.getByRole('radio', { name: 'Work location' }));
@@ -343,4 +418,30 @@ it('blocks writes offline and shows role/access failures explicitly', async () =
     .mockReturnValue(hookState({ data: undefined, authorized: false }));
   await view.rerender(<DecisionScreen claimId={claimId} />);
   expect(screen.getByText('Manager access required')).toBeVisible();
+});
+
+it('disables every decision write when cached context becomes offline', async () => {
+  const view = await render(<DecisionScreen claimId={claimId} />);
+  await selectCandidateAndReason();
+  await fireEvent.press(screen.getByRole('button', { name: 'Preview change' }));
+  await waitFor(() => expect(previewDecision).toHaveBeenCalledTimes(1));
+
+  jest
+    .mocked(useDecisionContext)
+    .mockReturnValue(hookState({ offline: true, data }));
+  await view.rerender(<DecisionScreen claimId={claimId} />);
+
+  for (const name of [
+    'Preview change',
+    'Accept verified event',
+    'Reject claim',
+    'Ask reporter',
+    'Request supervisor verification',
+  ]) {
+    expect(screen.getByRole('button', { name })).toBeDisabled();
+  }
+  expect(previewDecision).toHaveBeenCalledTimes(1);
+  expect(submitDecision).not.toHaveBeenCalled();
+  expect(requestClarification).not.toHaveBeenCalled();
+  expect(requestVerification).not.toHaveBeenCalled();
 });

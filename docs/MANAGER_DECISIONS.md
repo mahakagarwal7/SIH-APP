@@ -37,7 +37,7 @@ All RPCs use the mobile user's Supabase session. Database `app_private.is_planne
 
 Each action holds one command ID while its complete payload is unchanged. A retry after a lost response sends the same ID and payload so the database can replay the recorded result. Changing any decision field creates a new command ID.
 
-After an accepted or rejected result, the claim is removed from every cached page for the same account and project and every cached total is decremented once. Other projects remain untouched. Clarification and verification keep the claim in the queue and invalidate its current server state.
+After an accepted or rejected result, the claim is removed from every cached page for the same account and project, every cached total is decremented once, and each page's next-page state is recomputed. Other projects remain untouched. Clarification and verification keep the claim in the queue and invalidate its current server state. Cached decision context cannot enable writes while offline.
 
 ## Consistency boundary
 

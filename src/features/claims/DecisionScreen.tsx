@@ -121,6 +121,7 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
   const router = useRouter();
   const { project, decision, refresh, finish, authorized } =
     useDecisionContext(claimId);
+  const canWrite = !project.offline;
   const [activityId, setActivityId] = useState('');
   const [reason, setReason] = useState('');
   const [correctedDate, setCorrectedDate] = useState('');
@@ -135,6 +136,7 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const decisionCommand = useRef<StableCommand<BaseDecision> | null>(null);
+  const previewRequest = useRef(0);
   const clarificationCommand = useRef<StableCommand<{
     expectedClaimVersion: number;
     reasonCode: ReasonCode;
@@ -167,6 +169,7 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
       ? preview
       : null;
   const clearPreview = () => {
+    previewRequest.current += 1;
     setPreview(null);
     setMessage('');
   };
@@ -190,7 +193,7 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
       expectedActualsVersion: selected?.activity?.actualsVersion ?? 0,
       expectedPolicyVersion: data.snapshot.policyVersion,
       reason: reason.trim(),
-      correctedDate: correctedDate.trim() || null,
+      correctedDate: action === 'reject' ? null : correctedDate.trim() || null,
       reconciliation,
       expectedVerificationId: data.verification?.id ?? null,
       expectedVerificationVersion: data.verification?.version ?? null,
@@ -209,22 +212,24 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
   const runPreview = async () => {
     const command = makeBaseDecision('accept');
     const client = getSupabase();
-    if (!command || !client) return;
+    if (!canWrite || !command || !client) return;
+    const requestId = ++previewRequest.current;
     setBusy(true);
     setMessage('');
     try {
       const result = await previewDecision(client, command);
+      if (requestId !== previewRequest.current) return;
       setPreview({ data: result, command });
       setMessage('Check every proposed field before accepting.');
     } catch (error) {
-      await handleError(error);
+      if (requestId === previewRequest.current) await handleError(error);
     } finally {
       setBusy(false);
     }
   };
   const accept = async () => {
     const client = getSupabase();
-    if (!currentPreview || !client) return;
+    if (!canWrite || !currentPreview || !client) return;
     setBusy(true);
     setMessage('');
     try {
@@ -242,7 +247,7 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
   const reject = async () => {
     const client = getSupabase();
     const command = makeBaseDecision('reject');
-    if (!command || !client) return;
+    if (!canWrite || !command || !client) return;
     setBusy(true);
     setMessage('');
     try {
@@ -256,7 +261,7 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
   };
   const clarify = async () => {
     const client = getSupabase();
-    if (!data || !client) return;
+    if (!canWrite || !data || !client) return;
     const stable = stableCommand(
       clarificationCommand.current,
       { expectedClaimVersion: data.claim.version, reasonCode },
@@ -279,7 +284,7 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
   };
   const verify = async () => {
     const client = getSupabase();
-    if (!data || !selected || !client) return;
+    if (!canWrite || !data || !selected || !client) return;
     const payload = {
       expectedClaimVersion: data.claim.version,
       activityId: selected.activity_id,
@@ -319,11 +324,13 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
     data?.claim.validation_flags.includes('Work date missing') ||
     !data?.claim.facts.eventDate;
   const canPreview =
+    canWrite &&
     !!acceptCandidate &&
     !unresolvedFlags.length &&
     !!reason.trim() &&
     (!needsDate || validWorkDate(correctedDate));
   const canVerify =
+    canWrite &&
     !!selected?.activity &&
     selected.mismatch_flags.length === 0 &&
     !data?.claim.validation_flags.length &&
@@ -413,7 +420,9 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
               accessibilityRole="radio"
               accessibilityState={{
                 selected: activityId === candidate.activity_id,
+                disabled: busy,
               }}
+              disabled={busy}
               onPress={() => {
                 setActivityId(candidate.activity_id);
                 clearPreview();
@@ -446,6 +455,7 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
           </Text>
           <TextInput
             accessibilityLabel="Decision reason"
+            editable={!busy}
             multiline
             maxLength={1000}
             onChangeText={(value) => {
@@ -459,6 +469,7 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
           <TextInput
             accessibilityLabel="Corrected work date"
             autoCapitalize="none"
+            editable={!busy}
             maxLength={10}
             onChangeText={(value) => {
               setCorrectedDate(value);
@@ -480,12 +491,20 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
                 <Pressable
                   key={value}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected: reconciliation === value }}
+                  accessibilityState={{
+                    selected: reconciliation === value,
+                    disabled: busy,
+                  }}
+                  disabled={busy}
                   onPress={() => {
                     setReconciliation(value);
                     clearPreview();
                   }}
-                  style={styles.option}
+                  style={[
+                    styles.option,
+                    reconciliation === value && styles.selectedOption,
+                    busy && styles.disabled,
+                  ]}
                 >
                   <Text style={styles.optionText}>
                     {value === 'apply'
@@ -530,12 +549,14 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ disabled: busy || !currentPreview }}
-              disabled={busy || !currentPreview}
+              accessibilityState={{
+                disabled: busy || !canWrite || !currentPreview,
+              }}
+              disabled={busy || !canWrite || !currentPreview}
               onPress={() => void accept()}
               style={[
                 styles.primaryButton,
-                (busy || !currentPreview) && styles.disabled,
+                (busy || !canWrite || !currentPreview) && styles.disabled,
               ]}
             >
               <Text style={styles.primaryText}>Accept verified event</Text>
@@ -543,13 +564,13 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
             <Pressable
               accessibilityRole="button"
               accessibilityState={{
-                disabled: busy || !reason.trim() || !dateValid,
+                disabled: busy || !canWrite || !reason.trim(),
               }}
-              disabled={busy || !reason.trim() || !dateValid}
+              disabled={busy || !canWrite || !reason.trim()}
               onPress={() => void reject()}
               style={[
                 styles.dangerButton,
-                (busy || !reason.trim() || !dateValid) && styles.disabled,
+                (busy || !canWrite || !reason.trim()) && styles.disabled,
               ]}
             >
               <Text style={styles.dangerText}>Reject claim</Text>
@@ -568,9 +589,17 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
                 <Pressable
                   key={item.code}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected: reasonCode === item.code }}
+                  accessibilityState={{
+                    selected: reasonCode === item.code,
+                    disabled: busy,
+                  }}
+                  disabled={busy}
                   onPress={() => setReasonCode(item.code)}
-                  style={styles.option}
+                  style={[
+                    styles.option,
+                    reasonCode === item.code && styles.selectedOption,
+                    busy && styles.disabled,
+                  ]}
                 >
                   <Text style={styles.optionText}>{item.label}</Text>
                 </Pressable>
@@ -578,10 +607,13 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
             </View>
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ disabled: busy }}
-              disabled={busy}
+              accessibilityState={{ disabled: busy || !canWrite }}
+              disabled={busy || !canWrite}
               onPress={() => void clarify()}
-              style={[styles.secondaryButton, busy && styles.disabled]}
+              style={[
+                styles.secondaryButton,
+                (busy || !canWrite) && styles.disabled,
+              ]}
             >
               <Text style={shellStyles.linkText}>Ask reporter</Text>
             </Pressable>
@@ -685,6 +717,11 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
     paddingHorizontal: 12,
+  },
+  selectedOption: {
+    borderColor: '#266b8c',
+    borderWidth: 2,
+    backgroundColor: '#edf5f8',
   },
   optionText: { color: '#17354c', fontSize: 14, lineHeight: 21 },
   preview: {

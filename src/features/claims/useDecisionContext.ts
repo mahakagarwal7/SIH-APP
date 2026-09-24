@@ -67,6 +67,7 @@ export function useDecisionContext(claimId: string) {
           queryClient,
           context.member.user_id,
           context.project.id,
+          context.member.version,
           claimId,
         );
       void queryClient.invalidateQueries({
