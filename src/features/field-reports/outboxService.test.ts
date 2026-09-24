@@ -1,3 +1,4 @@
+import { mergeMyReports } from './myReportsService';
 import { OutboxSyncError } from './outbox';
 import { OutboxService } from './outboxService';
 import { initialConfirmationText } from './reportEvidence';
@@ -255,17 +256,17 @@ it('moves processed media to needs confirmation without submitting it', async ()
 });
 
 it.each([
-  ['voice', true, false, false],
-  ['text', false, true, false],
-  ['photo', false, false, true],
-  ['voice + text', true, true, false],
-  ['voice + photo', true, false, true],
-  ['text + photo', false, true, true],
-  ['voice + text + photo', true, true, true],
+  ['voice', true, false, false, 'Voice'],
+  ['text', false, true, false, 'Text'],
+  ['photo', false, false, true, 'Photo'],
+  ['voice + text', true, true, false, 'Voice + text'],
+  ['voice + photo', true, false, true, 'Voice + photo'],
+  ['text + photo', false, true, true, 'Text + photo'],
+  ['voice + text + photo', true, true, true, 'Voice + text + photo'],
 ])(
-  'confirms and submits %s evidence',
-  async (_name, hasVoice, hasText, hasPhoto) => {
-    const { service, input, rows, transport } = setup();
+  'delivers %s evidence through every My Reports state',
+  async (_name, hasVoice, hasText, hasPhoto, evidenceLabel) => {
+    const { service, input, setInspected, transport } = setup();
     const photo = {
       id: '40000000-0000-4000-8000-000000000004',
       name: 'evidence.jpg',
@@ -285,25 +286,83 @@ it.each([
       text: hasText ? 'Two supports installed.' : '',
       manifest: { ...input.manifest, files },
     };
-    await service.enqueue(capture);
+    setInspected({
+      status: 'ready',
+      originalTranscript: hasVoice ? 'Voice progress update.' : null,
+    });
+    let ready = await service.enqueue(capture);
+    expect(mergeMyReports([], [], [ready], [])[0]).toMatchObject({
+      evidenceLabel,
+      status: 'Uploading',
+      detail:
+        'Saved on device. Upload continues in the background and resumes after reconnecting.',
+    });
     if (files.length) {
-      rows.set(captureId, {
-        ...rows.get(captureId)!,
-        reportId,
-        state: 'needs_confirmation',
-        originalTranscript: hasVoice ? 'Voice progress update.' : null,
-      });
+      ready = await service.sync('user-one', captureId);
+      expect(ready.state).toBe('needs_confirmation');
     }
-    const ready = rows.get(captureId)!;
     await service.confirm('user-one', captureId, {
       text: initialConfirmationText(ready),
       workDate: null,
       activityId: null,
     });
-    await expect(service.sync('user-one', captureId)).resolves.toMatchObject({
+    const submitted = await service.sync('user-one', captureId);
+    expect(submitted).toMatchObject({
       submissionState: 'submitted',
     });
+    expect(mergeMyReports([], [], [submitted], [])[0]).toMatchObject({
+      evidenceLabel,
+      status: 'Awaiting review',
+    });
+    expect(
+      mergeMyReports(
+        [],
+        [],
+        [submitted],
+        [
+          {
+            id: reportId,
+            project_id: input.projectId,
+            author_id: input.userId,
+            capture_id: captureId,
+            current_version: 1,
+            lifecycle: 'submitted',
+            received_at: '2026-09-24T00:00:09.000Z',
+            source_kind: hasVoice ? 'voice' : 'text',
+            claims: [
+              {
+                id: fileId,
+                report_id: reportId,
+                report_version: 1,
+                state: 'accepted',
+              },
+            ],
+            jobs: [],
+          },
+        ],
+      )[0],
+    ).toMatchObject({ evidenceLabel, status: 'Accepted' });
     expect(transport.submit).toHaveBeenCalledTimes(1);
+    expect(transport.reserve).toHaveBeenCalledTimes(1);
+    expect(transport.upload).toHaveBeenCalledTimes(files.length);
+    expect(transport.finalize).toHaveBeenCalledTimes(files.length ? 1 : 0);
+    const reserveOrder = jest.mocked(transport.reserve).mock
+      .invocationCallOrder[0]!;
+    const submitOrder = jest.mocked(transport.submit).mock
+      .invocationCallOrder[0]!;
+    expect(reserveOrder).toBeLessThan(submitOrder);
+    if (files.length) {
+      const uploadOrders = jest.mocked(transport.upload).mock
+        .invocationCallOrder;
+      const finalizeOrder = jest.mocked(transport.finalize).mock
+        .invocationCallOrder[0]!;
+      const inspectOrder = jest.mocked(transport.inspect).mock
+        .invocationCallOrder[0]!;
+      expect(Math.min(...uploadOrders)).toBeGreaterThan(reserveOrder);
+      expect(finalizeOrder).toBeGreaterThan(Math.max(...uploadOrders));
+      expect(inspectOrder).toBeGreaterThan(finalizeOrder);
+      expect(submitOrder).toBeGreaterThan(inspectOrder);
+    }
   },
 );
 

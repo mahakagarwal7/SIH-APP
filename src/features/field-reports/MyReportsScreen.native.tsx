@@ -221,12 +221,7 @@ function AccountReports({ userId }: { userId: string }) {
               </Text>
             )}
             <Text style={styles.detail}>
-              {item.kind === 'voice'
-                ? 'Voice report'
-                : item.kind === 'remote'
-                  ? 'Production report'
-                  : 'Text/photo report'}{' '}
-              ·{' '}
+              {item.evidenceLabel} ·{' '}
               {item.mediaCount === null
                 ? 'Attachment count unavailable'
                 : `${item.mediaCount} ${item.mediaCount === 1 ? 'file' : 'files'}`}

@@ -9,6 +9,20 @@ export type ReportEvidenceState = {
   canSubmit: boolean;
 };
 
+export function reportEvidenceLabel(
+  evidence: Pick<ReportEvidenceState, 'hasVoice' | 'hasText' | 'hasPhoto'>,
+) {
+  if (evidence.hasVoice && evidence.hasText && evidence.hasPhoto)
+    return 'Voice + text + photo';
+  if (evidence.hasVoice && evidence.hasText) return 'Voice + text';
+  if (evidence.hasVoice && evidence.hasPhoto) return 'Voice + photo';
+  if (evidence.hasText && evidence.hasPhoto) return 'Text + photo';
+  if (evidence.hasVoice) return 'Voice';
+  if (evidence.hasText) return 'Text';
+  if (evidence.hasPhoto) return 'Photo';
+  return 'No evidence recorded';
+}
+
 export function getReportEvidenceState(
   input: Pick<OutboxRecord, 'text' | 'manifest' | 'originalTranscript'> &
     Partial<Pick<OutboxRecord, 'kind'>>,
@@ -41,12 +55,18 @@ export function initialConfirmationText(
   if (transcript) return transcript;
 
   const photos = input.manifest.files.filter((file) => file.kind === 'photo');
+  if (
+    photos.length === 0 &&
+    input.manifest.files.some((file) => file.kind === 'audio')
+  )
+    return 'Voice transcription pending.';
   const captions = photos
     .map((photo) => photo.caption.trim())
     .filter(Boolean)
     .join('; ');
   if (captions) return `Photo evidence: ${captions}`;
-  return photos.length === 1
-    ? 'Photo evidence submitted.'
-    : `${photos.length} photos submitted as evidence.`;
+  if (photos.length === 1) return 'Photo evidence submitted.';
+  return photos.length > 1
+    ? `${photos.length} photos submitted as evidence.`
+    : '';
 }
