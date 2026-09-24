@@ -41,7 +41,9 @@ export function useProjectSelection() {
       return loadActiveProjects(client(), userId, signal);
     },
   });
-  const ready = auth.offline ? remembered.isSuccess : projects.isSuccess;
+  const ready = auth.offline
+    ? remembered.isSuccess
+    : projects.isSuccess && (remembered.isSuccess || remembered.isError);
   const data = ready
     ? resolveProjectSelection(projects.data, remembered.data, auth.offline)
     : undefined;

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -88,6 +89,9 @@ function Consumer() {
   return (
     <View>
       <Text>{selection.data?.project.name ?? 'No selection'}</Text>
+      <Text>
+        {selection.projects.length > 0 ? 'Projects loaded' : 'Loading projects'}
+      </Text>
       <Text>{selection.error?.message ?? 'No selection error'}</Text>
       <Pressable
         accessibilityRole="button"
@@ -205,6 +209,35 @@ it('uses current online memberships when reading the saved choice fails', async 
   await waitFor(() =>
     expect(rememberProjectContext).toHaveBeenCalledWith(userId, one),
   );
+  client.clear();
+});
+
+it('waits for the saved selection before exposing the first live project', async () => {
+  let resolveRemembered!: (context: ProjectContext | null) => void;
+  jest.mocked(readRememberedProjectContext).mockReturnValue(
+    new Promise((resolve) => {
+      resolveRemembered = resolve;
+    }),
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+  });
+  await render(<Consumer />, {
+    wrapper: ({ children }) => <Provider client={client}>{children}</Provider>,
+  });
+
+  await waitFor(() =>
+    expect(client.getQueryState(['active-projects', userId])?.status).toBe(
+      'success',
+    ),
+  );
+  expect(await screen.findByText('Projects loaded')).toBeVisible();
+  expect(screen.getByText('No selection')).toBeVisible();
+  expect(screen.queryByText(one.project.name)).toBeNull();
+
+  await act(async () => resolveRemembered(two));
+
+  expect(await screen.findByText(two.project.name)).toBeVisible();
   client.clear();
 });
 

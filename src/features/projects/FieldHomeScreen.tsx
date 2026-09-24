@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { NavLink, ShellPage, shellStyles } from '@/features/navigation/shellUi';
@@ -18,12 +18,18 @@ function shortDate(value: string) {
 
 export function FieldHomeScreen() {
   const [focused, setFocused] = useState(false);
+  const [today, setToday] = useState(siteToday);
   const { project, work, refresh, offline } = useMyWork();
   const recent = useProjectRecentReports(project.data?.project.id, focused);
   const refreshReports = recent.refetch;
+  useEffect(() => {
+    const timer = setInterval(() => setToday(siteToday()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
   useFocusEffect(
     useCallback(() => {
       setFocused(true);
+      setToday(siteToday());
       void refresh();
       void refreshReports();
       return () => setFocused(false);
@@ -36,7 +42,7 @@ export function FieldHomeScreen() {
           work.data.snapshot.activities,
           work.data.assignments,
           context.member.user_id,
-          siteToday(),
+          today,
         )
       : null;
   const current = groups?.find((group) => group.title === 'Today')?.items ?? [];

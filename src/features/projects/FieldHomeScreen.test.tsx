@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react-native';
+import { act, render, screen } from '@testing-library/react-native';
 
 import { FieldHomeScreen } from './FieldHomeScreen';
 import { useMyWork } from './useMyWork';
@@ -162,4 +162,31 @@ it('shows empty and offline states without inventing assignment counts', async (
   expect(screen.getByText('No assignment today.')).toBeVisible();
   expect(screen.getByText('No reports for this project yet.')).toBeVisible();
   expect(screen.getByText(/Offline · Showing project context/)).toBeVisible();
+});
+
+it('recomputes current assignments when the project day changes at midnight', async () => {
+  jest.useFakeTimers().setSystemTime(new Date('2026-09-23T18:29:00Z'));
+  jest.mocked(useMyWork).mockReturnValue({
+    project: { data: context, error: null, isPending: false },
+    work: {
+      data: {
+        ...work,
+        assignments: [{ ...work.assignments[0], effective_from: '2026-09-24' }],
+      },
+      error: null,
+    },
+    refresh: jest.fn(),
+    offline: false,
+  } as unknown as ReturnType<typeof useMyWork>);
+  const view = await render(<FieldHomeScreen />);
+  expect(screen.getByText('No assignment today.')).toBeVisible();
+
+  await act(async () => {
+    await jest.advanceTimersByTimeAsync(60_000);
+  });
+
+  expect(screen.getByText('Line erection')).toBeVisible();
+  expect(screen.queryByText('No assignment today.')).toBeNull();
+  await view.unmount();
+  jest.useRealTimers();
 });
