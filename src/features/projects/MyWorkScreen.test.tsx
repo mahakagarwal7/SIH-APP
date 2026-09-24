@@ -39,7 +39,10 @@ jest.mock('./myWorkService', () => ({
   loadActiveProjects: jest.fn(),
   loadMyWork: jest.fn(),
 }));
-jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
+jest.mock('expo-router', () => ({
+  useFocusEffect: jest.fn(),
+  Link: ({ children }: { children: React.ReactNode }) => children,
+}));
 
 const member = {
   project_id: 'project',
@@ -154,6 +157,7 @@ it('shows accepted quantity separately from completion and missing actual dates'
   expect(screen.getByText('Assigned')).toBeVisible();
   expect(screen.queryByText('Complete')).toBeNull();
   expect(screen.getByText('Site project')).toBeVisible();
+  expect(screen.getByText('Open task hierarchy')).toBeVisible();
 }, 20_000);
 
 it.each([

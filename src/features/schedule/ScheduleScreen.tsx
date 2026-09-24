@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 
-import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
+import { NavLink, ShellPage, shellStyles } from '@/features/navigation/shellUi';
 
 import {
   filterScheduleActivities,
@@ -20,6 +20,7 @@ import {
 import { useManagerSchedule } from './useManagerSchedule';
 
 import type { ScheduleActivity } from './scheduleContracts';
+import type { Href } from 'expo-router';
 
 function dateLabel(value: string | null) {
   if (!value) return 'Not recorded';
@@ -236,6 +237,10 @@ function ActivityCard({
           </Text>
         </View>
       )}
+      <NavLink
+        href={`/task-hierarchy/${activity.id}` as Href}
+        label="Open task hierarchy"
+      />
     </View>
   );
 }

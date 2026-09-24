@@ -15,6 +15,7 @@ import type { ProjectContext } from '@/features/projects/myWorkService';
 jest.mock('./useManagerSchedule', () => ({ useManagerSchedule: jest.fn() }));
 jest.mock('expo-router', () => ({
   useFocusEffect: jest.fn((callback: () => void) => callback()),
+  Link: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 const userId = '10000000-0000-4000-8000-000000000001';
@@ -134,6 +135,7 @@ it('shows the active revision, planned dates and accepted actuals', async () => 
   expect(screen.getByText('PIP-1201 · Piping')).toBeVisible();
   expect(screen.getByText('In progress')).toBeVisible();
   expect(screen.getByText(/2 of 4 spools accepted/)).toBeVisible();
+  expect(screen.getAllByText('Open task hierarchy')).toHaveLength(2);
   expect(
     screen.getAllByLabelText(/Planned 20 Sept 2026 to 25 Sept 2026/),
   ).toHaveLength(2);

@@ -86,6 +86,10 @@ function WorkCard({ item }: { item: WorkItem }) {
         </Text>
       )}
       <Text style={styles.detail}>Assignment v{assignment.version}</Text>
+      <NavLink
+        href={`/task-hierarchy/${a.id}` as Href}
+        label="Open task hierarchy"
+      />
     </View>
   );
 }
