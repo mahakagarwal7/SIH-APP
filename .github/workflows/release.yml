@@ -1,0 +1,142 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and publish
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preview-apk:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Require the public Supabase configuration
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+        shell: pwsh
+        run: |
+          if (-not $env:SUPABASE_URL -or -not $env:SUPABASE_KEY) {
+            throw 'Set the NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY repository secrets. The build refuses to produce an acceptance APK without the owner-supplied public configuration.'
+          }
+          # .env.local is git-ignored; the build wrapper reads it and never prints either value.
+          Set-Content -LiteralPath .env.local -Encoding utf8 -Value @(
+            "NEXT_PUBLIC_SUPABASE_URL=$env:SUPABASE_URL"
+            "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$env:SUPABASE_KEY"
+          )
+
+      - name: Select a JDK the Android Gradle plugin supports
+        shell: pwsh
+        run: |
+          # The runner defaults JAVA_HOME to Java 8, which AGP rejects.
+          "JAVA_HOME=$env:JAVA_HOME_17_X64" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Keep only build-tools that still ship aapt
+        shell: pwsh
+        run: |
+          # build-android-preview.ps1 takes the highest-versioned build-tools directory and
+          # requires aapt.exe beside apksigner. Newer releases ship only aapt2, so remove the
+          # ones that would be selected and then fail. This shapes the runner, and leaves the
+          # script's ABI, bundle, package and signature verification untouched.
+          $root = Join-Path $env:ANDROID_SDK_ROOT 'build-tools'
+          if (-not (Test-Path -LiteralPath $root)) { throw "No build-tools directory at $root." }
+          foreach ($dir in Get-ChildItem -LiteralPath $root -Directory) {
+            if (-not (Test-Path -LiteralPath (Join-Path $dir.FullName 'aapt.exe') -PathType Leaf)) {
+              Write-Host "removing build-tools $($dir.Name): no aapt.exe"
+              Remove-Item -LiteralPath $dir.FullName -Recurse -Force
+            }
+          }
+          $kept = Get-ChildItem -LiteralPath $root -Directory | Sort-Object { [version]$_.Name } -Descending
+          if (-not $kept) { throw 'No installed build-tools version ships aapt.exe.' }
+          Write-Host "highest build-tools with aapt: $($kept[0].Name)"
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test -- --runInBand
+
+      - name: Build the ARM64 preview APK
+        run: npm run android:preview
+
+      - name: Record the artifact and its checksum
+        shell: pwsh
+        run: |
+          # Only the configured filename is publishable. The -AllowMissingPublicConfig build
+          # writes a different name and must never be released as acceptance evidence.
+          $apk = 'dist/nirmaan-field-preview-arm64.apk'
+          if (-not (Test-Path -LiteralPath $apk -PathType Leaf)) {
+            throw "Expected $apk. A setup-unavailable build is not publishable."
+          }
+          $hash = (Get-FileHash -LiteralPath $apk -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item -LiteralPath $apk).Length
+          Set-Content -LiteralPath dist/SHA256SUMS.txt -Encoding ascii `
+            -Value "$hash  nirmaan-field-preview-arm64.apk"
+          "APK_SHA256=$hash" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "APK_BYTES=$size" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nirmaan-field-preview-arm64
+          path: |
+            dist/nirmaan-field-preview-arm64.apk
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          $lines = @(
+            "ARM64 Android preview build of ``$env:TAG`` from commit ``$env:GITHUB_SHA``."
+            ''
+            '| | |'
+            '|---|---|'
+            '| Package | `com.mahakagarwal.nirmaan` |'
+            '| ABI | `arm64-v8a` |'
+            "| Size | $env:APK_BYTES bytes |"
+            "| SHA-256 | ``$env:APK_SHA256`` |"
+            ''
+            '## This build is signed with an Android debug certificate'
+            ''
+            'It is **not** a Play Store artifact and cannot be uploaded to Google Play. Install it by sideloading onto an ARM64 Android device. Release and store signing remain a separate delivery decision, as recorded in `docs/FIELD_PREVIEW.md`.'
+            ''
+            "The APK embeds the project's public Supabase URL and publishable key, so anyone who installs it can reach that backend under its RLS rules. Share it accordingly."
+            ''
+            '## Verify before installing'
+            ''
+            '    Get-FileHash .\nirmaan-field-preview-arm64.apk -Algorithm SHA256'
+            ''
+            'The result must match the SHA-256 above, which is also recorded in `SHA256SUMS.txt`.'
+            ''
+            '## Physical-device acceptance'
+            ''
+            'Publishing this artifact does not record device acceptance. The checks in `docs/FIELD_PREVIEW.md` still require an owner-designated Field account and a physical ARM64 phone.'
+          )
+          Set-Content -LiteralPath release-notes.md -Encoding utf8 -Value $lines
+          gh release create "$env:TAG" dist/nirmaan-field-preview-arm64.apk dist/SHA256SUMS.txt --title "Nirmaan field preview $env:TAG" --notes-file release-notes.md --verify-tag
