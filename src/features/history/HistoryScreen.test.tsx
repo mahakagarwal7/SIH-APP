@@ -5,12 +5,16 @@ import {
   screen,
 } from '@testing-library/react-native';
 
+import {
+  WorkReadError,
+  type ProjectContext,
+} from '@/features/projects/myWorkService';
+
 import { HistoryScreen } from './HistoryScreen';
 import { HistoryReadError } from './historyService';
 import { useExecutionHistory } from './useExecutionHistory';
 
 import type { ExecutionHistoryEntry } from './historyContracts';
-import type { ProjectContext } from '@/features/projects/myWorkService';
 
 jest.mock('./useExecutionHistory', () => ({
   useExecutionHistory: jest.fn(),
@@ -60,7 +64,18 @@ const entry: ExecutionHistoryEntry = {
   sourceId: 'VOICE-41',
   source: 'Line erection finished in Unit 2.',
   sourceUrl: '/planner/review',
-  provenance: {},
+  provenance: {
+    sourceRecordId: 'VOICE-41',
+    sheet: 'Voice_Reports',
+    row: 41,
+    sourceMessageAt: '2026-09-23T09:15:00+05:30',
+    reportingWorkDate: '2026-09-23',
+    reportedByLabel: null,
+    channel: 'voice',
+    raw: {},
+    timezone: 'Asia/Kolkata',
+    datePolicy: 'confirmed work date',
+  },
   media: [],
   matchScore: 0.94,
   matchReasons: { location: 1 },
@@ -85,6 +100,7 @@ const activity = {
   acceptedQuantity: 4,
   actualStart: '2026-09-20',
   actualFinish: '2026-09-23',
+  calendar: 'Standard shift',
   reportedProgress: true,
   acceptedPercent: null,
   percentBasis: null,
@@ -107,6 +123,7 @@ function state(
   overrides: {
     data?: unknown;
     error?: Error | null;
+    projectError?: Error | null;
     pending?: boolean;
     offline?: boolean;
     authorized?: boolean;
@@ -117,7 +134,7 @@ function state(
     project: {
       data: overrides.context === undefined ? context : overrides.context,
       projects: [context],
-      error: null,
+      error: overrides.projectError ?? null,
       isPending: overrides.pending ?? false,
       isFetching: false,
       offline: overrides.offline ?? false,
@@ -134,6 +151,7 @@ function state(
     },
     refresh: jest.fn().mockResolvedValue(undefined),
     authorized: overrides.authorized ?? true,
+    accessDenied: false,
   } as unknown as ReturnType<typeof useExecutionHistory>;
 }
 
@@ -146,6 +164,7 @@ it('shows completed work and accepted evidence with inspectable audit facts', as
   await render(<HistoryScreen />);
   expect(screen.getByText('1 activity')).toBeVisible();
   expect(screen.getByText('1 event')).toBeVisible();
+  expect(screen.getByText('Calendar: Standard shift')).toBeVisible();
   expect(screen.getByText('Current contribution')).toBeVisible();
   expect(screen.getByText('“Line erection finished”')).toBeVisible();
   expect(screen.queryByText(`Event ${entry.eventId}`)).toBeNull();
@@ -159,6 +178,145 @@ it('shows completed work and accepted evidence with inspectable audit facts', as
   expect(screen.getByText('Audit 41')).toBeVisible();
   expect(screen.getByText(entry.source)).toBeVisible();
   expect(screen.getByText(/evidenceQuote/)).toBeVisible();
+});
+
+it('shows provenance and voice/photo evidence with a mobile source fallback', async () => {
+  jest.mocked(useExecutionHistory).mockReturnValue(
+    state({
+      data: {
+        ...data,
+        entries: [
+          {
+            ...entry,
+            sourceId: null,
+            provenance: null,
+            media: [
+              {
+                attachmentId: '10000000-0000-4000-8000-000000000009',
+                kind: 'audio',
+                sha256: 'a'.repeat(64),
+                caption: '',
+                originalTranscript: 'The south line is complete.',
+                provider: 'transcriber',
+                model: 'field-v2',
+                language: 'en',
+              },
+              {
+                attachmentId: '10000000-0000-4000-8000-000000000010',
+                kind: 'photo',
+                sha256: 'b'.repeat(64),
+                caption: '',
+                originalTranscript: null,
+                provider: null,
+                model: null,
+                language: 'en',
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  await render(<HistoryScreen />);
+  expect(screen.getByText(/Mobile capture/)).toBeVisible();
+  expect(screen.getByText('The south line is complete.')).toBeVisible();
+  expect(screen.getByText('Photo caption: No caption supplied')).toBeVisible();
+});
+
+it('shows imported-source provenance and explicit missing-value labels', async () => {
+  jest.mocked(useExecutionHistory).mockReturnValue(
+    state({
+      data: {
+        ...data,
+        entries: [
+          {
+            ...entry,
+            reviewer: '',
+            provenance: {
+              ...entry.provenance!,
+              reportedByLabel: null,
+              sourceMessageAt: null,
+              reportingWorkDate: null,
+            },
+          },
+        ],
+      },
+    }),
+  );
+  await render(<HistoryScreen />);
+  expect(screen.getByText(/Voice_Reports/)).toBeVisible();
+  expect(screen.getByText(/row 41/)).toBeVisible();
+  expect(screen.getByText(/Named in source: Not supplied/)).toBeVisible();
+  expect(screen.getByText(/Message time: Not supplied/)).toBeVisible();
+  expect(screen.getByText(/Work date: Not supplied/)).toBeVisible();
+  expect(screen.getByText(/Accepted by Name not recorded/)).toBeVisible();
+});
+
+it('labels reports without source identifiers or media as text reports', async () => {
+  jest.mocked(useExecutionHistory).mockReturnValue(
+    state({
+      data: {
+        ...data,
+        entries: [
+          {
+            ...entry,
+            sourceId: null,
+            provenance: null,
+            media: null,
+          },
+        ],
+      },
+    }),
+  );
+  await render(<HistoryScreen />);
+  expect(screen.getByText(/Text report/)).toBeVisible();
+});
+
+it('shows cached history as stale after a temporary refresh failure', async () => {
+  jest
+    .mocked(useExecutionHistory)
+    .mockReturnValue(state({ error: new HistoryReadError('unavailable') }));
+  await render(<HistoryScreen />);
+  expect(screen.getByText(/Showing previously loaded history/)).toBeVisible();
+  expect(screen.getByText('1 event')).toBeVisible();
+  expect(screen.getByText('“Line erection finished”')).toBeVisible();
+});
+
+it('hides cached history when access is denied', async () => {
+  jest
+    .mocked(useExecutionHistory)
+    .mockReturnValue(state({ error: new HistoryReadError('access') }));
+  await render(<HistoryScreen />);
+  expect(
+    screen.getByText('Manager access is no longer available for this project.'),
+  ).toBeVisible();
+  expect(screen.queryByText('“Line erection finished”')).toBeNull();
+});
+
+it('does not restore cached history after denial when project refresh also fails', async () => {
+  jest.mocked(useExecutionHistory).mockReturnValue(
+    state({
+      error: new HistoryReadError('access'),
+      projectError: new WorkReadError('unavailable'),
+    }),
+  );
+  await render(<HistoryScreen />);
+  expect(
+    screen.getByText(/Manager access is no longer available/),
+  ).toBeVisible();
+  expect(screen.queryByText('“Line erection finished”')).toBeNull();
+});
+
+it('does not restore cached history after denial when the next history read fails', async () => {
+  jest.mocked(useExecutionHistory).mockReturnValue({
+    ...state({ error: new HistoryReadError('unavailable') }),
+    accessDenied: true,
+  });
+  await render(<HistoryScreen />);
+  expect(
+    screen.getByText(/Manager access is no longer available/),
+  ).toBeVisible();
+  expect(screen.queryByText('“Line erection finished”')).toBeNull();
 });
 
 it('filters by wording, evidence state and completed activity', async () => {
@@ -204,6 +362,30 @@ it('paginates accepted evidence twenty records at a time', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Next records' }));
   expect(screen.getByText('21–21 of 21')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Next records' })).toBeDisabled();
+});
+
+it('paginates completed activities twenty records at a time', async () => {
+  const activities = Array.from({ length: 21 }, (_, index) => ({
+    ...activity,
+    id: `30000000-0000-4000-8000-${String(index + 100).padStart(12, '0')}`,
+    externalId: `PIP-${1201 + index}`,
+  }));
+  jest.mocked(useExecutionHistory).mockReturnValue(
+    state({
+      data: { ...data, snapshot: { ...data.snapshot, activities } },
+    }),
+  );
+  await render(<HistoryScreen />);
+  expect(screen.getByText('1–20 of 21')).toBeVisible();
+  expect(screen.queryByText('PIP-1221 · Piping')).toBeNull();
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Next activities' }),
+  );
+  expect(screen.getByText('21–21 of 21')).toBeVisible();
+  expect(screen.getByText('PIP-1221 · Piping')).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Next activities' }),
+  ).toBeDisabled();
 });
 
 it('renders access, loading, empty, backend and offline states explicitly', async () => {

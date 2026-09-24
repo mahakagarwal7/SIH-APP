@@ -58,7 +58,18 @@ const entry: ExecutionHistoryEntry = {
   sourceId: 'VOICE-41',
   source: 'Line erection finished in Unit 2.',
   sourceUrl: `/planner/review?claim=${claimId}`,
-  provenance: { sourceRecordId: 'VOICE-41' },
+  provenance: {
+    sourceRecordId: 'VOICE-41',
+    sheet: 'Voice_Reports',
+    row: 41,
+    sourceMessageAt: null,
+    reportingWorkDate: '2026-09-23',
+    reportedByLabel: 'Site reporter',
+    channel: 'voice',
+    raw: {},
+    timezone: 'Asia/Kolkata',
+    datePolicy: 'confirmed work date',
+  },
   media: [],
   matchScore: 0.94,
   matchReasons: { location: 1 },
@@ -75,6 +86,7 @@ const activity = {
   revisionId,
   externalId: 'PIP-1201',
   name: 'Line erection',
+  calendar: 'Mon–Sat; Sunday off; no holidays',
   discipline: 'Piping',
   location: 'Unit 2',
   assignedReporterId: null,
@@ -181,6 +193,13 @@ it.each(['planner', 'manager'] as const)(
   },
 );
 
+it('accepts an empty production reviewer display name for UI fallback', async () => {
+  const { client } = harness({ history: [{ ...entry, reviewer: '' }] });
+  await expect(
+    loadExecutionHistory(client, context, signal()),
+  ).resolves.toMatchObject({ entries: [{ reviewer: '' }] });
+});
+
 it('rejects a field role before making a backend request', async () => {
   const { client, calls } = harness();
   await expect(
@@ -253,6 +272,60 @@ it('maps access and prototype-limit errors without hiding their meaning', async 
   await expect(
     loadExecutionHistory(limit.client, context, signal()),
   ).rejects.toMatchObject({ kind: 'limit' });
+});
+
+it.each([
+  'General',
+  'HSE',
+  'Quality',
+  'Structural',
+  'Mechanical',
+  'Instrumentation',
+])('loads valid production schedule discipline %s', async (discipline) => {
+  const { client } = harness({
+    snapshot: {
+      ...snapshot,
+      activities: [{ ...activity, discipline }],
+    },
+  });
+  await expect(
+    loadExecutionHistory(client, context, signal()),
+  ).resolves.toMatchObject({ snapshot: { activities: [{ discipline }] } });
+});
+
+it('preserves PostgreSQL microseconds when validating history order', async () => {
+  const later: ExecutionHistoryEntry = {
+    ...entry,
+    eventId: '10000000-0000-4000-8000-000000000011',
+    decisionId: '10000000-0000-4000-8000-000000000012',
+    acceptedAt: '2026-09-23T10:00:00.123457+00:00',
+  };
+  const earlier: ExecutionHistoryEntry = {
+    ...entry,
+    eventId: 'f0000000-0000-4000-8000-000000000001',
+    decisionId: 'f0000000-0000-4000-8000-000000000002',
+    acceptedAt: '2026-09-23T10:00:00.123456+00:00',
+  };
+  const { client } = harness({ history: [earlier, later] });
+  await expect(
+    loadExecutionHistory(client, context, signal()),
+  ).resolves.toMatchObject({
+    entries: [
+      { acceptedAt: earlier.acceptedAt },
+      { acceptedAt: later.acceptedAt },
+    ],
+  });
+});
+
+it.each([
+  { media: 'not an array' },
+  { media: [{ attachmentId: 'not-a-uuid' }] },
+  { provenance: { sourceRecordId: 'VOICE-41' } },
+])('rejects malformed capture evidence metadata: %j', async (metadata) => {
+  const { client } = harness({ history: [{ ...entry, ...metadata }] });
+  await expect(
+    loadExecutionHistory(client, context, signal()),
+  ).rejects.toMatchObject({ kind: 'changed' });
 });
 
 it('applies the web-supported evidence filters and newest-first paging', () => {
