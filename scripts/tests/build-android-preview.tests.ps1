@@ -32,6 +32,7 @@ foreach ($functionName in @(
   'Save-ProcessEnvironment'
   'Restore-ProcessEnvironment'
   'Get-PreviewArtifactName'
+  'Remove-StalePreviewArtifacts'
 )) {
   $functionAst = $ast.Find(
     {
@@ -137,6 +138,24 @@ try {
       'nirmaan-field-preview-arm64.apk'
   ) {
     throw 'A configured preview did not select the acceptance artifact filename.'
+  }
+
+  $artifactDirectory = Join-Path $temporaryDirectory 'dist'
+  New-Item -ItemType Directory -Path $artifactDirectory | Out-Null
+  foreach ($artifactName in @(
+    'nirmaan-field-preview-arm64.apk'
+    'nirmaan-field-preview-arm64-setup-unavailable.apk'
+  )) {
+    Set-Content -LiteralPath (Join-Path $artifactDirectory $artifactName) -Value 'stale'
+  }
+  Remove-StalePreviewArtifacts -OutputDirectory $artifactDirectory
+  foreach ($artifactName in @(
+    'nirmaan-field-preview-arm64.apk'
+    'nirmaan-field-preview-arm64-setup-unavailable.apk'
+  )) {
+    if (Test-Path -LiteralPath (Join-Path $artifactDirectory $artifactName)) {
+      throw "Stale preview artifact '$artifactName' was not removed."
+    }
   }
 
   $environmentSnapshot = Save-ProcessEnvironment -Names $buildEnvironmentNames
