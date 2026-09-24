@@ -1,4 +1,4 @@
-import { useFocusEffect } from 'expo-router';
+import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,6 +19,7 @@ import { useReviewQueue } from './useReviewQueue';
 
 import type { CandidateMatch } from './reviewContracts';
 import type { ReviewQueueItem } from './reviewQueueService';
+import type { Href } from 'expo-router';
 
 function dateLabel(value: string | null) {
   if (!value) return 'Not recorded';
@@ -339,6 +340,11 @@ function ReviewCard({
           )}
         </View>
       )}
+      <Link href={`/manager/review/${item.claim.id}` as Href} asChild>
+        <Pressable accessibilityRole="button" style={styles.decisionButton}>
+          <Text style={styles.decisionButtonText}>Open decision screen</Text>
+        </Pressable>
+      </Link>
     </View>
   );
 }
@@ -653,6 +659,20 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   open: { minHeight: 48, justifyContent: 'center', alignSelf: 'flex-start' },
+  decisionButton: {
+    minHeight: 48,
+    backgroundColor: '#17354c',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    marginTop: 8,
+  },
+  decisionButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '600',
+  },
   expanded: {
     borderTopWidth: 1,
     borderTopColor: '#d7e0e5',

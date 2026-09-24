@@ -20,6 +20,7 @@ jest.mock('./useReviewQueue', () => ({ useReviewQueue: jest.fn() }));
 jest.mock('@/lib/supabase', () => ({ getSupabase: jest.fn() }));
 jest.mock('expo-router', () => ({
   useFocusEffect: jest.fn((callback: () => void) => callback()),
+  Link: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 const userId = '10000000-0000-4000-8000-000000000001';
