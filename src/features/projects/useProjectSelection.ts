@@ -41,24 +41,28 @@ export function useProjectSelection() {
       return loadActiveProjects(client(), userId, signal);
     },
   });
-  const ready = auth.offline
-    ? remembered.isSuccess
-    : remembered.isSuccess && projects.isSuccess;
+  const ready = auth.offline ? remembered.isSuccess : projects.isSuccess;
   const data = ready
     ? resolveProjectSelection(projects.data, remembered.data, auth.offline)
     : undefined;
 
   useEffect(() => {
-    if (!userId || auth.offline || !projects.isSuccess || !remembered.isSuccess)
+    if (
+      !userId ||
+      auth.offline ||
+      !projects.isSuccess ||
+      (!remembered.isSuccess && !remembered.isError)
+    )
       return;
     if (data) {
-      if (sameProjectContext(data, remembered.data)) return;
+      if (remembered.isSuccess && sameProjectContext(data, remembered.data))
+        return;
       void rememberProjectContext(userId, data)
         .then(() =>
           queryClient.setQueryData(['selected-project', userId], data),
         )
         .catch(() => {});
-    } else if (remembered.data) {
+    } else if (remembered.isSuccess && remembered.data) {
       void forgetRememberedProjectContext(userId)
         .then(() =>
           queryClient.setQueryData(['selected-project', userId], null),
@@ -71,6 +75,7 @@ export function useProjectSelection() {
     projects.isSuccess,
     queryClient,
     remembered.data,
+    remembered.isError,
     remembered.isSuccess,
     userId,
   ]);
@@ -100,7 +105,7 @@ export function useProjectSelection() {
   return {
     data,
     projects: projects.data ?? (auth.offline && data ? [data] : []),
-    error: projects.error ?? remembered.error,
+    error: auth.offline ? remembered.error : projects.error,
     isPending: !ready,
     isFetching: projects.isFetching || remembered.isFetching,
     offline: auth.offline,

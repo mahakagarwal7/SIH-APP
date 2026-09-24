@@ -188,6 +188,46 @@ it('restores same-account context offline without querying Supabase', async () =
   expect(loadActiveProjects).not.toHaveBeenCalled();
 });
 
+it('uses current online memberships when reading the saved choice fails', async () => {
+  jest
+    .mocked(readRememberedProjectContext)
+    .mockRejectedValue(new Error('Local project cache unavailable'));
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+
+  await render(<Consumer />, {
+    wrapper: ({ children }) => <Provider client={client}>{children}</Provider>,
+  });
+
+  expect(await screen.findByText(one.project.name)).toBeVisible();
+  expect(screen.getByText('No selection error')).toBeVisible();
+  await waitFor(() =>
+    expect(rememberProjectContext).toHaveBeenCalledWith(userId, one),
+  );
+  client.clear();
+});
+
+it('drops an online access error when the same account goes offline', async () => {
+  const error = new WorkReadError('unavailable');
+  jest.mocked(readRememberedProjectContext).mockResolvedValue(two);
+  jest.mocked(loadActiveProjects).mockRejectedValue(error);
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  const view = await render(<Consumer />, {
+    wrapper: ({ children }) => <Provider client={client}>{children}</Provider>,
+  });
+
+  expect(await screen.findByText(error.message)).toBeVisible();
+  jest.mocked(useAuth).mockReturnValue(auth(true));
+  await view.rerender(<Consumer />);
+
+  expect(await screen.findByText(two.project.name)).toBeVisible();
+  expect(screen.getByText('No selection error')).toBeVisible();
+  client.clear();
+});
+
 it.each(['access', 'unavailable'] as const)(
   'does not use remembered access after an online %s failure',
   async (kind) => {

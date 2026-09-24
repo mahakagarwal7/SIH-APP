@@ -10,8 +10,13 @@ import {
 import { getVoiceDraftStore } from '@/features/field-reports/nativeDraftStore';
 import { getNativeOutbox } from '@/features/field-reports/nativeOutbox';
 import { getReportDraftStore } from '@/features/field-reports/nativeReportDraftStore';
+import { needsReportPolling } from '@/features/field-reports/reportStatus';
+import { useReportStatusPolling } from '@/features/field-reports/useReportStatusPolling';
 
-export function useProjectRecentReports(projectId: string | undefined) {
+export function useProjectRecentReports(
+  projectId: string | undefined,
+  focused = false,
+) {
   const auth = useAuth();
   const userId = auth.status === 'signedIn' ? auth.session?.user.id : undefined;
   const local = useQuery({
@@ -48,6 +53,11 @@ export function useProjectRecentReports(projectId: string | undefined) {
     .slice(0, 3);
   const localRefetch = local.refetch;
   const remoteRefetch = remote.refetch;
+  useReportStatusPolling({
+    enabled: !auth.offline && needsReportPolling(remote.data ?? []),
+    focused,
+    refetch: remoteRefetch,
+  });
   const refetch = useCallback(async () => {
     if (!userId || !projectId) return;
     await Promise.all([

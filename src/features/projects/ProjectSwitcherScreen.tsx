@@ -33,7 +33,8 @@ export function ProjectSwitcherScreen() {
     setChangeError('');
     try {
       await selection.select(projectId);
-      router.replace('/field');
+      if (router.canGoBack()) router.back();
+      else router.replace('/workspaces');
     } catch {
       setChangeError(
         'The project could not be selected. Refresh your access and try again.',

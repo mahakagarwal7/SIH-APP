@@ -12,7 +12,8 @@ jest.mock('./useProjectRecentReports.native', () => ({
   useProjectRecentReports: jest.fn(),
 }));
 jest.mock('expo-router', () => ({
-  useFocusEffect: (callback: () => void) => callback(),
+  useFocusEffect: (callback: () => void) =>
+    jest.requireActual('react').useEffect(callback, [callback]),
   Link: ({ children }: { children: React.ReactNode }) => children,
 }));
 

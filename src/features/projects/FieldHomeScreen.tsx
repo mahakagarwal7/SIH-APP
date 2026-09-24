@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { NavLink, ShellPage, shellStyles } from '@/features/navigation/shellUi';
@@ -17,13 +17,16 @@ function shortDate(value: string) {
 }
 
 export function FieldHomeScreen() {
+  const [focused, setFocused] = useState(false);
   const { project, work, refresh, offline } = useMyWork();
-  const recent = useProjectRecentReports(project.data?.project.id);
+  const recent = useProjectRecentReports(project.data?.project.id, focused);
   const refreshReports = recent.refetch;
   useFocusEffect(
     useCallback(() => {
+      setFocused(true);
       void refresh();
       void refreshReports();
+      return () => setFocused(false);
     }, [refresh, refreshReports]),
   );
   const context = project.data;

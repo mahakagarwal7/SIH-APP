@@ -7,8 +7,13 @@ import {
   loadRemoteReportsForProject,
   mergeMyReports,
 } from '@/features/field-reports/myReportsService';
+import { needsReportPolling } from '@/features/field-reports/reportStatus';
+import { useReportStatusPolling } from '@/features/field-reports/useReportStatusPolling';
 
-export function useProjectRecentReports(projectId: string | undefined) {
+export function useProjectRecentReports(
+  projectId: string | undefined,
+  focused = false,
+) {
   const auth = useAuth();
   const userId = auth.status === 'signedIn' ? auth.session?.user.id : undefined;
   const {
@@ -32,6 +37,11 @@ export function useProjectRecentReports(projectId: string | undefined) {
     () => (userId && projectId ? refetchRemote() : Promise.resolve(undefined)),
     [projectId, refetchRemote, userId],
   );
+  useReportStatusPolling({
+    enabled: !auth.offline && needsReportPolling(data ?? []),
+    focused,
+    refetch: refetchRemote,
+  });
   return {
     items: mergeMyReports([], [], [], data ?? []).slice(0, 3),
     error,
