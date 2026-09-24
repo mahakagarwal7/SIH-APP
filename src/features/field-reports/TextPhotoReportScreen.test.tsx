@@ -3,7 +3,14 @@ import {
   QueryClient,
   QueryClientProvider,
 } from '@tanstack/react-query';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react-native';
+import { Alert } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useCaptureProject } from '@/features/projects/useCaptureProject';
@@ -12,7 +19,7 @@ import { choosePhoto, recoverPendingPhoto } from './nativePhotoPicker';
 import { getReportDraftStore } from './nativeReportDraftStore';
 import { TextPhotoReportScreen } from './TextPhotoReportScreen.native';
 
-import type { ReportDraftStore } from './reportDraftStore';
+import type { LocalReportDraft, ReportDraftStore } from './reportDraftStore';
 import type { AuthViewState } from '@/features/auth/AuthProvider';
 
 jest.mock('@/features/auth/AuthProvider', () => ({ useAuth: jest.fn() }));
@@ -199,4 +206,149 @@ it('hides stale project access for a different signed-in account', async () => {
   expect(await screen.findByText('No active project access')).toBeVisible();
   expect(screen.queryByLabelText('Report details')).toBeNull();
   expect(list).toHaveBeenCalledWith('bob');
+});
+
+const savedDraft: LocalReportDraft = {
+  id: 'saved-draft',
+  userId: 'alice',
+  projectId: 'project',
+  projectName: 'Site project',
+  createdAt: '2026-09-24T00:00:00Z',
+  text: 'Keep this evidence until discard succeeds',
+  photos: [],
+  state: 'saved',
+  available: true,
+  photoUris: [],
+};
+
+it('keeps a failed discard visible and allows the user to retry it', async () => {
+  list.mockResolvedValue([savedDraft]);
+  discard.mockRejectedValueOnce(new Error('Disk busy'));
+  jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+    buttons?.find((button) => button.text === 'Discard')?.onPress?.();
+  });
+  await render(<App />);
+  await screen.findByText(savedDraft.text);
+  await fireEvent.press(screen.getByRole('button', { name: 'Discard draft' }));
+  await screen.findByText('Disk busy');
+  expect(screen.getByText(savedDraft.text)).toBeVisible();
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Discard draft' })).toBeEnabled(),
+  );
+  await fireEvent.press(screen.getByRole('button', { name: 'Discard draft' }));
+  await screen.findByText('No text or photo drafts saved yet.');
+  expect(discard).toHaveBeenCalledTimes(2);
+});
+
+it('prevents retry and repeated discard while incomplete-save deletion is pending', async () => {
+  save.mockRejectedValueOnce(new Error('Disk full'));
+  list.mockImplementation(async () =>
+    save.mock.calls[0]
+      ? [{ ...save.mock.calls[0][0], available: false, photoUris: [] }]
+      : [],
+  );
+  let finish!: () => void;
+  discard.mockImplementation(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await render(<App />);
+  await screen.findByText('No text or photo drafts saved yet.');
+  await fireEvent.changeText(
+    screen.getByLabelText('Report details'),
+    'Retry safely',
+  );
+  await fireEvent.press(screen.getByRole('button', { name: 'Save on device' }));
+  await screen.findByText('Disk full');
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Discard incomplete save' }),
+  );
+  await waitFor(() => expect(discard).toHaveBeenCalledTimes(1));
+  try {
+    expect(screen.getByRole('button', { name: 'Retry save' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Discard incomplete save' }),
+    ).toBeDisabled();
+    await fireEvent.press(screen.getByRole('button', { name: 'Retry save' }));
+    await fireEvent.press(
+      screen.getByRole('button', { name: 'Discard incomplete save' }),
+    );
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(discard).toHaveBeenCalledTimes(1);
+  } finally {
+    await act(async () => {
+      finish();
+    });
+  }
+  await screen.findByText('Unsaved attempt discarded.');
+  expect(screen.getByLabelText('Report details')).toBeEnabled();
+});
+
+it('waits for photo recovery before allowing save and persists the recovered bytes', async () => {
+  let recover!: (
+    photo: Awaited<ReturnType<typeof recoverPendingPhoto>>,
+  ) => void;
+  jest.mocked(recoverPendingPhoto).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        recover = resolve;
+      }),
+  );
+  await render(<App />);
+  await screen.findByText('No text or photo drafts saved yet.');
+  expect(screen.getByRole('button', { name: 'Save on device' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Choose photo' })).toBeDisabled();
+  await fireEvent.press(screen.getByRole('button', { name: 'Save on device' }));
+  expect(save).not.toHaveBeenCalled();
+  const bytes = new Uint8Array([1, 2, 3, 4]);
+  await act(async () => {
+    recover({
+      uri: 'cache/recovered.jpg',
+      width: 100,
+      height: 100,
+      byteLength: 4,
+      mimeType: 'image/jpeg',
+      bytes,
+    });
+  });
+  await screen.findByLabelText('Selected photo 1');
+  await fireEvent.press(screen.getByRole('button', { name: 'Save on device' }));
+  await screen.findByText('Saved on device. Not sent for review.');
+  expect(save.mock.calls[0]?.[0].photos).toHaveLength(1);
+  expect(save.mock.calls[0]?.[1][0].bytes).toEqual(bytes);
+});
+
+it('releases the form after photo recovery fails', async () => {
+  jest
+    .mocked(recoverPendingPhoto)
+    .mockRejectedValue(new Error('Could not recover the selected photo'));
+  await render(<App />);
+  await screen.findByText('Could not recover the selected photo');
+  expect(screen.getByLabelText('Report details')).toBeEnabled();
+  await fireEvent.changeText(
+    screen.getByLabelText('Report details'),
+    'A text-only report',
+  );
+  await fireEvent.press(screen.getByRole('button', { name: 'Save on device' }));
+  await screen.findByText('Saved on device. Not sent for review.');
+});
+
+it('shows discard failure even when project access is unavailable', async () => {
+  jest.mocked(useCaptureProject).mockReturnValue({
+    data: null,
+    isPending: false,
+    isFetching: false,
+    error: null,
+  } as ReturnType<typeof useCaptureProject>);
+  list.mockResolvedValue([savedDraft]);
+  discard.mockRejectedValue(new Error('Disk busy'));
+  jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => {
+    buttons?.find((button) => button.text === 'Discard')?.onPress?.();
+  });
+  await render(<App />);
+  await screen.findByText(savedDraft.text);
+  await fireEvent.press(screen.getByRole('button', { name: 'Discard draft' }));
+  expect(await screen.findByText('Disk busy')).toBeVisible();
 });

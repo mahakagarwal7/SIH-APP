@@ -41,7 +41,7 @@ Use a single auth provider above Expo Router so changing screens cannot create c
 
 Verify typecheck, lint, formatting, Jest, Android/iOS/web exports and browser navigation/back behavior. Check phone-width and large-text layouts against the PDF. Record native/device limitations and the still-missing production publishable key separately.
 
-The feature branch starts from auth PR #2 and will remain a dependent draft PR while that base is unmerged. Do not merge either PR automatically.
+The feature branch started from auth PR #2. After PR #1 and PR #2 merged, the navigation branch incorporated current main and its review fixes, and PR #3 now targets main. PR merging remains with the owner.
 
 ## Decision record
 
