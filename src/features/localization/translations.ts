@@ -927,6 +927,47 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   'Optional photo caption': 'वैकल्पिक फ़ोटो विवरण',
   'OPTIONAL SUPPORTING EVIDENCE': 'वैकल्पिक सहायक साक्ष्य',
   'of 3 photos selected': 'में से 3 फ़ोटो चुनी गईं',
+  'This recording could not be played. Try again.':
+    'यह रिकॉर्डिंग नहीं चलाई जा सकी। फिर से प्रयास करें।',
+  'Sending for review…': 'समीक्षा के लिए भेजा जा रहा है…',
+  'Send queued. The verified transcript will be attached before submission.':
+    'भेजने का अनुरोध कतार में है। जमा करने से पहले सत्यापित प्रतिलेख जोड़ा जाएगा।',
+  'Send failed.': 'भेजना विफल रहा।',
+  'Cancellation failed.': 'रद्द करना विफल रहा।',
+  'Preparing secure upload…': 'सुरक्षित अपलोड तैयार किया जा रहा है…',
+  'REVIEW VOICE REPORT': 'वॉइस रिपोर्ट की समीक्षा करें',
+  'Recording saved on this device': 'रिकॉर्डिंग इस डिवाइस पर सहेजी गई',
+  'Play recording': 'रिकॉर्डिंग चलाएँ',
+  Transcript: 'प्रतिलेख',
+  'Voice transcript': 'वॉइस प्रतिलेख',
+  'Transcribing…': 'प्रतिलेखन हो रहा है…',
+  'Offline · Upload resumes after reconnecting.':
+    'ऑफ़लाइन · दोबारा कनेक्ट होने पर अपलोड जारी रहेगा।',
+  'Send requested · Waiting for verified media.':
+    'भेजने का अनुरोध किया गया · सत्यापित मीडिया की प्रतीक्षा है।',
+  'Sent for review.': 'समीक्षा के लिए भेजा गया।',
+  'Canceling…': 'रद्द किया जा रहा है…',
+  Cancel: 'रद्द करें',
+  'Queuing…': 'कतार में जोड़ा जा रहा है…',
+  Send: 'भेजें',
+  'Cancellation queued. Server cleanup will retry after reconnecting.':
+    'रद्द करने का अनुरोध कतार में है। दोबारा कनेक्ट होने पर सर्वर की सफ़ाई फिर होगी।',
+  'Voice report canceled.': 'वॉइस रिपोर्ट रद्द कर दी गई।',
+  'Cancellation is queued. Local evidence stays private until server cleanup succeeds.':
+    'रद्द करने का अनुरोध कतार में है। सर्वर की सफ़ाई पूरी होने तक स्थानीय साक्ष्य निजी रहेगा।',
+  'This report is already being canceled.':
+    'यह रिपोर्ट पहले से रद्द की जा रही है।',
+  'A submitted report cannot be canceled from this review.':
+    'जमा की गई रिपोर्ट को इस समीक्षा से रद्द नहीं किया जा सकता।',
+  'Immediate Send is available for voice reports.':
+    'तुरंत भेजने की सुविधा वॉइस रिपोर्ट के लिए उपलब्ध है।',
+  'The saved recording could not enter the outbox.':
+    'सहेजी गई रिकॉर्डिंग भेजने की कतार में नहीं जा सकी।',
+  'Canceling report': 'रिपोर्ट रद्द की जा रही है',
+  'Server cleanup will retry before local evidence is removed.':
+    'स्थानीय साक्ष्य हटाने से पहले सर्वर की सफ़ाई का पुनः प्रयास होगा।',
+  'The report will submit after its verified transcript is ready.':
+    'सत्यापित प्रतिलेख तैयार होने के बाद रिपोर्ट जमा होगी।',
   'activities have': 'गतिविधियाँ हैं',
   'activity has': 'गतिविधि है',
   'basis not recorded': 'आधार दर्ज नहीं किया गया',

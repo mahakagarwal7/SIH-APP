@@ -17,6 +17,8 @@ type StoredOutbox = Omit<
   | 'evidenceReleased'
   | 'retryable'
   | 'submissionRejected'
+  | 'sendRequested'
+  | 'cancelRequested'
 > & {
   manifest: string;
   uploadedFiles: string;
@@ -24,6 +26,8 @@ type StoredOutbox = Omit<
   evidenceReleased: number;
   retryable: number;
   submissionRejected: number;
+  sendRequested: number;
+  cancelRequested: number;
 };
 
 function hydrate(row: StoredOutbox | null): OutboxRecord | null {
@@ -60,6 +64,8 @@ function hydrate(row: StoredOutbox | null): OutboxRecord | null {
     evidenceReleased: row.evidenceReleased === 1,
     retryable: row.retryable === 1,
     submissionRejected: row.submissionRejected === 1,
+    sendRequested: row.sendRequested === 1,
+    cancelRequested: row.cancelRequested === 1,
   };
 }
 
@@ -80,6 +86,8 @@ export async function createOutboxIndex(
       reportId TEXT,
       uploadedFiles TEXT NOT NULL,
       originalTranscript TEXT,
+      sendRequested INTEGER NOT NULL DEFAULT 0 CHECK(sendRequested IN (0,1)),
+      cancelRequested INTEGER NOT NULL DEFAULT 0 CHECK(cancelRequested IN (0,1)),
       confirmedPayload TEXT,
       confirmedActivityLabel TEXT,
       submissionRejected INTEGER NOT NULL DEFAULT 0 CHECK(submissionRejected IN (0,1)),
@@ -108,6 +116,14 @@ export async function createOutboxIndex(
   if (!columns.has('confirmedActivityLabel'))
     await db.execAsync(
       'ALTER TABLE local_field_outbox ADD COLUMN confirmedActivityLabel TEXT',
+    );
+  if (!columns.has('sendRequested'))
+    await db.execAsync(
+      'ALTER TABLE local_field_outbox ADD COLUMN sendRequested INTEGER NOT NULL DEFAULT 0 CHECK(sendRequested IN (0,1))',
+    );
+  if (!columns.has('cancelRequested'))
+    await db.execAsync(
+      'ALTER TABLE local_field_outbox ADD COLUMN cancelRequested INTEGER NOT NULL DEFAULT 0 CHECK(cancelRequested IN (0,1))',
     );
   if (!columns.has('submissionRejected'))
     await db.execAsync(
@@ -152,12 +168,12 @@ export async function createOutboxIndex(
     async put(record) {
       const result = await db.runAsync(
         `INSERT INTO local_field_outbox
-          (captureId,userId,projectId,projectName,kind,createdAt,text,manifest,reportId,uploadedFiles,originalTranscript,confirmedPayload,submissionState,submittedAt,evidenceReleased,state,attemptCount,lastErrorKind,lastError,updatedAt,retryable,submissionRejected,confirmedActivityLabel)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          (captureId,userId,projectId,projectName,kind,createdAt,text,manifest,reportId,uploadedFiles,originalTranscript,sendRequested,cancelRequested,confirmedPayload,submissionState,submittedAt,evidenceReleased,state,attemptCount,lastErrorKind,lastError,updatedAt,retryable,submissionRejected,confirmedActivityLabel)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(captureId) DO UPDATE SET
           userId=excluded.userId,projectId=excluded.projectId,projectName=excluded.projectName,kind=excluded.kind,
           createdAt=excluded.createdAt,text=excluded.text,manifest=excluded.manifest,reportId=excluded.reportId,
-          uploadedFiles=excluded.uploadedFiles,originalTranscript=excluded.originalTranscript,
+          uploadedFiles=excluded.uploadedFiles,originalTranscript=excluded.originalTranscript,sendRequested=excluded.sendRequested,cancelRequested=excluded.cancelRequested,
           confirmedPayload=excluded.confirmedPayload,submissionState=excluded.submissionState,
           submittedAt=excluded.submittedAt,evidenceReleased=excluded.evidenceReleased,
           state=excluded.state,attemptCount=excluded.attemptCount,
@@ -172,6 +188,9 @@ export async function createOutboxIndex(
            AND local_field_outbox.manifest=excluded.manifest
            AND (local_field_outbox.reportId IS NULL OR local_field_outbox.reportId=excluded.reportId)
            AND (local_field_outbox.originalTranscript IS NULL OR local_field_outbox.originalTranscript=excluded.originalTranscript)
+           AND (local_field_outbox.sendRequested<=excluded.sendRequested
+             OR (excluded.cancelRequested=1 AND excluded.sendRequested=0))
+           AND local_field_outbox.cancelRequested<=excluded.cancelRequested
            AND (local_field_outbox.confirmedPayload IS NULL OR local_field_outbox.confirmedPayload=excluded.confirmedPayload
              OR (local_field_outbox.submissionRejected=1 AND excluded.submissionRejected=0
                AND local_field_outbox.submissionState='pending' AND excluded.submissionState='pending'
@@ -192,6 +211,8 @@ export async function createOutboxIndex(
         record.reportId,
         JSON.stringify(record.uploadedFiles),
         record.originalTranscript,
+        record.sendRequested ? 1 : 0,
+        record.cancelRequested ? 1 : 0,
         record.confirmedPayload
           ? JSON.stringify(record.confirmedPayload)
           : null,
@@ -211,6 +232,15 @@ export async function createOutboxIndex(
         throw new Error(
           'This capture identifier already belongs to different content.',
         );
+    },
+    async remove(userId, captureId) {
+      const result = await db.runAsync(
+        'DELETE FROM local_field_outbox WHERE userId = ? AND captureId = ?',
+        userId,
+        captureId,
+      );
+      if (result.changes !== 1)
+        throw new Error('This outbox item is unavailable for this account.');
     },
   };
 }

@@ -259,6 +259,10 @@ export type Database = {
         };
         Returns: string;
       };
+      discard_field_capture: {
+        Args: { p_report: string };
+        Returns: boolean;
+      };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };

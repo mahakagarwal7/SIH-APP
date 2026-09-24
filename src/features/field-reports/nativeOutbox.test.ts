@@ -3,6 +3,7 @@ import { digest } from 'expo-crypto';
 import { VoiceDraftStore } from './draftStore';
 import { getVoiceDraftStore } from './nativeDraftStore';
 import {
+  cancelNativeOutboxCapture,
   getNativeOutbox,
   prepareLocalOutbox,
   syncNativeOutbox,
@@ -47,6 +48,9 @@ const index: OutboxIndex = {
   put: async (row) => {
     records.set(row.captureId, structuredClone(row));
   },
+  remove: async (userId, id) => {
+    if (records.get(id)?.userId === userId) records.delete(id);
+  },
 };
 beforeEach(() => {
   records.clear();
@@ -59,6 +63,7 @@ beforeEach(() => {
     finalize: jest.fn(async () => {}),
     inspect: jest.fn(async () => ({ status: 'processing' as const })),
     submit: jest.fn(async () => '30000000-0000-4000-8000-000000000003'),
+    discard: jest.fn(async () => {}),
   });
 });
 function localStore(
@@ -243,6 +248,16 @@ it('notifies the coordinator after a durable save releases its preparation lock'
   } finally {
     unsubscribe();
   }
+});
+
+it('cancels an enqueued local capture and removes its private evidence', async () => {
+  const local = localStore('voice');
+  await prepareLocalOutbox('alice');
+  expect(records.has(captureId)).toBe(true);
+  await cancelNativeOutboxCapture('alice', captureId);
+  expect(records.has(captureId)).toBe(false);
+  expect(local.exists()).toBe(false);
+  await expect(local.voiceStore.list('alice')).resolves.toEqual([]);
 });
 
 it('notifies idle foreground polling after an explicit sync finishes', async () => {

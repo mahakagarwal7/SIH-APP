@@ -34,6 +34,7 @@ import { assertLocalDraftCanBeDiscarded } from './nativeOutbox';
 import { choosePhoto, takePhoto } from './nativePhotoPicker';
 import { ReportMethodLinks } from './ReportMethodLinks';
 import { VoiceCapture } from './voiceCapture';
+import { VoiceReviewPanel } from './VoiceReviewPanel.native';
 
 import type { VoiceDraft } from './draftStore';
 import type { PreparedLocalPhoto } from './nativePhotoPicker';
@@ -94,7 +95,7 @@ function CapturePanel({
   projectName: string;
   evidence: CombinedEvidence;
   onBusy: (busy: boolean) => void;
-  onSaved: () => void;
+  onSaved: (captureId: string) => void;
 }) {
   const client = useQueryClient();
   const [discarding, setDiscarding] = useState(false);
@@ -178,7 +179,7 @@ function CapturePanel({
             : undefined;
         try {
           await saveCombinedVoiceDraft(draft, recording.bytes, companion);
-          if (mounted.current) onSaved();
+          if (mounted.current) onSaved(draft.id);
         } finally {
           void client.invalidateQueries({
             queryKey: ['voice-drafts', userId],
@@ -310,6 +311,8 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
   const [text, setText] = useState('');
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
   const [picking, setPicking] = useState(false);
+  const [reviewCaptureId, setReviewCaptureId] = useState<string | null>(null);
+  const [reviewMessage, setReviewMessage] = useState('');
   const [playing, setPlaying] = useState<string | null>(null);
   const [loadingPlayback, setLoadingPlayback] = useState(false);
   const [error, setError] = useState('');
@@ -345,9 +348,10 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
     },
     [stopPlayback],
   );
-  const clearEvidence = useCallback(() => {
+  const openReview = useCallback((captureId: string) => {
     setText('');
     setPhotos([]);
+    setReviewCaptureId(captureId);
   }, []);
   async function pick(source: 'camera' | 'library') {
     if (busy || picking || photos.length >= 3) return;
@@ -477,7 +481,16 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
           Offline · Recordings stay on this device.
         </Text>
       )}
-      {context ? (
+      {reviewCaptureId ? (
+        <VoiceReviewPanel
+          userId={userId}
+          captureId={reviewCaptureId}
+          onCanceled={(nextMessage) => {
+            setReviewCaptureId(null);
+            setReviewMessage(nextMessage);
+          }}
+        />
+      ) : context ? (
         <>
           <View style={styles.companion}>
             <Text style={styles.mode}>OPTIONAL SUPPORTING EVIDENCE</Text>
@@ -550,7 +563,7 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
             projectName={context.project.name}
             evidence={{ text, photos }}
             onBusy={captureBusy}
-            onSaved={clearEvidence}
+            onSaved={openReview}
           />
         </>
       ) : (
@@ -578,9 +591,11 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
           />
         </View>
       )}
-      <Text style={styles.detail}>
-        Check and Send are implemented in later approved slices.
-      </Text>
+      {!!reviewMessage && (
+        <Text accessibilityLiveRegion="polite" style={styles.notice}>
+          {reviewMessage}
+        </Text>
+      )}
       <View style={styles.savedHeader}>
         <Text accessibilityRole="header" style={shellStyles.cardTitle}>
           Your local voice drafts

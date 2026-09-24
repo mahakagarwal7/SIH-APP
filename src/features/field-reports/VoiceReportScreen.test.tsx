@@ -42,6 +42,25 @@ jest.mock('./nativeOutbox', () => ({
   assertLocalDraftCanBeDiscarded: jest.fn(async () => {}),
 }));
 jest.mock('./ReportMethodLinks', () => ({ ReportMethodLinks: () => null }));
+jest.mock('./VoiceReviewPanel.native', () => {
+  const React = jest.requireActual('react') as typeof import('react');
+  const { Text } = jest.requireActual(
+    'react-native',
+  ) as typeof import('react-native');
+  return {
+    VoiceReviewPanel: ({ captureId }: { captureId: string }) =>
+      React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(
+          Text,
+          null,
+          'Saved on device. Not sent for review.',
+        ),
+        React.createElement(Text, null, `Voice review ${captureId}`),
+      ),
+  };
+});
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'draft-id' }));
 const mockPlayer = {
   pause: jest.fn(),
@@ -195,8 +214,8 @@ it('keeps the active recording operable when project metadata refreshes', async 
   ).toBeVisible();
   expect(save).toHaveBeenCalledTimes(1);
   expect(save.mock.calls[0][0].projectName).toBe('Renamed site');
-  await recordOneSecond();
-  expect(androidMicrophone).toHaveBeenCalledTimes(2);
+  expect(screen.getByText('Voice review draft-id')).toBeVisible();
+  expect(androidMicrophone).toHaveBeenCalledTimes(1);
 });
 it('retries the same recording and draft after a project-name refresh', async () => {
   save.mockRejectedValueOnce(new Error('Storage full'));

@@ -81,6 +81,22 @@ it('persists the frozen manifest, upload progress and owner partition', async ()
       state: 'processing',
       attemptCount: 1,
       manifest: { files: [{ sha256: 'a'.repeat(64) }] },
+      sendRequested: false,
+      cancelRequested: false,
+    });
+    const processing = (await index.get('alice', row.captureId))!;
+    await index.put({ ...processing, sendRequested: true });
+    await expect(index.get('alice', row.captureId)).resolves.toMatchObject({
+      sendRequested: true,
+    });
+    await index.put({
+      ...(await index.get('alice', row.captureId))!,
+      sendRequested: false,
+      cancelRequested: true,
+    });
+    await expect(index.get('alice', row.captureId)).resolves.toMatchObject({
+      sendRequested: false,
+      cancelRequested: true,
     });
     await expect(index.put({ ...row, text: 'different' })).rejects.toThrow(
       'different content',

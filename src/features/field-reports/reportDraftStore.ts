@@ -221,8 +221,20 @@ export class ReportDraftStore {
   }
 
   async discard(userId: string, id: string): Promise<void> {
+    return this.discardLocal(userId, id, true);
+  }
+
+  async discardAfterCancellation(userId: string, id: string): Promise<void> {
+    return this.discardLocal(userId, id, false);
+  }
+
+  private async discardLocal(
+    userId: string,
+    id: string,
+    checkOutbox: boolean,
+  ): Promise<void> {
     return this.mutate(userId, id, async () => {
-      await this.beforeDiscard(userId, id);
+      if (checkOutbox) await this.beforeDiscard(userId, id);
       const draft = await this.index.get(userId, id);
       if (!draft)
         throw new Error('This draft is unavailable for this account.');

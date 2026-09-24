@@ -212,6 +212,20 @@ export class SupabaseOutboxTransport implements OutboxTransport {
       );
     return result.data;
   }
+
+  async discard(reportId: string) {
+    const result = await this.client.rpc('discard_field_capture', {
+      p_report: reportId,
+    });
+    if (result.error)
+      throw transportError(result.error, 'Could not cancel this report.');
+    if (result.data !== true)
+      throw new OutboxSyncError(
+        'The server returned an invalid cancellation receipt.',
+        'server',
+        true,
+      );
+  }
 }
 
 export function createAccountOutboxTransport(
