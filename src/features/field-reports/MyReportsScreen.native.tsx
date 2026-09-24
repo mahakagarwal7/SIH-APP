@@ -25,6 +25,8 @@ import {
   syncNativeOutbox,
 } from './nativeOutbox';
 import { getReportDraftStore } from './nativeReportDraftStore';
+import { needsReportPolling } from './reportStatus';
+import { useReportStatusPolling } from './useReportStatusPolling';
 
 import type { Href } from 'expo-router';
 
@@ -62,6 +64,7 @@ function AccountReports({ userId }: { userId: string }) {
     };
   }, []);
   const [syncing, setSyncing] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [message, setMessage] = useState('');
   const local = useQuery({
     queryKey: ['my-reports', userId, 'local'],
@@ -84,10 +87,21 @@ function AccountReports({ userId }: { userId: string }) {
   });
   const localRefetch = local.refetch;
   const remoteRefetch = remote.refetch;
+  const pollingRequired = needsReportPolling(remote.data ?? []);
+  useReportStatusPolling({
+    enabled: !auth.offline && pollingRequired,
+    focused,
+    refetch: remoteRefetch,
+  });
   useFocusEffect(
     useCallback(() => {
+      mounted.current = true;
+      setFocused(true);
       void localRefetch();
       if (!auth.offline) void remoteRefetch();
+      return () => {
+        setFocused(false);
+      };
     }, [auth.offline, localRefetch, remoteRefetch]),
   );
   const items = useMemo(
@@ -159,6 +173,17 @@ function AccountReports({ userId }: { userId: string }) {
           {message}
         </Text>
       )}
+      {!auth.offline && remote.isFetching && (
+        <Text accessibilityLiveRegion="polite" style={styles.message}>
+          Checking production report status…
+        </Text>
+      )}
+      {!auth.offline && !remote.isFetching && remote.dataUpdatedAt > 0 && (
+        <Text style={styles.checked}>
+          Last checked {new Date(remote.dataUpdatedAt).toLocaleTimeString()}
+          {pollingRequired ? ' · Automatic checks active' : ''}
+        </Text>
+      )}
       {local.data?.preparation.unavailable ? (
         <Text accessibilityRole="alert" style={styles.error}>
           {local.data.preparation.unavailable} local draft could not be prepared
@@ -221,6 +246,18 @@ function AccountReports({ userId }: { userId: string }) {
                 }
               />
             )}
+            {item.canOpen && item.reportId && (
+              <Action
+                label="Open report and questions"
+                disabled={false}
+                onPress={() =>
+                  router.push({
+                    pathname: '/field-report/[reportId]',
+                    params: { reportId: item.reportId! },
+                  } as unknown as Href)
+                }
+              />
+            )}
             {item.canSync && (
               <Text style={styles.retry}>Use Sync now to retry this item.</Text>
             )}
@@ -268,4 +305,5 @@ const styles = StyleSheet.create({
   status: { color: '#266b8c', fontWeight: '700', fontSize: 13, lineHeight: 21 },
   detail: { color: '#627786', fontSize: 13, lineHeight: 21 },
   retry: { color: '#76541d', fontSize: 14, lineHeight: 22, fontWeight: '600' },
+  checked: { color: '#627786', fontSize: 12, lineHeight: 20, marginBottom: 12 },
 });

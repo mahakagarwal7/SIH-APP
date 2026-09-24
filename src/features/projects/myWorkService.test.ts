@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-import { loadDefaultProject, loadMyWork } from './myWorkService';
+import {
+  loadActiveProjects,
+  loadDefaultProject,
+  loadMyWork,
+} from './myWorkService';
 
 import type { Database } from '@/types/database';
 
@@ -126,6 +130,46 @@ it('selects only the signed-in active membership with the web default ordering',
   expect(calls[0]?.url.searchParams.get('active')).toBe('eq.true');
   expect(calls[0]?.url.searchParams.get('order')).toBe('project_id.asc');
   expect(calls[0]?.url.searchParams.get('limit')).toBe('1');
+});
+
+it('loads every active membership and maps projects in stable membership order', async () => {
+  const secondProjectId = '10000000-0000-4000-8000-000000000005';
+  const secondMember = {
+    ...context.member,
+    project_id: secondProjectId,
+    version: 2,
+  };
+  const { client, calls } = harness({
+    memberships: [context.member, secondMember],
+    project: [{ id: secondProjectId, name: 'Second site' }, context.project],
+  });
+  await expect(loadActiveProjects(client, userId, signal())).resolves.toEqual([
+    context,
+    {
+      member: secondMember,
+      project: { id: secondProjectId, name: 'Second site' },
+    },
+  ]);
+  expect(calls[0]?.url.searchParams.get('limit')).toBe('101');
+  expect(calls[1]?.url.searchParams.get('id')).toContain(projectId);
+  expect(calls[1]?.url.searchParams.get('id')).toContain(secondProjectId);
+});
+
+it('rejects incomplete project membership results', async () => {
+  const missing = harness({ memberships: [context.member], project: [] });
+  await expect(
+    loadActiveProjects(missing.client, userId, signal()),
+  ).rejects.toMatchObject({
+    kind: 'changed',
+  });
+  const crossAccount = harness({
+    memberships: [{ ...context.member, user_id: projectId }],
+  });
+  await expect(
+    loadActiveProjects(crossAccount.client, userId, signal()),
+  ).rejects.toMatchObject({
+    kind: 'access',
+  });
 });
 
 it('keeps no active membership distinct from a query failure', async () => {

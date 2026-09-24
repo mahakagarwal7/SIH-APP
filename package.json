@@ -17,6 +17,7 @@
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
+    "android:preview": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-android-preview.ps1",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",

@@ -76,6 +76,50 @@ export async function loadDefaultProject(
   return { member, project };
 }
 
+export async function loadActiveProjects(
+  client: Client,
+  userId: string,
+  signal: AbortSignal,
+): Promise<ProjectContext[]> {
+  const membersResult = await client
+    .from('project_members')
+    .select(memberColumns)
+    .eq('user_id', userId)
+    .eq('active', true)
+    .order('project_id')
+    .limit(101)
+    .abortSignal(signal);
+  readError(membersResult.error);
+  const members = parse(z.array(membershipSchema).max(100), membersResult.data);
+  if (
+    members.some((member) => member.user_id !== userId || !member.active) ||
+    new Set(members.map((member) => member.project_id)).size !== members.length
+  )
+    throw new WorkReadError('access');
+  if (!members.length) return [];
+  const projectIds = members.map((member) => member.project_id);
+  const projectsResult = await client
+    .from('projects')
+    .select('id,name')
+    .in('id', projectIds)
+    .abortSignal(signal);
+  readError(projectsResult.error);
+  const projects = parse(z.array(projectSchema).max(100), projectsResult.data);
+  const projectsById = new Map(
+    projects.map((project) => [project.id, project]),
+  );
+  if (
+    projects.length !== members.length ||
+    projects.some((project) => !projectIds.includes(project.id))
+  )
+    throw new WorkReadError('changed');
+  return members.map((member) => {
+    const project = projectsById.get(member.project_id);
+    if (!project) throw new WorkReadError('changed');
+    return { member, project };
+  });
+}
+
 async function readAssignments(
   client: Client,
   projectId: string,

@@ -42,6 +42,8 @@ The server list currently reads the latest 100 authored reports. For those repor
 
 The last loaded server data can remain visible offline, clearly labeled stale by the offline banner. Remembered capture context is used only offline; an online access/load error is shown even when a previous project remains cached. Local drafts survive logout but stay hidden from other accounts. Capture screens and native stores block local deletion after an item enters the outbox until a durable submission receipt permits evidence cleanup. Failed cleanup retries while the foreground app is active without submitting again.
 
+Roadmap 1.6 reads production extraction jobs and claim outcomes with bounded foreground polling. See [the submitted status contract](REPORT_STATUS.md) for precedence, terminal states and pause behavior.
+
 ## Evidence limits
 
 Unit/integration tests cover interruption, restart, duplicate upload, manifest mutation, account switches between network phases, deletion/preparation races, coordinator wakeups, revoked access, transient/terminal failures, claim pagination/status precedence, cached project errors and navigation during sync. PR #7 passed 206 tests in 36 suites; the integrated confirmation results are recorded in the PR #8 draft. Android/iOS/web exports establish bundle compatibility when recorded in the PR validation notes. These checks do not prove the local publishable key, production membership, deployed worker, transcription quality, physical connectivity or RLS behavior on a live account.

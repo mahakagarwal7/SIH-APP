@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-import { loadRemoteReports, mergeMyReports } from './myReportsService';
+import {
+  loadRemoteReports,
+  loadRemoteReportsForProject,
+  mergeMyReports,
+} from './myReportsService';
+import { needsReportPolling } from './reportStatus';
 
 import type { OutboxRecord } from './outbox';
 import type { Database } from '@/types/database';
@@ -41,10 +46,19 @@ const remote = {
   project_id: projectId,
   author_id: userId,
   capture_id: captureId,
+  current_version: 1,
   lifecycle: 'submitted' as const,
   received_at: '2026-09-24T00:01:00Z',
   source_kind: 'text' as const,
-  claims: [{ report_id: reportId, state: 'accepted' as const }],
+  claims: [
+    {
+      id: '50000000-0000-4000-8000-000000000005',
+      report_id: reportId,
+      report_version: 1,
+      state: 'accepted' as const,
+    },
+  ],
+  jobs: [],
 };
 
 it('deduplicates local/outbox/server identity and prefers accepted server status', () => {
@@ -57,8 +71,23 @@ it('deduplicates local/outbox/server identity and prefers accepted server status
     summary: 'Installed two supports',
     canSync: false,
     canConfirm: false,
+    canOpen: true,
   });
 });
+
+it.each(['draft', 'withdrawn'] as const)(
+  'does not open a remote-only %s report that the detail loader rejects',
+  (lifecycle) => {
+    expect(
+      mergeMyReports(
+        [],
+        [],
+        [],
+        [{ ...remote, lifecycle, claims: [], jobs: [] }],
+      )[0],
+    ).toMatchObject({ canOpen: false });
+  },
+);
 
 it('opens confirmation only for a ready, still-unsubmitted outbox record', () => {
   const [item] = mergeMyReports([], [], [outbox], []);
@@ -66,6 +95,7 @@ it('opens confirmation only for a ready, still-unsubmitted outbox record', () =>
     status: 'Needs confirmation',
     canConfirm: true,
     canSync: false,
+    canOpen: false,
   });
 });
 
@@ -189,20 +219,24 @@ it('keeps saved, processing, paused and incomplete local states honest', () => {
   expect(items[0]?.detail).toBe('Project access changed.');
 });
 
-it('queries only the signed-in author and joins permitted claim statuses', async () => {
+it('queries only the signed-in author and selected project, then joins permitted statuses', async () => {
   const calls: URL[] = [];
   const fetcher = jest.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input));
     calls.push(url);
-    const data = url.pathname.endsWith('/reports')
-      ? [{ ...remote, claims: undefined }]
-      : remote.claims.map((claim) => ({
-          ...claim,
-          id: '50000000-0000-4000-8000-000000000005',
-        }));
+    const isReport = url.pathname.endsWith('/reports');
+    const isClaim = url.pathname.endsWith('/claims');
+    const data = isReport
+      ? [{ ...remote, claims: undefined, jobs: undefined }]
+      : isClaim
+        ? remote.claims
+        : [];
     return new Response(JSON.stringify(data), {
       status: 200,
-      headers: { 'Content-Type': 'application/json', 'Content-Range': '0-0/1' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Range': isClaim ? '0-0/1' : '*/0',
+      },
     });
   });
   const client = createClient<Database>(
@@ -217,10 +251,14 @@ it('queries only the signed-in author and joins permitted claim statuses', async
       global: { fetch: fetcher },
     },
   );
-  await expect(loadRemoteReports(client, userId)).resolves.toEqual([remote]);
+  await expect(
+    loadRemoteReportsForProject(client, userId, projectId),
+  ).resolves.toEqual([remote]);
   expect(calls[0]?.searchParams.get('author_id')).toBe(`eq.${userId}`);
+  expect(calls[0]?.searchParams.get('project_id')).toBe(`eq.${projectId}`);
   expect(calls[0]?.searchParams.get('limit')).toBe('100');
   expect(calls[1]?.searchParams.get('report_id')).toContain(reportId);
+  expect(calls[2]?.pathname).toContain('/jobs');
 });
 
 it('rejects server rows for another author instead of showing them', async () => {
@@ -237,7 +275,12 @@ it('rejects server rows for another author instead of showing them', async () =>
         fetch: async () =>
           new Response(
             JSON.stringify([
-              { ...remote, author_id: projectId, claims: undefined },
+              {
+                ...remote,
+                author_id: projectId,
+                claims: undefined,
+                jobs: undefined,
+              },
             ]),
             { status: 200, headers: { 'Content-Type': 'application/json' } },
           ),
@@ -262,7 +305,15 @@ it.each([
       [
         {
           ...remote,
-          claims: [...remote.claims, { report_id: reportId, state }],
+          claims: [
+            ...remote.claims,
+            {
+              id: '60000000-0000-4000-8000-000000000006',
+              report_id: reportId,
+              report_version: 1,
+              state,
+            },
+          ],
         },
       ],
     )[0]?.status,
@@ -305,12 +356,24 @@ function reportClient(
           const url = new URL(String(input));
           if (url.pathname.endsWith('/reports'))
             return new Response(
-              JSON.stringify([{ ...remote, claims: undefined }]),
+              JSON.stringify([
+                { ...remote, claims: undefined, jobs: undefined },
+              ]),
               { status: 200, headers: { 'Content-Type': 'application/json' } },
             );
+          if (url.pathname.endsWith('/jobs'))
+            return new Response('[]', {
+              status: 200,
+              headers: {
+                'Content-Type': 'application/json',
+                'Content-Range': '*/0',
+              },
+            });
           const offset = Number(url.searchParams.get('offset') || 0);
           offsets.push(offset);
-          const page = claims.slice(offset, offset + pageCap);
+          const page = claims
+            .slice(offset, offset + pageCap)
+            .map((claim) => ({ ...claim, report_version: 1 }));
           return new Response(JSON.stringify(page), {
             status: 200,
             headers: {
@@ -354,6 +417,25 @@ it('reads all claim pages even when the server caps pages below the requested si
   );
 });
 
+it('reads claims beyond the production row cap before displaying final outcomes', async () => {
+  const claims = Array.from({ length: 2_101 }, (_, index) => ({
+    id: `${String(index).padStart(8, '0')}-0000-4000-8000-000000000005`,
+    report_id: reportId,
+    state: index === 200 ? 'pending' : 'accepted',
+  }));
+  const { client, offsets } = reportClient(claims, 200);
+  const reports = await loadRemoteReports(client, userId);
+
+  expect(offsets).toEqual(
+    Array.from({ length: 11 }, (_, index) => index * 200),
+  );
+  expect(reports[0]?.claims).toHaveLength(2_101);
+  expect(mergeMyReports([], [], [], reports)[0]?.status).toBe(
+    'Partly accepted',
+  );
+  expect(needsReportPolling(reports)).toBe(true);
+});
+
 it('rejects a changing claim count instead of displaying partial acceptance evidence', async () => {
   const claims = Array.from({ length: 3 }, (_, i) => ({
     id: `${String(i).padStart(8, '0')}-0000-4000-8000-000000000005`,
@@ -363,4 +445,48 @@ it('rejects a changing claim count instead of displaying partial acceptance evid
   await expect(
     loadRemoteReports(reportClient(claims, 2, true).client, userId),
   ).rejects.toThrow('Could not refresh reports');
+});
+
+it('rejects job rows outside the selected author reports', async () => {
+  const client = createClient<Database>(
+    'https://example.supabase.co',
+    'synthetic-public-key',
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+      global: {
+        fetch: async (input) => {
+          const path = new URL(String(input)).pathname;
+          const data = path.endsWith('/reports')
+            ? [{ ...remote, claims: undefined, jobs: undefined }]
+            : path.endsWith('/claims')
+              ? []
+              : [
+                  {
+                    id: '60000000-0000-4000-8000-000000000006',
+                    report_id: captureId,
+                    report_version: 1,
+                    status: 'succeeded',
+                    attempts: 1,
+                    error_code: null,
+                    created_at: '2026-09-24T00:01:00Z',
+                  },
+                ];
+          return new Response(JSON.stringify(data), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Range': data.length ? `0-${data.length - 1}/1` : '*/0',
+            },
+          });
+        },
+      },
+    },
+  );
+  await expect(loadRemoteReports(client, userId)).rejects.toThrow(
+    'Could not refresh reports',
+  );
 });

@@ -8,3 +8,5 @@ export async function rememberProjectContext(
 export async function readRememberedProjectContext(_userId: string) {
   return null as ProjectContext | null;
 }
+
+export async function forgetRememberedProjectContext(_userId: string) {}

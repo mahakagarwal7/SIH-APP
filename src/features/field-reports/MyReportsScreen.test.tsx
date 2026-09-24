@@ -15,6 +15,7 @@ import {
 } from './nativeOutbox';
 import { getReportDraftStore } from './nativeReportDraftStore';
 
+import type { RemoteReport } from './myReportsService';
 import type { AuthViewState } from '@/features/auth/AuthProvider';
 
 jest.mock('@/features/auth/AuthProvider', () => ({ useAuth: jest.fn() }));
@@ -38,9 +39,10 @@ jest.mock('./myReportsService', () => {
     loadRemoteReports: jest.fn(),
   };
 });
+const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
   useFocusEffect: jest.fn(),
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 const originalAppState = AppState.currentState;
@@ -168,13 +170,60 @@ it('labels unqueried server attachments as unavailable instead of zero files', a
       project_id: 'project',
       author_id: 'alice',
       capture_id: 'capture',
+      current_version: 1,
       lifecycle: 'submitted',
       received_at: '2026-09-24T00:00:00Z',
       source_kind: 'voice',
       claims: [],
+      jobs: [],
     },
   ]);
   await render(<App />);
   expect(await screen.findByText(/Attachment count unavailable/)).toBeVisible();
   expect(screen.queryByText(/0 files/)).toBeNull();
+});
+
+it('shows server processing as distinct from planner review', async () => {
+  jest.mocked(getVoiceDraftStore).mockResolvedValue({
+    list: async () => [],
+  } as never);
+  jest.mocked(loadRemoteReports).mockResolvedValue([
+    {
+      id: '40000000-0000-4000-8000-000000000004',
+      project_id: '30000000-0000-4000-8000-000000000003',
+      author_id: 'alice',
+      capture_id: '10000000-0000-4000-8000-000000000001',
+      current_version: 1,
+      lifecycle: 'submitted',
+      received_at: '2026-09-24T00:00:00Z',
+      source_kind: 'text',
+      claims: [],
+      jobs: [
+        {
+          id: '50000000-0000-4000-8000-000000000005',
+          report_id: '40000000-0000-4000-8000-000000000004',
+          report_version: 1,
+          status: 'running',
+          attempts: 1,
+          error_code: null,
+          created_at: '2026-09-24T00:00:01Z',
+        },
+      ],
+    } as RemoteReport,
+  ]);
+  await render(<App />);
+  expect(await screen.findByText('Processing report')).toBeVisible();
+  expect(
+    screen.getByText(
+      'The current report version is queued or still processing.',
+    ),
+  ).toBeVisible();
+  expect(screen.queryByText('Awaiting review')).toBeNull();
+  fireEvent.press(
+    screen.getByRole('button', { name: 'Open report and questions' }),
+  );
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/field-report/[reportId]',
+    params: { reportId: '40000000-0000-4000-8000-000000000004' },
+  });
 });
