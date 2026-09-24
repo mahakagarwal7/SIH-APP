@@ -3,12 +3,45 @@ import { z } from 'zod';
 const id = z.uuid();
 const date = z.iso.date();
 
+const sourceEnvelopeSchema = z
+  .object({
+    sourceRecordId: z.string(),
+    sheet: z.string(),
+    row: z.number().int().positive(),
+    sourceMessageAt: z.string().nullable(),
+    reportingWorkDate: date.nullable(),
+    reportedByLabel: z.string().nullable(),
+    channel: z.string(),
+    raw: z.record(z.string(), z.unknown()),
+    timezone: z.literal('Asia/Kolkata'),
+    datePolicy: z.string(),
+  })
+  .strict();
+
+const mediaEvidenceSchema = z
+  .object({
+    attachmentId: id,
+    kind: z.enum(['audio', 'photo']),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    caption: z.string().max(500),
+    originalTranscript: z.string().nullable(),
+    provider: z.string().nullable(),
+    model: z.string().nullable(),
+    language: z.enum(['en', 'hi', 'auto']),
+  })
+  .strict();
+
 const acceptedFactsSchema = z
   .object({
     eventDate: date,
     evidenceQuote: z.string().min(1),
   })
   .passthrough();
+
+function submillisecondPrecision(value: string) {
+  const fraction = value.match(/\.(\d+)(?=Z|[+-]\d{2}:\d{2}$)/)?.[1] ?? '';
+  return Number(fraction.slice(3, 6).padEnd(3, '0') || '0');
+}
 
 export const executionHistoryEntrySchema = z
   .object({
@@ -33,7 +66,7 @@ export const executionHistoryEntrySchema = z
     eventDate: date,
     quote: z.string().min(1),
     reason: z.string().min(1),
-    reviewer: z.string().min(1).nullable(),
+    reviewer: z.string().nullable(),
     reviewerId: id,
     acceptedAt: z.iso.datetime({ offset: true }),
     effective: z.boolean(),
@@ -41,8 +74,8 @@ export const executionHistoryEntrySchema = z
     sourceId: z.string().min(1).nullable(),
     source: z.string().min(1),
     sourceUrl: z.string().min(1),
-    provenance: z.unknown(),
-    media: z.unknown().optional(),
+    provenance: sourceEnvelopeSchema.nullable().optional(),
+    media: z.array(mediaEvidenceSchema).max(4).nullable().optional(),
     matchScore: z.number().min(0).max(1).nullable(),
     matchReasons: z.record(z.string(), z.number()).nullable(),
     calendar: z.string().min(1),
@@ -77,6 +110,7 @@ export const executionHistorySchema = z
       ),
     );
     let previousAcceptedAt = Number.NEGATIVE_INFINITY;
+    let previousSubmillisecond = 0;
     let previousEventId = '';
 
     entries.forEach((entry, index) => {
@@ -90,9 +124,13 @@ export const executionHistorySchema = z
       decisionIds.add(entry.decisionId);
 
       const acceptedAt = Date.parse(entry.acceptedAt);
+      const acceptedSubmillisecond = submillisecondPrecision(entry.acceptedAt);
       if (
         acceptedAt < previousAcceptedAt ||
-        (acceptedAt === previousAcceptedAt && entry.eventId < previousEventId)
+        (acceptedAt === previousAcceptedAt &&
+          (acceptedSubmillisecond < previousSubmillisecond ||
+            (acceptedSubmillisecond === previousSubmillisecond &&
+              entry.eventId < previousEventId)))
       )
         context.addIssue({
           code: 'custom',
@@ -100,6 +138,7 @@ export const executionHistorySchema = z
           message: 'Accepted records must retain server history order.',
         });
       previousAcceptedAt = acceptedAt;
+      previousSubmillisecond = acceptedSubmillisecond;
       previousEventId = entry.eventId;
 
       if (entry.effective === correctedIds.has(entry.eventId))

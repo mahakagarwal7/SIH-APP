@@ -120,6 +120,7 @@ export function useProjectSelection() {
   );
 
   return {
+    userId,
     data,
     projects: projectContexts ?? (auth.offline && data ? [data] : []),
     error: auth.offline ? remembered.error : projects.error,

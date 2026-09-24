@@ -8,6 +8,7 @@ type Tab = {
   name: string;
   label: string;
   icon: ComponentProps<typeof Feather>['name'];
+  hidden?: boolean;
 };
 const tabs: Record<'field' | 'manager', Tab[]> = {
   field: [
@@ -21,6 +22,12 @@ const tabs: Record<'field' | 'manager', Tab[]> = {
     { name: 'review', label: 'Review', icon: 'check-square' },
     { name: 'schedule', label: 'Schedule', icon: 'calendar' },
     { name: 'history', label: 'History', icon: 'clock' },
+    {
+      name: 'review/[claimId]',
+      label: 'Review detail',
+      icon: 'check-square',
+      hidden: true,
+    },
   ],
 };
 
@@ -50,6 +57,7 @@ export function WorkspaceTabs({ workspace }: { workspace: keyof typeof tabs }) {
           key={tab.name}
           name={tab.name}
           options={{
+            href: tab.hidden ? null : undefined,
             title: tab.label,
             tabBarAccessibilityLabel: tab.label,
             tabBarLabel: ({ color }) => (

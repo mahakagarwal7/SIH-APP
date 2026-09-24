@@ -337,6 +337,7 @@ it('releases the form after photo recovery fails', async () => {
 
 it('shows discard failure even when project access is unavailable', async () => {
   jest.mocked(useCaptureProject).mockReturnValue({
+    userId: undefined,
     data: undefined,
     projects: [],
     isPending: false,
