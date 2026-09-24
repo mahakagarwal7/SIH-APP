@@ -45,11 +45,17 @@ export function useProjectSelection() {
       return loadActiveProjects(client(), userId, signal);
     },
   });
+  const canUseProjectData =
+    projects.isSuccess ||
+    (projects.data !== undefined &&
+      (!(projects.error instanceof WorkReadError) ||
+        projects.error.kind === 'unavailable'));
+  const projectContexts = canUseProjectData ? projects.data : undefined;
   const ready = auth.offline
     ? remembered.isSuccess
-    : projects.isSuccess && (remembered.isSuccess || remembered.isError);
+    : canUseProjectData && (remembered.isSuccess || remembered.isError);
   const data = ready
-    ? resolveProjectSelection(projects.data, remembered.data, auth.offline)
+    ? resolveProjectSelection(projectContexts, remembered.data, auth.offline)
     : undefined;
 
   useEffect(() => {
@@ -88,9 +94,9 @@ export function useProjectSelection() {
 
   const select = useCallback(
     async (projectId: string) => {
-      if (!userId || auth.offline || !projects.data)
+      if (!userId || auth.offline || !projectContexts)
         throw new WorkReadError('unavailable');
-      const context = projects.data.find(
+      const context = projectContexts.find(
         (candidate) => candidate.project.id === projectId,
       );
       if (!context) throw new WorkReadError('access');
@@ -105,12 +111,12 @@ export function useProjectSelection() {
       await rememberProjectContext(userId, context);
       queryClient.setQueryData(['selected-project', userId], context);
     },
-    [auth.offline, projects.data, queryClient, userId],
+    [auth.offline, projectContexts, queryClient, userId],
   );
 
   return {
     data,
-    projects: projects.data ?? (auth.offline && data ? [data] : []),
+    projects: projectContexts ?? (auth.offline && data ? [data] : []),
     error: auth.offline ? remembered.error : projects.error,
     isPending: !ready,
     isFetching: projects.isFetching || remembered.isFetching,

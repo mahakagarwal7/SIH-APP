@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
-import { loadReviewQueue } from './reviewQueueService';
+import { createReviewEvidenceUrl, loadReviewQueue } from './reviewQueueService';
 
 import type { ProjectContext } from '@/features/projects/myWorkService';
 import type { Database } from '@/types/database';
@@ -13,6 +13,7 @@ const runId = '10000000-0000-4000-8000-000000000005';
 const revisionId = '10000000-0000-4000-8000-000000000006';
 const activityId = '10000000-0000-4000-8000-000000000007';
 const reporterId = '10000000-0000-4000-8000-000000000008';
+const attachmentId = '10000000-0000-4000-8000-000000000009';
 const context: ProjectContext = {
   member: {
     project_id: projectId,
@@ -97,6 +98,30 @@ const snapshot = {
     },
   ],
 };
+const attachment = {
+  id: attachmentId,
+  project_id: projectId,
+  report_id: reportId,
+  object_path: `${projectId}/${reportId}/${attachmentId}`,
+  state: 'received',
+  file_name: 'shift-audio.wav',
+  mime_type: 'audio/wav',
+  byte_size: 1200,
+  sha256: 'a'.repeat(64),
+  caption: '',
+  media_kind: 'audio',
+  language: 'en',
+};
+const media = {
+  attachmentId,
+  kind: 'audio',
+  sha256: 'a'.repeat(64),
+  caption: '',
+  originalTranscript: 'Line erection finished in Unit 2.',
+  provider: 'fixture',
+  model: 'speech-v1',
+  language: 'en',
+};
 
 function harness(
   options: {
@@ -109,6 +134,8 @@ function harness(
     snapshot?: unknown;
     access?: unknown[];
     reporterRows?: unknown[];
+    attachments?: unknown[];
+    signedUrl?: string;
     error?: string;
   } = {},
 ) {
@@ -148,12 +175,26 @@ function harness(
           : (options.reporterRows ?? [
               { user_id: reporterId, display_name: 'Field supervisor' },
             ]);
+      } else if (url.pathname.endsWith('/attachments')) {
+        const rows = options.attachments ?? [];
+        data = url.searchParams.has('id')
+          ? ((rows as { id: string }[]).find((row) =>
+              url.searchParams.get('id')?.endsWith(row.id),
+            ) ?? null)
+          : rows;
+        if (Array.isArray(data)) count = data.length;
+      } else if (url.pathname.includes('/storage/v1/object/sign/evidence/')) {
+        data = {
+          signedURL:
+            options.signedUrl ??
+            '/object/sign/evidence/signed-evidence?token=one',
+        };
       } else throw new Error(`Unexpected URL ${url.pathname}`);
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
       if (count != null) headers['Content-Range'] = `0-19/${count}`;
-      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      if (init?.signal) expect(init.signal).toBeInstanceOf(AbortSignal);
       return new Response(JSON.stringify(data), { status: 200, headers });
     },
   );
@@ -195,6 +236,65 @@ it.each(['planner', 'manager'] as const)(
     expect(claimCall.searchParams.get('order')).toBe('id.asc');
   },
 );
+
+it('loads the report’s captured media metadata and received evidence attachments', async () => {
+  const reportOriginal = {
+    ...original,
+    context: { media: [media] },
+  };
+  const { client, calls } = harness({
+    versions: [reportOriginal],
+    attachments: [attachment],
+  });
+
+  const result = await loadReviewQueue(client, context, 0, signal());
+
+  expect(result.items[0]?.media).toEqual([media]);
+  expect(result.items[0]?.attachments).toMatchObject([
+    {
+      id: attachmentId,
+      file_name: attachment.file_name,
+      mime_type: attachment.mime_type,
+    },
+  ]);
+  expect(
+    calls.some(
+      (url) =>
+        url.pathname.endsWith('/attachments') &&
+        url.searchParams.get('state') === 'eq.received',
+    ),
+  ).toBe(true);
+});
+
+it('creates a short-lived evidence URL only after rechecking manager access', async () => {
+  const { client, calls } = harness({ attachments: [attachment] });
+  await expect(
+    createReviewEvidenceUrl(client, context, reportId, attachmentId, signal()),
+  ).resolves.toBe(
+    'https://example.supabase.co/storage/v1/object/sign/evidence/signed-evidence?token=one',
+  );
+  expect(
+    calls.filter((url) => url.pathname.endsWith('/project_members')),
+  ).toHaveLength(2);
+  expect(
+    calls.some((url) =>
+      url.pathname.includes('/storage/v1/object/sign/evidence/'),
+    ),
+  ).toBe(true);
+});
+
+it('does not create signed evidence URLs after manager access is revoked', async () => {
+  const { client, calls } = harness({ access: [], attachments: [attachment] });
+
+  await expect(
+    createReviewEvidenceUrl(client, context, reportId, attachmentId, signal()),
+  ).rejects.toMatchObject({ kind: 'access' });
+  expect(
+    calls.some((url) =>
+      url.pathname.includes('/storage/v1/object/sign/evidence/'),
+    ),
+  ).toBe(false);
+});
 
 it('uses stable server pagination and reports whether another page exists', async () => {
   const { client, calls } = harness({ claimCount: 41 });
@@ -268,6 +368,13 @@ it('rejects revoked or downgraded membership after the queue read', async () => 
   });
   await expect(
     loadReviewQueue(downgraded.client, context, 0, signal()),
+  ).rejects.toMatchObject({ kind: 'access' });
+});
+
+it('classifies revoked access before validating an RLS-hidden schedule snapshot', async () => {
+  const revoked = harness({ access: [], snapshot: {} });
+  await expect(
+    loadReviewQueue(revoked.client, context, 0, signal()),
   ).rejects.toMatchObject({ kind: 'access' });
 });
 

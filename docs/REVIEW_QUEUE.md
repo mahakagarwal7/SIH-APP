@@ -6,14 +6,14 @@ Roadmap 3.1 is a read-only mobile view of the production claim-review data. It u
 
 The contract was checked against web source `564befbf589478ab9a1e123e4b9b72e5ee2b7026`, including the reports, clarification, follow-up and field-observation migrations; `packages/contracts/src/reports.ts`; and the planner review page and panel. This source check does not prove which migration revision is currently deployed.
 
-| Read           | Existing contract                                                                         | Mobile use                                                                              |
-| -------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Queue          | `claims`, selected project, states `pending`, `clarification`, `verification`, `disputed` | Exact-count pages of 20 unresolved claims in stable claim-ID order                      |
-| Evidence       | `reports` and version 1 from `report_versions`                                            | Reporter, received time and the original field-report text verbatim                     |
-| Match context  | `candidate_matches`                                                                       | Ranked score, matcher features and mismatch reasons; RLS requires planner authority     |
-| Activity label | `schedule_snapshot(p_project)`                                                            | Resolve a candidate to the active activity name and location when still available       |
-| Reporter label | `project_members`                                                                         | Display the report author's recorded project name                                       |
-| Access recheck | Active `project_members` row for the signed-in user and selected project                  | Reject removed, downgraded or version-changed manager access before publishing the page |
+| Read           | Existing contract                                                                         | Mobile use                                                                                        |
+| -------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Queue          | `claims`, selected project, states `pending`, `clarification`, `verification`, `disputed` | Exact-count pages of 20 unresolved claims in stable claim-ID order                                |
+| Evidence       | `reports`, version 1 from `report_versions`, received `attachments`                       | Original report text, captured audio/photo provenance and one-minute authenticated evidence links |
+| Match context  | `candidate_matches`                                                                       | Ranked score, matcher features and mismatch reasons; RLS requires planner authority               |
+| Activity label | `schedule_snapshot(p_project)`                                                            | Resolve a candidate to the active activity name and location when still available                 |
+| Reporter label | `project_members`                                                                         | Display the report author's recorded project name                                                 |
+| Access recheck | Active `project_members` row for the signed-in user and selected project                  | Reject removed, downgraded or version-changed manager access before publishing the page           |
 
 `app_private.is_planner(project_id)` includes active `planner` and `manager` memberships. The screen checks that role before reading and the database remains authoritative. Client checks do not grant access.
 
@@ -22,9 +22,11 @@ The contract was checked against web source `564befbf589478ab9a1e123e4b9b72e5ee2
 - The queue shows only unresolved states used by the web filter. Terminal claim history belongs in the approved History slice.
 - A card exposes the extracted evidence quote, date, location, stage, full or partial scope, quantity, qualifiers and validation flags. Missing values say `Not recorded`.
 - Opening a card displays report version 1 as the original evidence. A claim produced by a later clarification still retains its own extracted evidence quote and version metadata.
+- Captured transcripts and photo provenance come from the immutable version-1 context. Received attachment rows are read under RLS; a fresh one-minute storage URL is generated only after rechecking manager membership when the reviewer opens a file.
+- A correction claim names the accepted event it would replace and states that the earlier event remains in history.
 - Candidate reasons prefer explicit mismatch flags. With no mismatch, known positive matcher features are translated into plain labels. A score is displayed as a matcher score and never as construction completion.
 - Activity labels come from the active schedule snapshot. A candidate from an earlier revision remains visible by ID and is explicitly marked as belonging to the report's earlier revision.
-- Empty, loading, error, no-access, role-denied and offline states are separate. Previously loaded data may remain visible offline with a stale warning. No review data is persisted to device storage.
+- Empty, loading, error, no-access, role-denied and offline states are separate. Previously loaded data may remain visible offline or after a transient refresh failure with a stale warning; a confirmed access denial hides the cached page. No review data is persisted to device storage.
 - React Query keys contain account, project, membership version and page. Project switching cancels and removes the review namespace before the selected context changes.
 
 ## Completeness and consistency

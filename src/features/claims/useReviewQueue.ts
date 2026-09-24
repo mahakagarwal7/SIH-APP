@@ -1,8 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect } from 'react';
 
 import { getSupabase } from '@/lib/supabase';
 
+import { WorkReadError } from '../projects/myWorkService';
 import { useProjectSelection } from '../projects/useProjectSelection';
 
 import { loadReviewQueue, ReviewReadError } from './reviewQueueService';
@@ -18,10 +19,20 @@ export function useReviewQueue(
   requestedProjectId?: string,
 ) {
   const project = useProjectSelection();
+  const queryClient = useQueryClient();
   const context = project.data;
   const page = requestedProjectId === context?.project.id ? requestedPage : 0;
+  const userId = context?.member.user_id;
+  const projectId = context?.project.id;
+  const version = context?.member.version;
   const authorized =
     context?.member.role === 'planner' || context?.member.role === 'manager';
+  const accessState = useQuery({
+    queryKey: ['review-queue-access-denied', userId, projectId, version],
+    queryFn: async () => false,
+    enabled: false,
+    staleTime: Infinity,
+  });
   const queue = useQuery({
     queryKey: [
       'review-queue',
@@ -36,10 +47,47 @@ export function useReviewQueue(
       return loadReviewQueue(client(), context, page, signal);
     },
   });
+  const projectAccessDenied =
+    project.error instanceof WorkReadError && project.error.kind === 'access';
+  const queueAccessDenied =
+    queue.error instanceof ReviewReadError && queue.error.kind === 'access';
+  const queryAccessDenied = projectAccessDenied || queueAccessDenied;
+  const accessDenied = accessState.data === true || queryAccessDenied;
+  const reportAccessDenied = useCallback(() => {
+    queryClient.setQueryData(
+      ['review-queue-access-denied', userId, projectId, version],
+      true,
+    );
+    queryClient.removeQueries({
+      queryKey:
+        userId && projectId
+          ? ['review-queue', userId, projectId]
+          : ['review-queue'],
+    });
+  }, [projectId, queryClient, userId, version]);
+  useEffect(() => {
+    if (queryAccessDenied && accessState.data !== true) {
+      queryClient.setQueryData(
+        ['review-queue-access-denied', userId, projectId, version],
+        true,
+      );
+      queryClient.removeQueries({
+        queryKey:
+          userId && projectId
+            ? ['review-queue', userId, projectId]
+            : ['review-queue'],
+      });
+    }
+  }, [
+    accessState.data,
+    projectId,
+    queryAccessDenied,
+    queryClient,
+    userId,
+    version,
+  ]);
   const projectRefetch = project.refetch;
   const queueRefetch = queue.refetch;
-  const projectId = context?.project.id;
-  const version = context?.member.version;
   const refresh = useCallback(async () => {
     if (project.offline) return;
     const result = await projectRefetch();
@@ -51,8 +99,30 @@ export function useReviewQueue(
       current.project.id === projectId &&
       current.member.version === version &&
       ['planner', 'manager'].includes(current.member.role)
-    )
-      await queueRefetch();
-  }, [project.offline, projectId, projectRefetch, queueRefetch, version]);
-  return { project, queue, refresh, authorized: !!authorized, page };
+    ) {
+      const refreshedQueue = await queueRefetch();
+      if (!refreshedQueue.error)
+        queryClient.setQueryData(
+          ['review-queue-access-denied', userId, projectId, version],
+          false,
+        );
+    }
+  }, [
+    project.offline,
+    projectId,
+    projectRefetch,
+    queueRefetch,
+    queryClient,
+    userId,
+    version,
+  ]);
+  return {
+    project,
+    queue,
+    refresh,
+    authorized: !!authorized,
+    page,
+    accessDenied,
+    reportAccessDenied,
+  };
 }

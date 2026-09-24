@@ -241,6 +241,45 @@ it('waits for the saved selection before exposing the first live project', async
   client.clear();
 });
 
+it('keeps verified project access visible when a background refresh fails', async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  await render(<Consumer />, {
+    wrapper: ({ children }) => <Provider client={client}>{children}</Provider>,
+  });
+  expect(await screen.findByText(one.project.name)).toBeVisible();
+
+  const error = new WorkReadError('unavailable');
+  jest.mocked(loadActiveProjects).mockRejectedValueOnce(error);
+  await fireEvent.press(screen.getByRole('button', { name: 'Refresh' }));
+
+  expect(await screen.findByText(error.message)).toBeVisible();
+  expect(screen.getByText(one.project.name)).toBeVisible();
+  expect(screen.getByText('Projects loaded')).toBeVisible();
+  client.clear();
+});
+
+it('drops cached project access when a background refresh confirms revocation', async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  await render(<Consumer />, {
+    wrapper: ({ children }) => <Provider client={client}>{children}</Provider>,
+  });
+  expect(await screen.findByText(one.project.name)).toBeVisible();
+
+  const error = new WorkReadError('access');
+  jest.mocked(loadActiveProjects).mockRejectedValueOnce(error);
+  await fireEvent.press(screen.getByRole('button', { name: 'Refresh' }));
+
+  expect(await screen.findByText(error.message)).toBeVisible();
+  expect(screen.getByText('No selection')).toBeVisible();
+  expect(screen.getByText('Loading projects')).toBeVisible();
+  expect(screen.queryByText(one.project.name)).toBeNull();
+  client.clear();
+});
+
 it('drops an online access error when the same account goes offline', async () => {
   const error = new WorkReadError('unavailable');
   jest.mocked(readRememberedProjectContext).mockResolvedValue(two);
