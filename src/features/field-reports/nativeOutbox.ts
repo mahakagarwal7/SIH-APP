@@ -28,7 +28,7 @@ export function getNativeOutbox(): Promise<OutboxService> {
           index,
           {
             async read(record, file) {
-              if (record.kind === 'voice') {
+              if (file.kind === 'audio') {
                 const source = await (
                   await getVoiceDraftStore()
                 ).recording(record.userId, record.captureId);
@@ -49,23 +49,20 @@ export function getNativeOutbox(): Promise<OutboxService> {
           sha256Hex,
           undefined,
           async (record) => {
-            if (record.kind === 'voice') {
-              const store = await getVoiceDraftStore();
-              if (
-                (await store.list(record.userId)).some(
-                  (row) => row.id === record.captureId,
-                )
-              )
-                await store.discard(record.userId, record.captureId);
-              return;
-            }
-            const store = await getReportDraftStore();
+            const voiceStore = await getVoiceDraftStore();
             if (
-              (await store.list(record.userId)).some(
+              (await voiceStore.list(record.userId)).some(
                 (row) => row.id === record.captureId,
               )
             )
-              await store.discard(record.userId, record.captureId);
+              await voiceStore.discard(record.userId, record.captureId);
+            const reportStore = await getReportDraftStore();
+            if (
+              (await reportStore.list(record.userId)).some(
+                (row) => row.id === record.captureId,
+              )
+            )
+              await reportStore.discard(record.userId, record.captureId);
           },
         ),
     )
@@ -83,23 +80,52 @@ async function prepare(userId: string) {
   );
   let enqueued = 0;
   let unavailable = 0;
+  const reports = await (await getReportDraftStore()).list(userId);
+  const reportById = new Map(reports.map((report) => [report.id, report]));
   const voice = await (await getVoiceDraftStore()).list(userId);
+  const voiceIds = new Set(voice.map((draft) => draft.id));
   for (const local of voice) {
-    if (!local.available || known.has(local.id)) continue;
+    if (known.has(local.id)) continue;
+    if (!local.available) {
+      unavailable += 1;
+      continue;
+    }
     try {
       await withDraftMutation(userId, local.id, async () => {
         const source = await (
           await getVoiceDraftStore()
         ).recording(userId, local.id);
-        const file: CaptureFile = {
-          id: randomUUID(),
-          name: `${local.id}.wav`,
-          kind: 'audio',
-          mime: 'audio/wav',
-          bytes: source.bytes.length,
-          sha256: await sha256Hex(source.bytes),
-          caption: '',
-        };
+        const files: CaptureFile[] = [
+          {
+            id: randomUUID(),
+            name: `${local.id}.wav`,
+            kind: 'audio',
+            mime: 'audio/wav',
+            bytes: source.bytes.length,
+            sha256: await sha256Hex(source.bytes),
+            caption: '',
+          },
+        ];
+        const companion = reportById.get(local.id);
+        let text = '';
+        if (companion) {
+          if (!companion.available)
+            throw new Error('Combined report evidence is incomplete.');
+          const report = await (
+            await getReportDraftStore()
+          ).materialize(userId, local.id);
+          text = report.draft.text;
+          for (const prepared of report.prepared)
+            files.push({
+              id: prepared.photo.id,
+              name: prepared.photo.fileName,
+              kind: 'photo',
+              mime: prepared.photo.mimeType,
+              bytes: prepared.bytes.length,
+              sha256: await sha256Hex(prepared.bytes),
+              caption: prepared.photo.caption,
+            });
+        }
         await outbox.enqueue({
           captureId: local.id,
           userId,
@@ -107,8 +133,8 @@ async function prepare(userId: string) {
           projectName: local.projectName,
           kind: 'voice',
           createdAt: local.createdAt,
-          text: '',
-          manifest: { captureId: local.id, language: 'auto', files: [file] },
+          text,
+          manifest: { captureId: local.id, language: 'auto', files },
         });
         known.add(local.id);
         enqueued += 1;
@@ -117,9 +143,9 @@ async function prepare(userId: string) {
       if (!(error instanceof DraftBusyError)) unavailable += 1;
     }
   }
-  const reports = await (await getReportDraftStore()).list(userId);
   for (const local of reports) {
-    if (!local.available || known.has(local.id)) continue;
+    if (!local.available || known.has(local.id) || voiceIds.has(local.id))
+      continue;
     try {
       await withDraftMutation(userId, local.id, async () => {
         const source = await (

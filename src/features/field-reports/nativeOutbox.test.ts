@@ -62,7 +62,7 @@ beforeEach(() => {
   });
 });
 function localStore(
-  kind: 'voice' | 'report',
+  kind: 'voice' | 'report' | 'combined',
   beforeDiscard = assertLocalDraftCanBeDiscarded,
 ) {
   const common = {
@@ -74,11 +74,11 @@ function localStore(
     state: 'saved' as const,
   };
   let voice: VoiceDraft | null =
-    kind === 'voice'
+    kind !== 'report'
       ? { ...common, duration: 1, sampleRate: 16000, byteLength: 3 }
       : null;
   let report: ReportDraft | null =
-    kind === 'report'
+    kind !== 'voice'
       ? {
           ...common,
           text: 'Work complete',
@@ -141,12 +141,32 @@ function localStore(
   jest.mocked(getVoiceDraftStore).mockResolvedValue(voiceStore);
   jest.mocked(getReportDraftStore).mockResolvedValue(reportStore);
   return {
-    store: kind === 'voice' ? voiceStore : reportStore,
+    store: kind === 'report' ? reportStore : voiceStore,
     voiceStore,
+    reportStore,
     voice,
     exists: () => exists,
   };
 }
+
+it('freezes voice, typed text and photos with one shared capture identity', async () => {
+  localStore('combined');
+  await expect(prepareLocalOutbox('alice')).resolves.toEqual({
+    enqueued: 1,
+    unavailable: 0,
+  });
+  expect(records.get(captureId)).toMatchObject({
+    kind: 'voice',
+    text: 'Work complete',
+    manifest: {
+      captureId,
+      files: [
+        expect.objectContaining({ kind: 'audio' }),
+        expect.objectContaining({ kind: 'photo' }),
+      ],
+    },
+  });
+});
 
 it.each(['voice', 'report'] as const)(
   'retains %s evidence during hashing and after entering the outbox',

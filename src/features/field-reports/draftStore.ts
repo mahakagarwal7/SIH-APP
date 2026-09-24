@@ -65,6 +65,14 @@ export class VoiceDraftStore {
     notifyOutboxWork(draft.userId);
   }
 
+  // A combined evidence save already owns the shared capture mutation lock.
+  async saveWithinMutation(
+    draft: VoiceDraft,
+    bytes: Uint8Array,
+  ): Promise<void> {
+    await this.persist(draft, bytes);
+  }
+
   private async persist(draft: VoiceDraft, bytes: Uint8Array): Promise<void> {
     if (bytes.length !== draft.byteLength)
       throw new Error('Incomplete recording.');

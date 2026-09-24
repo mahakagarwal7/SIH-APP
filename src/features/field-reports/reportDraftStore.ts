@@ -158,6 +158,14 @@ export class ReportDraftStore {
     notifyOutboxWork(draft.userId);
   }
 
+  // A combined evidence save already owns the shared capture mutation lock.
+  async saveWithinMutation(
+    draft: ReportDraft,
+    prepared: PreparedDraftPhoto[],
+  ): Promise<void> {
+    await this.persist(draft, prepared);
+  }
+
   private async persist(
     draft: ReportDraft,
     prepared: PreparedDraftPhoto[],

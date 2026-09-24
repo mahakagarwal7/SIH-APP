@@ -6,6 +6,7 @@ import {
   validateManifest,
 } from './outbox';
 import { notifyOutboxChanged, notifyOutboxWork } from './outboxEvents';
+import { getReportEvidenceState } from './reportEvidence';
 
 import type {
   OutboxFileReader,
@@ -169,8 +170,14 @@ export class OutboxService {
         );
       return record;
     }
-    const localText =
-      record.kind === 'report' && record.manifest.files.length === 0;
+    const evidence = getReportEvidenceState(record);
+    if (!evidence.hasAny)
+      throw new OutboxSyncError(
+        'Add a voice recording, report text or a photo before sending.',
+        'local',
+        false,
+      );
+    const localText = evidence.hasText && record.manifest.files.length === 0;
     if (
       !record.submissionRejected &&
       !localText &&
@@ -181,7 +188,7 @@ export class OutboxService {
         'local',
         false,
       );
-    if (record.kind === 'voice' && !record.originalTranscript?.trim())
+    if (!evidence.voiceTranscriptReady)
       throw new OutboxSyncError(
         'The verified voice transcript is not available yet.',
         'server',
@@ -422,7 +429,7 @@ export class OutboxService {
       if (
         row.state === 'needs_confirmation' &&
         row.submissionState === 'unconfirmed' &&
-        (row.kind !== 'voice' || !!row.originalTranscript)
+        getReportEvidenceState(row).canSubmit
       ) {
         results.push(row);
         continue;
