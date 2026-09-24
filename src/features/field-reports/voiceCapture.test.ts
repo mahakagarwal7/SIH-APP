@@ -3,10 +3,11 @@ import { VoiceCapture } from './voiceCapture';
 import type { PcmBuffer } from './pcmWav';
 import type { CaptureState } from './voiceCapture';
 
-function sample(seconds = 1): PcmBuffer {
+function sample(seconds = 1, amplitude = 2048): PcmBuffer {
   const data = new ArrayBuffer(16000 * 2 * seconds);
   const view = new DataView(data);
-  for (let i = 0; i < data.byteLength; i += 2) view.setInt16(i, 2048, true);
+  for (let i = 0; i < data.byteLength; i += 2)
+    view.setInt16(i, amplitude, true);
   return { data, channels: 1, sampleRate: 16000 };
 }
 function setup() {
@@ -49,6 +50,20 @@ it('requests permission once under double taps and stops before persisting', asy
   expect(c.mic.stop).toHaveBeenCalledTimes(1);
   expect(c.save).toHaveBeenCalledTimes(1);
   expect(c.state()?.phase).toBe('saved');
+});
+it('reports live audio level and cancels without persisting', async () => {
+  const c = setup();
+  await c.controller.start();
+  c.feed();
+  expect(c.state()).toMatchObject({ phase: 'recording', level: 0.75 });
+  c.callbacks[0]!(sample(1, 32767));
+  expect(c.state()).toMatchObject({ phase: 'recording', level: 1 });
+  c.controller.cancel();
+  expect(c.state()).toMatchObject({ phase: 'idle', duration: 0, level: 0 });
+  expect(c.mic.stop).toHaveBeenCalledTimes(1);
+  expect(c.mic.release).toHaveBeenCalledTimes(1);
+  c.callbacks[0]!(sample());
+  expect(c.save).not.toHaveBeenCalled();
 });
 it('never starts the microphone after permission is denied or granted after leaving', async () => {
   const c = setup();

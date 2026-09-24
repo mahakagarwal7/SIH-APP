@@ -27,7 +27,16 @@ jest.mock('@/features/auth/AuthProvider', () => ({ useAuth: jest.fn() }));
 jest.mock('@/features/projects/useCaptureProject', () => ({
   useCaptureProject: jest.fn(),
 }));
-jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
+const mockRouter = {
+  back: jest.fn(),
+  canGoBack: jest.fn(() => true),
+  push: jest.fn(),
+  replace: jest.fn(),
+};
+jest.mock('expo-router', () => ({
+  useFocusEffect: jest.fn(),
+  useRouter: () => mockRouter,
+}));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('./androidMicrophone', () => ({ androidMicrophone: jest.fn() }));
 jest.mock('./combinedDraftStore', () => ({
@@ -143,9 +152,29 @@ beforeEach(() => {
   });
   list.mockReset().mockResolvedValue([]);
   jest.mocked(assertLocalDraftCanBeDiscarded).mockResolvedValue(undefined);
+  Object.values(mockRouter).forEach((mock) => mock.mockClear());
   jest
     .mocked(getVoiceDraftStore)
     .mockResolvedValue({ save, list } as unknown as VoiceDraftStore);
+});
+
+it('matches the Speak Progress recording controls with a live voice meter', async () => {
+  await render(<App />);
+  expect(await screen.findByText('Speak Progress')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Back' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Open settings' })).toBeVisible();
+  expect(screen.getByRole('radio', { name: 'Language हिन्दी' })).toBeVisible();
+  expect(screen.getByRole('radio', { name: 'Language English' })).toBeVisible();
+  expect(screen.getByText('READY TO RECORD')).toBeVisible();
+  const submit = screen.getByRole('button', { name: 'Submit recording' });
+  expect(submit).toBeDisabled();
+  await recordOneSecond();
+  expect(screen.getByText('RECORDING VOICE…')).toBeVisible();
+  expect(screen.getByLabelText('Voice level 75%')).toBeVisible();
+  expect(submit).toBeEnabled();
+  await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+  expect(screen.getByText('READY TO RECORD')).toBeVisible();
+  expect(save).not.toHaveBeenCalled();
 });
 
 it('freezes voice, typed text and a selected photo as one capture', async () => {

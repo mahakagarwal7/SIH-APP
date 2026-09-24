@@ -13,6 +13,18 @@ export const languageNames: Record<AppLocale, string> = {
 // English source copy is the key so untranslated additions remain readable.
 // The coverage test keeps every visible static phrase represented here.
 export const hiTranslations: Readonly<Record<string, string>> = {
+  English: 'अंग्रेज़ी',
+  'OTHER REPORT METHODS': 'अन्य रिपोर्ट तरीके',
+  'READY TO RECORD': 'रिकॉर्ड करने के लिए तैयार',
+  'RECORDING VOICE…': 'आवाज़ रिकॉर्ड हो रही है…',
+  'Recording stops automatically at 25 seconds.':
+    'रिकॉर्डिंग 25 सेकंड पर अपने आप रुक जाती है।',
+  'Say the location or line tag, work completed and what remains.':
+    'स्थान या लाइन टैग, पूरा हुआ काम और बचा हुआ काम बोलें।',
+  Submit: 'जमा करें',
+  'Submit recording': 'रिकॉर्डिंग जमा करें',
+  'Speak Progress': 'प्रगति बोलें',
+  'Voice waveform': 'आवाज़ की तरंग',
   'ACTIVITIES DONE': 'पूर्ण गतिविधियाँ',
   DELAYED: 'विलंबित',
   Nirmaan: 'निर्माण',

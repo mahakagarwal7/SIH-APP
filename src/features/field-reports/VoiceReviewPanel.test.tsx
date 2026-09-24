@@ -113,7 +113,7 @@ beforeEach(() => {
   jest.mocked(cancelNativeOutboxCapture).mockReset();
 });
 
-it('shows review immediately and queues Send without waiting for transcription', async () => {
+it('shows review immediately and queues Submit without waiting for transcription', async () => {
   let finishPreparation!: () => void;
   let prepared = false;
   jest.mocked(prepareLocalOutbox).mockReturnValue(
@@ -130,7 +130,7 @@ it('shows review immediately and queues Send without waiting for transcription',
   } as never);
   await render(<App />);
   expect(await screen.findByText('Transcribing…')).toBeVisible();
-  const send = screen.getByRole('button', { name: 'Send' });
+  const send = screen.getByRole('button', { name: 'Submit' });
   expect(send).toBeEnabled();
   await fireEvent.press(send);
   expect(
@@ -159,7 +159,7 @@ it('shows the worker transcript on the same screen and sends edited wording', as
     transcript,
     'Two supports installed; welding remains.',
   );
-  await fireEvent.press(screen.getByRole('button', { name: 'Send' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Submit' }));
   expect(requestSend).toHaveBeenCalledWith('alice', captureId, {
     text: 'Two supports installed; welding remains.',
     workDate: null,

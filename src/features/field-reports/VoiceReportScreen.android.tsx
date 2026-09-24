@@ -5,7 +5,7 @@ import {
   requestRecordingPermissionsAsync,
 } from 'expo-audio';
 import { randomUUID } from 'expo-crypto';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -97,6 +97,99 @@ function Action({
   );
 }
 
+function VoiceHeader() {
+  const router = useRouter();
+  return (
+    <View style={styles.header}>
+      <Pressable
+        accessibilityLabel="Back"
+        accessibilityRole="button"
+        onPress={() =>
+          router.canGoBack() ? router.back() : router.replace('/field')
+        }
+        style={styles.headerButton}
+      >
+        <Ionicons color="#17354c" name="arrow-back" size={20} />
+      </Pressable>
+      <Text accessibilityRole="header" style={styles.headerTitle}>
+        Speak Progress
+      </Text>
+      <Pressable
+        accessibilityLabel="Open settings"
+        accessibilityRole="button"
+        onPress={() => router.push('/account')}
+        style={styles.headerButton}
+      >
+        <Ionicons color="#17354c" name="settings-outline" size={20} />
+      </Pressable>
+    </View>
+  );
+}
+
+function LanguageSelector() {
+  const { locale, saving, setLocale } = useLocalization();
+  return (
+    <View accessibilityRole="radiogroup" style={styles.languages}>
+      {(
+        [
+          { locale: 'hi', flag: '🇮🇳', label: 'हिन्दी' },
+          { locale: 'en', flag: '🇬🇧', label: 'English' },
+        ] as const
+      ).map((option) => {
+        const selected = locale === option.locale;
+        return (
+          <Pressable
+            accessibilityLabel={`Language ${option.label}`}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: selected, disabled: saving }}
+            disabled={saving}
+            key={option.locale}
+            onPress={() => void setLocale(option.locale)}
+            style={[styles.language, selected && styles.languageSelected]}
+          >
+            <Text style={styles.languageFlag}>{option.flag}</Text>
+            <Text
+              style={[
+                styles.languageLabel,
+                selected && styles.languageLabelSelected,
+              ]}
+            >
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const waveformShape = [
+  0.32, 0.58, 0.86, 0.48, 1, 0.68, 0.4, 0.82, 0.56, 0.94, 0.5,
+];
+
+function VoiceWaveform({ level, active }: { level: number; active: boolean }) {
+  const amplitude = active ? Math.max(0.18, level) : 0.12;
+  return (
+    <View
+      accessibilityLabel={
+        active ? `Voice level ${Math.round(level * 100)}%` : 'Voice waveform'
+      }
+      style={styles.waveform}
+    >
+      {waveformShape.map((shape, index) => (
+        <View
+          key={index}
+          style={[
+            styles.waveBar,
+            { height: 8 + 42 * shape * amplitude },
+            active && styles.waveBarActive,
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
 function CapturePanel({
   userId,
   projectId,
@@ -104,6 +197,7 @@ function CapturePanel({
   evidence,
   evidencePending,
   onBusy,
+  onLeave,
   onSaved,
 }: {
   userId: string;
@@ -112,6 +206,7 @@ function CapturePanel({
   evidence: CombinedEvidence;
   evidencePending: boolean;
   onBusy: (busy: boolean) => void;
+  onLeave: () => void;
   onSaved: (captureId: string) => void;
 }) {
   const client = useQueryClient();
@@ -121,6 +216,7 @@ function CapturePanel({
   const [state, setState] = useState<CaptureState>({
     phase: 'idle',
     duration: 0,
+    level: 0,
     message: 'Ready to record',
     canRetry: false,
   });
@@ -248,48 +344,74 @@ function CapturePanel({
 
   return (
     <View style={styles.capture}>
-      <Text style={styles.mode}>VOICE</Text>
-      <Text style={shellStyles.cardTitle}>{projectName}</Text>
-      <Text style={shellStyles.body}>
-        Say the location or line tag, the work completed and what remains.
+      <Text numberOfLines={1} style={styles.projectName}>
+        {projectName}
       </Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={
-          state.phase === 'recording'
-            ? 'Stop and save recording'
-            : 'Record voice report'
-        }
-        accessibilityState={{
-          disabled:
-            (busy && state.phase !== 'recording') ||
-            state.canRetry ||
-            evidencePending,
-        }}
-        disabled={
-          (busy && state.phase !== 'recording') ||
-          state.canRetry ||
-          evidencePending
-        }
-        onPress={() =>
-          void (state.phase === 'recording'
-            ? controller.current?.stop()
-            : controller.current?.start())
-        }
+      <Text style={styles.prompt}>
+        Say the location or line tag, work completed and what remains.
+      </Text>
+      <View
         style={[
-          styles.record,
-          ((busy && state.phase !== 'recording') ||
-            state.canRetry ||
-            evidencePending) &&
-            styles.disabled,
+          styles.recordHaloOuter,
+          state.phase === 'recording' && styles.recordHaloOuterActive,
         ]}
       >
-        <Ionicons
-          name={state.phase === 'recording' ? 'stop' : 'mic'}
-          size={38}
-          color="#fff"
-        />
-      </Pressable>
+        <View
+          style={[
+            styles.recordHaloInner,
+            state.phase === 'recording' && styles.recordHaloInnerActive,
+          ]}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              state.phase === 'recording'
+                ? 'Stop and save recording'
+                : 'Record voice report'
+            }
+            accessibilityState={{
+              disabled:
+                (busy && state.phase !== 'recording') ||
+                state.canRetry ||
+                evidencePending,
+            }}
+            disabled={
+              (busy && state.phase !== 'recording') ||
+              state.canRetry ||
+              evidencePending
+            }
+            onPress={() =>
+              void (state.phase === 'recording'
+                ? controller.current?.stop()
+                : controller.current?.start())
+            }
+            style={[
+              styles.record,
+              state.phase === 'recording' && styles.recordActive,
+              ((busy && state.phase !== 'recording') ||
+                state.canRetry ||
+                evidencePending) &&
+                styles.disabled,
+            ]}
+          >
+            <Ionicons
+              name={state.phase === 'recording' ? 'stop' : 'mic'}
+              size={38}
+              color="#fff"
+            />
+          </Pressable>
+        </View>
+      </View>
+      <Text
+        accessibilityLiveRegion="polite"
+        style={[
+          styles.recordingLabel,
+          state.phase === 'recording' && styles.recordingLabelActive,
+        ]}
+      >
+        {state.phase === 'recording' ? 'RECORDING VOICE…' : 'READY TO RECORD'}
+      </Text>
+      <VoiceWaveform active={state.phase === 'recording'} level={state.level} />
       <Text style={styles.timer}>{state.duration.toFixed(1)}s / 25s</Text>
       <Text
         accessibilityLiveRegion="polite"
@@ -297,9 +419,46 @@ function CapturePanel({
       >
         {state.message}
       </Text>
-      <Text style={styles.detail}>
-        Tap to {state.phase === 'recording' ? 'stop and save' : 'record'}.
-        Recording stops at 25 seconds.
+      <View style={styles.captureActions}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{
+            disabled: state.phase === 'saving' || state.canRetry || discarding,
+          }}
+          disabled={state.phase === 'saving' || state.canRetry || discarding}
+          onPress={() =>
+            ['permission', 'recording'].includes(state.phase)
+              ? controller.current?.cancel()
+              : onLeave()
+          }
+          style={[
+            styles.captureAction,
+            styles.cancelAction,
+            (state.phase === 'saving' || state.canRetry || discarding) &&
+              styles.disabled,
+          ]}
+        >
+          <Ionicons color="#ef5c64" name="close-circle-outline" size={18} />
+          <Text style={styles.cancelActionText}>Cancel</Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Submit recording"
+          accessibilityState={{ disabled: state.phase !== 'recording' }}
+          disabled={state.phase !== 'recording'}
+          onPress={() => void controller.current?.stop()}
+          style={[
+            styles.captureAction,
+            styles.submitAction,
+            state.phase !== 'recording' && styles.disabled,
+          ]}
+        >
+          <Ionicons color="#ffffff" name="checkmark-circle-outline" size={18} />
+          <Text style={styles.submitActionText}>Submit</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.limit}>
+        Recording stops automatically at 25 seconds.
       </Text>
       {state.canRetry && (
         <View>
@@ -329,8 +488,8 @@ function CapturePanel({
 }
 
 function AccountVoiceScreen({ userId }: { userId: string }) {
-  useLocalization();
   const auth = useAuth();
+  const router = useRouter();
   const project = useCaptureProject();
   const client = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -528,16 +687,9 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
     }
   }
   return (
-    <ShellPage title="Report progress" eyebrow="FIELD · VOICE REPORT">
-      <View style={styles.steps}>
-        <Text style={styles.mode}>1 Report</Text>
-        <Text style={styles.detail}>2 Check</Text>
-        <Text style={styles.detail}>3 Send</Text>
-      </View>
-      <ReportMethodLinks active="voice" />
-      <Text style={shellStyles.body}>
-        Add a voice note, typed details or photos in any combination.
-      </Text>
+    <ShellPage>
+      <VoiceHeader />
+      <LanguageSelector />
       {auth.offline && (
         <Text style={styles.notice}>
           Offline · Recordings stay on this device.
@@ -554,6 +706,19 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
         />
       ) : context ? (
         <>
+          <CapturePanel
+            key={`${userId}:${context.project.id}`}
+            userId={userId}
+            projectId={context.project.id}
+            projectName={context.project.name}
+            evidence={{ text, photos: readyPhotos }}
+            evidencePending={evidencePending}
+            onBusy={captureBusy}
+            onLeave={() =>
+              router.canGoBack() ? router.back() : router.replace('/field')
+            }
+            onSaved={openReview}
+          />
           <View style={styles.companion}>
             <Text style={styles.mode}>OPTIONAL SUPPORTING EVIDENCE</Text>
             <TextInput
@@ -625,16 +790,8 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
               {photos.length} of 3 photos selected
             </Text>
           </View>
-          <CapturePanel
-            key={`${userId}:${context.project.id}`}
-            userId={userId}
-            projectId={context.project.id}
-            projectName={context.project.name}
-            evidence={{ text, photos: readyPhotos }}
-            evidencePending={evidencePending}
-            onBusy={captureBusy}
-            onSaved={openReview}
-          />
+          <Text style={styles.otherMethods}>OTHER REPORT METHODS</Text>
+          <ReportMethodLinks active="voice" />
         </>
       ) : (
         <View style={shellStyles.card}>
@@ -756,14 +913,61 @@ export function VoiceReportScreen() {
 }
 
 const styles = StyleSheet.create({
-  steps: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 18 },
+  header: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+  },
+  headerButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e1e7ea',
+  },
+  headerTitle: {
+    color: '#17354c',
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '800',
+  },
+  languages: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  language: {
+    minHeight: 40,
+    minWidth: 104,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#dfe5e9',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  languageSelected: { borderColor: '#7655d9', backgroundColor: '#f2eeff' },
+  languageFlag: { fontSize: 16 },
+  languageLabel: { color: '#667681', fontSize: 13, fontWeight: '700' },
+  languageLabelSelected: { color: '#7655d9' },
   mode: { color: '#266b8c', fontWeight: '700', fontSize: 13, lineHeight: 21 },
   detail: { color: '#586c7a', fontSize: 13, lineHeight: 21 },
   companion: {
     backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#d7e0e5',
+    borderColor: '#e1e7ea',
+    borderRadius: 16,
     padding: 20,
+    marginTop: 22,
     gap: 10,
   },
   input: {
@@ -791,29 +995,102 @@ const styles = StyleSheet.create({
     color: '#17354c',
   },
   capture: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#d7e0e5',
-    padding: 20,
-    marginVertical: 22,
+    paddingTop: 26,
+    paddingHorizontal: 4,
     gap: 10,
     alignItems: 'center',
   },
-  record: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#17354c',
+  projectName: {
+    color: '#73818b',
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+  },
+  prompt: {
+    color: '#667681',
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+    maxWidth: 330,
+  },
+  recordHaloOuter: {
+    width: 146,
+    height: 146,
+    borderRadius: 73,
+    backgroundColor: '#eee9ff',
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 20,
+  },
+  recordHaloOuterActive: { backgroundColor: '#fde3e5' },
+  recordHaloInner: {
+    width: 116,
+    height: 116,
+    borderRadius: 58,
+    backgroundColor: '#dcd2ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recordHaloInnerActive: { backgroundColor: '#fac8cc' },
+  record: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: '#7655d9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recordActive: { backgroundColor: '#ef3f49' },
+  recordingLabel: {
+    color: '#7b8992',
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '800',
+    letterSpacing: 0.6,
     marginTop: 16,
   },
+  recordingLabelActive: { color: '#ef3f49' },
+  waveform: {
+    height: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  waveBar: { width: 3, borderRadius: 2, backgroundColor: '#d5dde2' },
+  waveBarActive: { backgroundColor: '#ef5c64' },
   timer: {
     color: '#17354c',
-    fontSize: 22,
+    fontSize: 16,
     fontVariant: ['tabular-nums'],
-    fontWeight: '600',
+    fontWeight: '700',
   },
+  captureActions: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  captureAction: {
+    flex: 1,
+    minHeight: 50,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+  },
+  cancelAction: {
+    borderWidth: 1,
+    borderColor: '#f2a0a5',
+    backgroundColor: '#fff1f2',
+  },
+  cancelActionText: { color: '#ef5c64', fontSize: 14, fontWeight: '800' },
+  submitAction: { backgroundColor: '#27c76f' },
+  submitActionText: { color: '#ffffff', fontSize: 14, fontWeight: '800' },
+  limit: { color: '#7b8992', fontSize: 11, lineHeight: 17 },
   disabled: { opacity: 0.45 },
   error: { color: '#9d3434', fontSize: 15, lineHeight: 23 },
   notice: {
@@ -825,5 +1102,13 @@ const styles = StyleSheet.create({
   },
   savedHeader: { marginTop: 30, gap: 4 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
+  otherMethods: {
+    color: '#73818b',
+    fontSize: 11,
+    lineHeight: 17,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+    marginTop: 24,
+  },
   empty: { color: '#586c7a', paddingVertical: 28, fontSize: 16 },
 });
