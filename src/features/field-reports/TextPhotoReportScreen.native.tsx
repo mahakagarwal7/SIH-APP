@@ -83,12 +83,15 @@ function AccountTextPhotoScreen({
   const [text, setText] = useState('');
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
   const [picking, setPicking] = useState(false);
+  const [recovering, setRecovering] = useState(true);
   const [saving, setSaving] = useState(false);
   const [discarding, setDiscarding] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingSave | null>(null);
   const [message, setMessage] = useState('');
   const mounted = useRef(true);
   const recovered = useRef(false);
+  const recoveryPending = useRef(true);
+  const mutationPending = useRef(false);
   const drafts = useQuery({
     queryKey: ['report-drafts', userId],
     networkMode: 'always',
@@ -98,7 +101,8 @@ function AccountTextPhotoScreen({
     !project.error && project.data?.member.user_id === userId
       ? project.data
       : null;
-  const busy = saving || picking || !!pending;
+  const mutationBusy = saving || picking || recovering || discarding !== null;
+  const busy = mutationBusy || !!pending;
 
   const addPrepared = useCallback((photo: PreparedLocalPhoto | null) => {
     if (!photo) return;
@@ -124,7 +128,11 @@ function AccountTextPhotoScreen({
                 ? error.message
                 : 'Could not restore photo.',
             ),
-        );
+        )
+        .finally(() => {
+          recoveryPending.current = false;
+          if (mounted.current) setRecovering(false);
+        });
     }
     return () => {
       mounted.current = false;
@@ -137,7 +145,14 @@ function AccountTextPhotoScreen({
   );
 
   async function pick(source: 'camera' | 'library') {
-    if (photos.length >= 3 || busy) return;
+    if (
+      !mounted.current ||
+      photos.length >= 3 ||
+      busy ||
+      mutationPending.current
+    )
+      return;
+    mutationPending.current = true;
     setPicking(true);
     setMessage('');
     try {
@@ -152,6 +167,7 @@ function AccountTextPhotoScreen({
             : 'Could not prepare this photo.',
         );
     } finally {
+      mutationPending.current = false;
       if (mounted.current) setPicking(false);
     }
   }
@@ -179,12 +195,15 @@ function AccountTextPhotoScreen({
   }
 
   async function save(attempt?: PendingSave) {
+    if (!mounted.current || mutationPending.current || recoveryPending.current)
+      return;
     if (!pending && !text.trim() && photos.length === 0) {
       setMessage('Add report text or a photo before saving.');
       return;
     }
     const target = attempt ?? pending ?? createPending();
     if (!target || saving) return;
+    mutationPending.current = true;
     setPending(target);
     setSaving(true);
     setMessage('Saving to this device…');
@@ -215,33 +234,45 @@ function AccountTextPhotoScreen({
             : 'Could not finish saving this draft.',
         );
     } finally {
+      mutationPending.current = false;
       if (mounted.current) setSaving(false);
     }
   }
 
   async function discard(id: string) {
-    if (!mounted.current) return;
+    if (
+      !mounted.current ||
+      mutationPending.current ||
+      pending ||
+      recoveryPending.current
+    )
+      return;
+    mutationPending.current = true;
     setDiscarding(id);
     setMessage('');
     try {
       await (await getReportDraftStore()).discard(userId, id);
-    } catch {
       if (mounted.current)
-        setMessage('Could not finish discarding. Retry the discard action.');
-    } finally {
-      if (mounted.current) {
-        setDiscarding(null);
         client.setQueryData<LocalReportDraft[]>(
           ['report-drafts', userId],
           (current = []) => current.filter((draft) => draft.id !== id),
         );
+    } catch {
+      if (mounted.current) {
+        setMessage('Could not finish discarding. Retry the discard action.');
+        await client.invalidateQueries({ queryKey: ['report-drafts', userId] });
       }
+    } finally {
+      mutationPending.current = false;
+      if (mounted.current) setDiscarding(null);
     }
   }
 
   async function discardFailedSave() {
     const attempt = pending;
-    if (!attempt || !mounted.current) return;
+    if (!attempt || !mounted.current || mutationPending.current) return;
+    mutationPending.current = true;
+    setDiscarding(attempt.draft.id);
     try {
       const store = await getReportDraftStore();
       if (
@@ -261,6 +292,9 @@ function AccountTextPhotoScreen({
     } catch {
       if (mounted.current)
         setMessage('Could not discard the incomplete save. Retry.');
+    } finally {
+      mutationPending.current = false;
+      if (mounted.current) setDiscarding(null);
     }
   }
 
@@ -272,6 +306,7 @@ function AccountTextPhotoScreen({
         <Text style={styles.detail}>3 Send</Text>
       </View>
       <ReportMethodLinks active={mode} />
+      {recovering && <Text style={styles.message}>Restoring photo…</Text>}
       {auth.offline && (
         <Text style={styles.notice}>Offline · Drafts stay on this device.</Text>
       )}
@@ -355,30 +390,25 @@ function AccountTextPhotoScreen({
             <View>
               <Action
                 label={saving ? 'Saving…' : 'Retry save'}
-                disabled={saving}
+                disabled={mutationBusy}
                 onPress={() => void save()}
               />
               <Action
                 label="Discard incomplete save"
-                disabled={saving}
+                disabled={mutationBusy}
                 onPress={() => void discardFailedSave()}
               />
             </View>
           ) : (
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ disabled: saving || picking }}
-              disabled={saving || picking}
+              accessibilityState={{ disabled: mutationBusy }}
+              disabled={mutationBusy}
               onPress={() => void save()}
-              style={[styles.primary, (saving || picking) && styles.disabled]}
+              style={[styles.primary, mutationBusy && styles.disabled]}
             >
               <Text style={styles.primaryText}>Save on device</Text>
             </Pressable>
-          )}
-          {!!message && (
-            <Text accessibilityLiveRegion="polite" style={styles.message}>
-              {message}
-            </Text>
           )}
         </View>
       ) : (
@@ -406,6 +436,11 @@ function AccountTextPhotoScreen({
           />
         </View>
       )}
+      {!!message && (
+        <Text accessibilityLiveRegion="polite" style={styles.message}>
+          {message}
+        </Text>
+      )}
       <Text style={styles.detail}>
         Check and Send are implemented in later approved slices.
       </Text>
@@ -415,7 +450,7 @@ function AccountTextPhotoScreen({
         </Text>
         <Action
           label="Refresh drafts"
-          disabled={drafts.isFetching || saving}
+          disabled={drafts.isFetching || mutationBusy}
           onPress={() => void drafts.refetch()}
         />
       </View>
@@ -451,7 +486,7 @@ function AccountTextPhotoScreen({
             <Text style={styles.detail}>Not sent for review</Text>
             <Action
               label={discarding === draft.id ? 'Discarding…' : 'Discard draft'}
-              disabled={!!discarding || saving}
+              disabled={busy}
               onPress={() =>
                 Alert.alert(
                   'Discard local report?',
@@ -489,7 +524,7 @@ export function TextPhotoReportScreen({ mode }: { mode: 'text' | 'photo' }) {
 const styles = StyleSheet.create({
   steps: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 18 },
   mode: { color: '#266b8c', fontWeight: '700', fontSize: 13, lineHeight: 21 },
-  detail: { color: '#627786', fontSize: 13, lineHeight: 21 },
+  detail: { color: '#586c7a', fontSize: 13, lineHeight: 21 },
   notice: {
     backgroundColor: '#e7edf0',
     color: '#17354c',
@@ -544,5 +579,5 @@ const styles = StyleSheet.create({
   message: { color: '#17354c', fontSize: 14, lineHeight: 22 },
   error: { color: '#9d3434', fontSize: 15, lineHeight: 23 },
   savedHeader: { marginTop: 30, gap: 4 },
-  empty: { color: '#627786', paddingVertical: 28, fontSize: 16 },
+  empty: { color: '#586c7a', paddingVertical: 28, fontSize: 16 },
 });

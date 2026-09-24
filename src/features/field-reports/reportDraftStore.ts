@@ -106,10 +106,31 @@ function sameDraft(left: ReportDraft, right: ReportDraft) {
 
 // This service owns local data only. Upload and submission belong to the outbox slice.
 export class ReportDraftStore {
+  private readonly mutations = new Set<string>();
+
   constructor(
     private index: ReportDraftIndex,
     private files: ReportDraftFiles,
   ) {}
+
+  // Reject overlap instead of queueing a stale retry behind a completed discard.
+  private async mutate(
+    userId: string,
+    id: string,
+    action: () => Promise<void>,
+  ) {
+    const key = JSON.stringify([userId, id]);
+    if (this.mutations.has(key))
+      throw new Error(
+        'This draft is busy. Wait for its save or discard to finish.',
+      );
+    this.mutations.add(key);
+    try {
+      await action();
+    } finally {
+      this.mutations.delete(key);
+    }
+  }
 
   async list(userId: string): Promise<LocalReportDraft[]> {
     const rows = await this.index.list(userId);
@@ -132,6 +153,15 @@ export class ReportDraftStore {
   }
 
   async save(
+    draft: ReportDraft,
+    prepared: PreparedDraftPhoto[],
+  ): Promise<void> {
+    return this.mutate(draft.userId, draft.id, () =>
+      this.persist(draft, prepared),
+    );
+  }
+
+  private async persist(
     draft: ReportDraft,
     prepared: PreparedDraftPhoto[],
   ): Promise<void> {
@@ -164,10 +194,13 @@ export class ReportDraftStore {
   }
 
   async discard(userId: string, id: string): Promise<void> {
-    const draft = await this.index.get(userId, id);
-    if (!draft) throw new Error('This draft is unavailable for this account.');
-    await this.index.setState(userId, id, 'deleting');
-    for (const photo of draft.photos) await this.files.remove(draft, photo);
-    await this.index.remove(userId, id);
+    return this.mutate(userId, id, async () => {
+      const draft = await this.index.get(userId, id);
+      if (!draft)
+        throw new Error('This draft is unavailable for this account.');
+      await this.index.setState(userId, id, 'deleting');
+      for (const photo of draft.photos) await this.files.remove(draft, photo);
+      await this.index.remove(userId, id);
+    });
   }
 }

@@ -24,7 +24,10 @@ export function ReportMethodLinks({
           <Pressable
             accessibilityRole="tab"
             accessibilityState={{ selected: active === method.key }}
-            style={[styles.tab, active === method.key && styles.active]}
+            style={StyleSheet.flatten([
+              styles.tab,
+              active === method.key && styles.active,
+            ])}
           >
             <Text
               style={[
@@ -42,7 +45,7 @@ export function ReportMethodLinks({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
   tab: {
     minHeight: 48,
     minWidth: 84,
