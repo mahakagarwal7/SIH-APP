@@ -82,6 +82,10 @@ implemented before 1.4. Each numbered item remains its own tested PR.
 - **3.1** Review queue list screen (pending claims).
 - **3.2** Decision screen (accept/reject + reason), wired to the
   verifications/decisions API.
+- **3.3** Clarification and independent verification responses: reporters
+  answer the current structured question from My reports, and the routed
+  supervisor records assignment and work checks separately from My work.
+  This is approved delivery-plan slice 9; it adds no Alerts dependency.
 
 ## Phase 4 — Feature 1: Schedule (read-only)
 
