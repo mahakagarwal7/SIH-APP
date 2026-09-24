@@ -2,13 +2,13 @@ import { usePathname } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
-import { useDefaultProject } from '@/features/projects/useMyWork';
+import { useProjectSelection } from '@/features/projects/useProjectSelection';
 
 import { NavLink, shellStyles } from './shellUi';
 
 export function ShellHeader() {
   const { offline } = useAuth();
-  const project = useDefaultProject();
+  const project = useProjectSelection();
   const pathname = usePathname();
   const workspace = pathname.startsWith('/field')
     ? 'FIELD'
@@ -26,7 +26,7 @@ export function ShellHeader() {
       </View>
       <View style={[styles.row, styles.project]}>
         <Text style={styles.projectText}>
-          {project.isError
+          {project.error
             ? 'Project unavailable'
             : (project.data?.project.name ??
               (project.isPending

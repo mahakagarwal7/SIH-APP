@@ -1,6 +1,10 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render } from '@testing-library/react-native';
-import { AppState } from 'react-native';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from '@tanstack/react-query';
+import { act, render, screen } from '@testing-library/react-native';
+import { AppState, Text } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
 
@@ -10,6 +14,7 @@ import { OutboxSyncAgent } from './OutboxSyncAgent.native';
 
 import type { OutboxRecord } from './outbox';
 import type { AuthViewState } from '@/features/auth/AuthProvider';
+import type { ReactNode } from 'react';
 
 jest.mock('@/features/auth/AuthProvider', () => ({ useAuth: jest.fn() }));
 jest.mock('./nativeOutbox', () => ({ syncNativeOutbox: jest.fn() }));
@@ -33,13 +38,40 @@ afterEach(() => {
   jest.useRealTimers();
   AppState.currentState = originalState;
 });
-function App() {
+function App({ children }: { children?: ReactNode }) {
   return (
     <QueryClientProvider client={client}>
       <OutboxSyncAgent />
+      {children}
     </QueryClientProvider>
   );
 }
+
+function RecentReportRead({ load }: { load: () => Promise<string> }) {
+  const query = useQuery({
+    queryKey: ['project-recent-reports', 'alice', 'project', 'local'],
+    queryFn: load,
+    staleTime: Infinity,
+  });
+  return <Text>{query.data ?? 'Loading recent report'}</Text>;
+}
+
+it('refreshes Home report data after an outbox sync pass', async () => {
+  const load = jest.fn(async () => 'After sync');
+  client.setQueryData(
+    ['project-recent-reports', 'alice', 'project', 'local'],
+    'Before sync',
+  );
+
+  await render(
+    <App>
+      <RecentReportRead load={load} />
+    </App>,
+  );
+
+  expect(await screen.findByText('After sync')).toBeVisible();
+  expect(load).toHaveBeenCalledTimes(1);
+});
 
 it('wakes after idle when this account saves/enqueues work, but ignores other accounts', async () => {
   await render(<App />);

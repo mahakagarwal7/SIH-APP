@@ -37,6 +37,8 @@ it('remembers only the verified context under its exact account key', async () =
     await expect(index.get('alice')).resolves.toEqual(context);
     await expect(index.get('bob')).resolves.toBeNull();
     await expect(index.get("bob' OR 1=1 --")).resolves.toBeNull();
+    await index.remove('alice');
+    await expect(index.get('alice')).resolves.toBeNull();
   } finally {
     sql.close();
   }

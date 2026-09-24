@@ -174,7 +174,7 @@ export function MyWorkScreen() {
         <>
           <Text style={styles.project}>{context.project.name}</Text>
           <Text style={styles.detail}>
-            {context.member.display_name || 'Name not recorded'} · Default
+            {context.member.display_name || 'Name not recorded'} · Selected
             project
           </Text>
           {!data ? (

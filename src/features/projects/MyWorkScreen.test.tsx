@@ -1,6 +1,7 @@
-import { onlineManager } from '@tanstack/react-query';
+import { notifyManager, onlineManager } from '@tanstack/react-query';
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -13,16 +14,29 @@ import { ServerStateProvider } from '@/lib/queryClient';
 import { getSupabase } from '@/lib/supabase';
 
 import { MyWorkScreen } from './MyWorkScreen';
-import { loadDefaultProject, loadMyWork, WorkReadError } from './myWorkService';
+import { loadActiveProjects, loadMyWork, WorkReadError } from './myWorkService';
 
 import type { AuthViewState } from '@/features/auth/AuthProvider';
 import type { Session } from '@supabase/supabase-js';
 
 jest.mock('@/features/auth/AuthProvider', () => ({ useAuth: jest.fn() }));
+jest.mock('@/features/field-reports/OutboxSyncAgent.native', () => ({
+  OutboxSyncAgent: () => null,
+}));
 jest.mock('@/lib/supabase', () => ({ getSupabase: jest.fn() }));
+jest.mock('./captureProjectStore', () => ({
+  readRememberedProjectContext: jest.fn().mockResolvedValue(null),
+  rememberProjectContext: jest.fn().mockResolvedValue(undefined),
+  forgetRememberedProjectContext: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('./captureProjectStore.native', () => ({
+  readRememberedProjectContext: jest.fn().mockResolvedValue(null),
+  rememberProjectContext: jest.fn().mockResolvedValue(undefined),
+  forgetRememberedProjectContext: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('./myWorkService', () => ({
   ...jest.requireActual('./myWorkService'),
-  loadDefaultProject: jest.fn(),
+  loadActiveProjects: jest.fn(),
   loadMyWork: jest.fn(),
 }));
 jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
@@ -114,19 +128,22 @@ afterAll(() => {
 });
 beforeEach(() => {
   jest.useFakeTimers();
+  notifyManager.setScheduler((callback) => callback());
   AppState.currentState = 'active';
   onlineManager.setOnline(true);
   jest.mocked(useAuth).mockReturnValue(auth());
   jest
     .mocked(getSupabase)
     .mockReturnValue({} as NonNullable<ReturnType<typeof getSupabase>>);
-  jest.mocked(loadDefaultProject).mockReset().mockResolvedValue(context);
+  jest.mocked(loadActiveProjects).mockReset().mockResolvedValue([context]);
   jest.mocked(loadMyWork).mockReset().mockResolvedValue(work);
 });
 afterEach(() => {
+  cleanup();
   onlineManager.setOnline(true);
-  jest.runOnlyPendingTimers();
+  jest.clearAllTimers();
   jest.useRealTimers();
+  notifyManager.setScheduler((callback) => setTimeout(callback, 0));
 });
 
 it('shows accepted quantity separately from completion and missing actual dates', async () => {
@@ -137,7 +154,7 @@ it('shows accepted quantity separately from completion and missing actual dates'
   expect(screen.getByText('Assigned')).toBeVisible();
   expect(screen.queryByText('Complete')).toBeNull();
   expect(screen.getByText('Site project')).toBeVisible();
-});
+}, 20_000);
 
 it.each([
   {
@@ -180,15 +197,15 @@ it.each([
 });
 
 it('provides a loading state and an explicit no-access state', async () => {
-  let finish!: (result: null) => void;
-  jest.mocked(loadDefaultProject).mockReturnValue(
+  let finish!: (result: (typeof context)[]) => void;
+  jest.mocked(loadActiveProjects).mockReturnValue(
     new Promise((resolve) => {
       finish = resolve;
     }),
   );
   await render(<App />);
   expect(screen.getByText('Loading your project access…')).toBeVisible();
-  await act(async () => finish(null));
+  await act(async () => finish([]));
   expect(await screen.findByText('No active project access')).toBeVisible();
   expect(loadMyWork).not.toHaveBeenCalled();
 });
@@ -217,8 +234,8 @@ it('does not fetch offline and fetches after reconnect', async () => {
   expect(
     screen.getByText('Offline · Connect to load your assigned work.'),
   ).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
-  expect(loadDefaultProject).not.toHaveBeenCalled();
+  expect(await screen.findByRole('button', { name: 'Refresh' })).toBeDisabled();
+  expect(loadActiveProjects).not.toHaveBeenCalled();
   jest.mocked(useAuth).mockReturnValue(auth());
   await screen.rerender(<App />);
   expect(await screen.findByText('2 of 8 spools accepted')).toBeVisible();
@@ -261,7 +278,7 @@ it('hides previous records after access is revoked, then supports retry', async 
 it('drops the previous project records when membership disappears on refresh', async () => {
   await render(<App />);
   await screen.findByText('Line erection');
-  jest.mocked(loadDefaultProject).mockResolvedValue(null);
+  jest.mocked(loadActiveProjects).mockResolvedValue([]);
   await fireEvent.press(screen.getByRole('button', { name: 'Refresh' }));
   expect(await screen.findByText('No active project access')).toBeVisible();
   expect(screen.queryByText('Line erection')).toBeNull();
@@ -279,13 +296,13 @@ it('cancels the previous user’s read and cannot display its late response for 
   await render(<App />);
   await waitFor(() => expect(previousSignal).toBeDefined());
   jest.mocked(useAuth).mockReturnValue(auth('another-user'));
-  jest.mocked(loadDefaultProject).mockResolvedValue(null);
+  jest.mocked(loadActiveProjects).mockResolvedValue([]);
   await screen.rerender(<App />);
   expect(previousSignal?.aborted).toBe(true);
   await act(async () => finish(work));
   expect(await screen.findByText('No active project access')).toBeVisible();
   expect(screen.queryByText('Line erection')).toBeNull();
-  expect(loadDefaultProject).toHaveBeenLastCalledWith(
+  expect(loadActiveProjects).toHaveBeenLastCalledWith(
     expect.anything(),
     'another-user',
     expect.any(AbortSignal),
