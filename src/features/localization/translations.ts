@@ -13,6 +13,13 @@ export const languageNames: Record<AppLocale, string> = {
 // English source copy is the key so untranslated additions remain readable.
 // The coverage test keeps every visible static phrase represented here.
 export const hiTranslations: Readonly<Record<string, string>> = {
+  'Retry server status': 'सर्वर स्थिति फिर जाँचें',
+  'Total is the mean accepted progress across':
+    'कुल मान इन सभी गतिविधियों की औसत स्वीकृत प्रगति है:',
+  'planned activities. Accepted-finished activities:':
+    'नियोजित गतिविधियाँ। स्वीकृत रूप से पूर्ण गतिविधियाँ:',
+  '. It does not infer progress from quantity, duration or cost.':
+    '। यह मात्रा, अवधि या लागत से प्रगति का अनुमान नहीं लगाता।',
   'Accepted field events by work date · evidence volume, not productivity.':
     'कार्य तिथि के अनुसार स्वीकृत फ़ील्ड घटनाएँ · यह साक्ष्य की मात्रा है, उत्पादकता नहीं।',
   'accepted-finished of': 'स्वीकृत रूप से पूर्ण, कुल',
