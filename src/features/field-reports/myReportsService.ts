@@ -82,6 +82,12 @@ export class ReportsReadError extends Error {
 }
 
 function outboxStatus(record: OutboxRecord) {
+  if (record.cancelRequested)
+    return [
+      'Canceling report',
+      record.lastError ||
+        'Server cleanup will retry before local evidence is removed.',
+    ] as const;
   if (record.submissionState === 'submitted')
     return [
       'Awaiting review',
@@ -91,6 +97,11 @@ function outboxStatus(record: OutboxRecord) {
     return [
       'Check report',
       record.lastError || 'Check the report before confirming again.',
+    ] as const;
+  if (record.sendRequested)
+    return [
+      'Sending for review',
+      'The report will submit after its verified transcript is ready.',
     ] as const;
   if (
     record.submissionState === 'pending' &&

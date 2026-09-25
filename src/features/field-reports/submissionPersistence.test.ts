@@ -46,6 +46,7 @@ async function setup() {
       originalTranscript: null,
     })),
     submit: jest.fn(async () => reportId),
+    discard: jest.fn(async () => {}),
   };
   const release = jest.fn(async () => {});
   let tick = 0;

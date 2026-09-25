@@ -6,7 +6,10 @@ import {
   validateManifest,
 } from './outbox';
 import { notifyOutboxChanged, notifyOutboxWork } from './outboxEvents';
-import { getReportEvidenceState } from './reportEvidence';
+import {
+  getReportEvidenceState,
+  initialConfirmationText,
+} from './reportEvidence';
 
 import type {
   OutboxFileReader,
@@ -67,6 +70,9 @@ export class OutboxService {
     private readonly releaseEvidence: (
       record: OutboxRecord,
     ) => Promise<void> = async () => {},
+    private readonly cancelEvidence: (
+      record: OutboxRecord,
+    ) => Promise<void> = async () => {},
   ) {}
 
   list(userId: string) {
@@ -86,6 +92,8 @@ export class OutboxService {
       reportId: null,
       uploadedFiles: [],
       originalTranscript: null,
+      sendRequested: false,
+      cancelRequested: false,
       confirmedPayload: null,
       confirmedActivityLabel: null,
       submissionRejected: false,
@@ -143,6 +151,99 @@ export class OutboxService {
     const result = await this.mutate(userId, captureId, () =>
       this.confirmRecord(userId, captureId, input, activityLabel),
     );
+    notifyOutboxWork(userId);
+    return result;
+  }
+
+  async requestSend(
+    userId: string,
+    captureId: string,
+    input?: ConfirmedPayload,
+  ): Promise<OutboxRecord> {
+    const result = await this.mutate(userId, captureId, async () => {
+      const record = await this.index.get(userId, captureId);
+      if (!record)
+        throw new OutboxSyncError(
+          'This report is unavailable for this account.',
+          'local',
+          false,
+        );
+      if (record.cancelRequested)
+        throw new OutboxSyncError(
+          'This report is already being canceled.',
+          'local',
+          false,
+        );
+      const evidence = getReportEvidenceState(record);
+      if (!evidence.hasVoice)
+        throw new OutboxSyncError(
+          'Immediate Send is available for voice reports.',
+          'local',
+          false,
+        );
+      if (evidence.voiceTranscriptReady)
+        return this.confirmRecord(
+          userId,
+          captureId,
+          input ?? {
+            text: initialConfirmationText(record),
+            workDate: null,
+            activityId: null,
+          },
+          null,
+        );
+      return this.save(record, {
+        sendRequested: true,
+        lastError: null,
+        lastErrorKind: null,
+        retryable: true,
+      });
+    });
+    notifyOutboxWork(userId);
+    return result;
+  }
+
+  async cancel(userId: string, captureId: string): Promise<OutboxRecord> {
+    const result = await this.mutate(userId, captureId, async () => {
+      let record = await this.index.get(userId, captureId);
+      if (!record)
+        throw new OutboxSyncError(
+          'This report is unavailable for this account.',
+          'local',
+          false,
+        );
+      if (record.submissionState === 'submitted')
+        throw new OutboxSyncError(
+          'A submitted report cannot be canceled from this review.',
+          'server',
+          false,
+        );
+      record = await this.save(record, {
+        cancelRequested: true,
+        sendRequested: false,
+        lastError: null,
+        lastErrorKind: null,
+        retryable: true,
+      });
+      try {
+        return await this.finishCancellation(
+          record,
+          this.transportForAccount(userId),
+        );
+      } catch (error) {
+        const failure = asSyncError(error, 'server');
+        return this.save(record, {
+          state:
+            failure.kind === 'auth' || failure.kind === 'access'
+              ? 'paused'
+              : 'failed',
+          lastErrorKind: failure.kind,
+          lastError:
+            'Cancellation is queued. Local evidence stays private until server cleanup succeeds.',
+          retryable: failure.retryable,
+        });
+      }
+    });
     notifyOutboxWork(userId);
     return result;
   }
@@ -253,6 +354,42 @@ export class OutboxService {
     return this.release(submitted);
   }
 
+  private async fulfillSendRequest(
+    record: OutboxRecord,
+    transport: OutboxTransport,
+  ) {
+    if (!record.sendRequested || !getReportEvidenceState(record).canSubmit)
+      return record;
+    const pending = await this.save(record, {
+      confirmedPayload: normalizeConfirmation({
+        text: initialConfirmationText(record),
+        workDate: null,
+        activityId: null,
+      }),
+      confirmedActivityLabel: null,
+      submissionState: 'pending',
+      submissionRejected: false,
+    });
+    return this.submit(pending, transport);
+  }
+
+  private async finishCancellation(
+    record: OutboxRecord,
+    transport: OutboxTransport,
+  ): Promise<OutboxRecord> {
+    if (record.reportId) await transport.discard(record.reportId);
+    await this.cancelEvidence(record);
+    await this.index.remove(record.userId, record.captureId);
+    notifyOutboxChanged(record.userId, record.captureId);
+    return {
+      ...record,
+      state: 'failed',
+      retryable: false,
+      lastError: null,
+      lastErrorKind: null,
+    };
+  }
+
   async sync(
     userId: string,
     captureId: string,
@@ -285,6 +422,25 @@ export class OutboxService {
         false,
       );
     if (record.submissionState === 'submitted') return this.release(record);
+    if (record.cancelRequested)
+      try {
+        return await this.finishCancellation(
+          record,
+          this.transportForAccount(userId),
+        );
+      } catch (error) {
+        const failure = asSyncError(error, 'server');
+        return this.save(record, {
+          state:
+            failure.kind === 'auth' || failure.kind === 'access'
+              ? 'paused'
+              : 'failed',
+          lastErrorKind: failure.kind,
+          lastError:
+            'Cancellation is queued. Local evidence stays private until server cleanup succeeds.',
+          retryable: failure.retryable,
+        });
+      }
     if (record.submissionRejected) return record;
     if (record.state === 'paused' && !options.includePaused) return record;
     if (
@@ -319,14 +475,18 @@ export class OutboxService {
         return await this.submit(record, transport);
       }
       if (record.state === 'needs_confirmation') {
-        if (record.kind !== 'voice' || record.originalTranscript) return record;
+        if (record.kind !== 'voice' || record.originalTranscript)
+          return await this.fulfillSendRequest(record, transport);
         const result = await transport.inspect(record.reportId!);
         if (result.status === 'ready')
-          return this.save(record, {
-            originalTranscript: result.originalTranscript,
-            lastError: null,
-            lastErrorKind: null,
-          });
+          return await this.fulfillSendRequest(
+            await this.save(record, {
+              originalTranscript: result.originalTranscript,
+              lastError: null,
+              lastErrorKind: null,
+            }),
+            transport,
+          );
         if (result.status === 'failed')
           throw new OutboxSyncError(result.message, 'server', false);
         if (result.status === 'retryable')
@@ -337,12 +497,15 @@ export class OutboxService {
         const reportId = record.reportId;
         const result = await transport.inspect(reportId);
         if (result.status === 'ready')
-          return this.save(record, {
-            state: 'needs_confirmation',
-            originalTranscript: result.originalTranscript,
-            lastError: null,
-            lastErrorKind: null,
-          });
+          return await this.fulfillSendRequest(
+            await this.save(record, {
+              state: 'needs_confirmation',
+              originalTranscript: result.originalTranscript,
+              lastError: null,
+              lastErrorKind: null,
+            }),
+            transport,
+          );
         if (result.status === 'processing') return record;
         if (result.status === 'failed')
           throw new OutboxSyncError(result.message, 'server', false);
@@ -393,12 +556,15 @@ export class OutboxService {
       record = await this.phase(record, 'processing');
       const result = await transport.inspect(record.reportId!);
       if (result.status === 'ready')
-        return this.save(record, {
-          state: 'needs_confirmation',
-          originalTranscript: result.originalTranscript,
-          lastError: null,
-          lastErrorKind: null,
-        });
+        return await this.fulfillSendRequest(
+          await this.save(record, {
+            state: 'needs_confirmation',
+            originalTranscript: result.originalTranscript,
+            lastError: null,
+            lastErrorKind: null,
+          }),
+          transport,
+        );
       if (result.status === 'failed')
         throw new OutboxSyncError(result.message, 'server', false);
       if (result.status === 'retryable')
@@ -406,7 +572,8 @@ export class OutboxService {
       return record;
     } catch (error) {
       const failure = asSyncError(error, 'server');
-      return this.save(record, {
+      const latest = (await this.index.get(userId, captureId)) ?? record;
+      return this.save(latest, {
         state:
           failure.kind === 'auth' || failure.kind === 'access'
             ? 'paused'
@@ -429,6 +596,8 @@ export class OutboxService {
       if (
         row.state === 'needs_confirmation' &&
         row.submissionState === 'unconfirmed' &&
+        !row.sendRequested &&
+        !row.cancelRequested &&
         getReportEvidenceState(row).canSubmit
       ) {
         results.push(row);

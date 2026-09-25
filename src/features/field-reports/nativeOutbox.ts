@@ -64,6 +64,28 @@ export function getNativeOutbox(): Promise<OutboxService> {
             )
               await reportStore.discard(record.userId, record.captureId);
           },
+          async (record) => {
+            const voiceStore = await getVoiceDraftStore();
+            if (
+              (await voiceStore.list(record.userId)).some(
+                (row) => row.id === record.captureId,
+              )
+            )
+              await voiceStore.discardAfterCancellation(
+                record.userId,
+                record.captureId,
+              );
+            const reportStore = await getReportDraftStore();
+            if (
+              (await reportStore.list(record.userId)).some(
+                (row) => row.id === record.captureId,
+              )
+            )
+              await reportStore.discardAfterCancellation(
+                record.userId,
+                record.captureId,
+              );
+          },
         ),
     )
     .catch((error) => {
@@ -218,6 +240,25 @@ export function syncNativeOutbox(
     });
   running.set(userId, operation);
   return operation;
+}
+
+export async function cancelNativeOutboxCapture(
+  userId: string,
+  captureId: string,
+) {
+  await prepareLocalOutbox(userId);
+  const outbox = await getNativeOutbox();
+  const record = (await outbox.list(userId)).find(
+    (candidate) => candidate.captureId === captureId,
+  );
+  if (record) return outbox.cancel(userId, captureId);
+
+  const voiceStore = await getVoiceDraftStore();
+  if ((await voiceStore.list(userId)).some((row) => row.id === captureId))
+    await voiceStore.discardAfterCancellation(userId, captureId);
+  const reportStore = await getReportDraftStore();
+  if ((await reportStore.list(userId)).some((row) => row.id === captureId))
+    await reportStore.discardAfterCancellation(userId, captureId);
 }
 
 export { assertLocalDraftCanBeDiscarded } from './nativeOutboxIndex';

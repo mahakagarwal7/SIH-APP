@@ -99,6 +99,49 @@ it('opens confirmation only for a ready, still-unsubmitted outbox record', () =>
   });
 });
 
+it('labels early voice Send intent while transcription is pending', () => {
+  expect(
+    mergeMyReports(
+      [],
+      [],
+      [
+        {
+          ...outbox,
+          kind: 'voice',
+          text: '',
+          state: 'processing',
+          sendRequested: true,
+        },
+      ],
+      [],
+    )[0],
+  ).toMatchObject({
+    status: 'Sending for review',
+    detail: 'The report will submit after its verified transcript is ready.',
+  });
+});
+
+it('labels durable cancellation intent ahead of ordinary sync failures', () => {
+  expect(
+    mergeMyReports(
+      [],
+      [],
+      [
+        {
+          ...outbox,
+          state: 'failed',
+          cancelRequested: true,
+          lastError: null,
+        },
+      ],
+      [],
+    )[0],
+  ).toMatchObject({
+    status: 'Canceling report',
+    detail: 'Server cleanup will retry before local evidence is removed.',
+  });
+});
+
 it('opens an offline text draft for confirmation before server reservation', () => {
   expect(
     mergeMyReports(

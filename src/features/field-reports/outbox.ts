@@ -46,6 +46,8 @@ export type OutboxRecord = {
   reportId: string | null;
   uploadedFiles: string[];
   originalTranscript: string | null;
+  sendRequested?: boolean;
+  cancelRequested?: boolean;
   confirmedPayload: ConfirmedPayload | null;
   confirmedActivityLabel: string | null;
   submissionRejected: boolean;
@@ -64,6 +66,7 @@ export type OutboxIndex = {
   get(userId: string, captureId: string): Promise<OutboxRecord | null>;
   list(userId: string): Promise<OutboxRecord[]>;
   put(record: OutboxRecord): Promise<void>;
+  remove(userId: string, captureId: string): Promise<void>;
 };
 
 export type OutboxFileReader = {
@@ -83,6 +86,7 @@ export type OutboxTransport = {
   finalize(reportId: string): Promise<void>;
   inspect(reportId: string): Promise<RemoteMediaState>;
   submit(reportId: string, payload: ConfirmedPayload): Promise<string>;
+  discard(reportId: string): Promise<void>;
 };
 
 export class OutboxSyncError extends Error {

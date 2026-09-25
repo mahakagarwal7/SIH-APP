@@ -175,6 +175,17 @@ it('submits the locked payload through the existing production RPC', async () =>
   });
 });
 
+it('discards a reserved draft through the existing production RPC', async () => {
+  const rpc = jest.fn(async () => ({ data: true, error: null }));
+  const transport = new SupabaseOutboxTransport({
+    rpc,
+  } as unknown as SupabaseClient<Database>);
+  await expect(transport.discard('report-id')).resolves.toBeUndefined();
+  expect(rpc).toHaveBeenCalledWith('discard_field_capture', {
+    p_report: 'report-id',
+  });
+});
+
 it.each([
   ['42501', 'Activity access denied', true],
   ['42501', 'Author required', false],
@@ -272,6 +283,9 @@ it.each(['membership', 'reservation'] as const)(
         list: async () => (stored ? [stored] : []),
         put: async (row) => {
           stored = row;
+        },
+        remove: async () => {
+          stored = null;
         },
       },
       { read: async () => new Uint8Array([1, 2, 3]) },
