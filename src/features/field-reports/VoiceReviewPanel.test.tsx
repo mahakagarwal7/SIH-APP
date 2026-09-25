@@ -16,7 +16,36 @@ import { VoiceReviewPanel } from './VoiceReviewPanel.native';
 import type { OutboxRecord } from './outbox';
 import type { AuthViewState } from '@/features/auth/AuthProvider';
 
+const mockShowToast = jest.fn();
+jest.mock('@/components/ToastProvider', () => ({
+  useToast: () => ({ showToast: mockShowToast }),
+}));
 jest.mock('@/features/auth/AuthProvider', () => ({ useAuth: jest.fn() }));
+jest.mock('@/components/WorkDatePicker', () => ({
+  WorkDatePicker: ({
+    label,
+    onChange,
+    value,
+  }: {
+    label: string;
+    onChange: (value: string) => void;
+    value: string | null;
+  }) => {
+    const React = jest.requireActual('react') as typeof import('react');
+    const { Pressable, Text } = jest.requireActual(
+      'react-native',
+    ) as typeof import('react-native');
+    return React.createElement(
+      Pressable,
+      {
+        accessibilityLabel: `Choose ${label.toLocaleLowerCase()}`,
+        accessibilityRole: 'button',
+        onPress: () => onChange('2026-09-24'),
+      },
+      React.createElement(Text, null, value ?? 'Choose date'),
+    );
+  },
+}));
 jest.mock('./nativeDraftStore', () => ({ getVoiceDraftStore: jest.fn() }));
 jest.mock('./nativeOutbox', () => ({
   cancelNativeOutboxCapture: jest.fn(),
@@ -89,6 +118,7 @@ function App() {
 }
 
 beforeEach(() => {
+  mockShowToast.mockReset();
   stored = structuredClone(base);
   requestSend.mockReset().mockImplementation(async () => {
     stored = { ...stored, sendRequested: true };
@@ -113,7 +143,7 @@ beforeEach(() => {
   jest.mocked(cancelNativeOutboxCapture).mockReset();
 });
 
-it('shows review immediately and queues Submit without waiting for transcription', async () => {
+it('requires a work date and queues Submit without waiting for transcription', async () => {
   let finishPreparation!: () => void;
   let prepared = false;
   jest.mocked(prepareLocalOutbox).mockReturnValue(
@@ -134,13 +164,29 @@ it('shows review immediately and queues Submit without waiting for transcription
   expect(send).toBeEnabled();
   await fireEvent.press(send);
   expect(
+    await screen.findByText('Choose today or an earlier work date.'),
+  ).toBeVisible();
+  expect(requestSend).not.toHaveBeenCalled();
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Choose work date' }),
+  );
+  expect(
+    screen.queryByText('Choose today or an earlier work date.'),
+  ).toBeNull();
+  await fireEvent.press(send);
+  await fireEvent.press(send);
+  expect(
     await screen.findByText(
       'Send queued. The verified transcript will be attached before submission.',
     ),
   ).toBeVisible();
   expect(requestSend).not.toHaveBeenCalled();
   await act(() => finishPreparation());
-  expect(requestSend).toHaveBeenCalledWith('alice', captureId, undefined);
+  expect(requestSend).toHaveBeenCalledWith('alice', captureId, {
+    text: '',
+    workDate: '2026-09-24',
+    activityId: null,
+  });
 });
 
 it('shows the worker transcript on the same screen and sends edited wording', async () => {
@@ -159,12 +205,26 @@ it('shows the worker transcript on the same screen and sends edited wording', as
     transcript,
     'Two supports installed; welding remains.',
   );
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Choose work date' }),
+  );
   await fireEvent.press(screen.getByRole('button', { name: 'Submit' }));
   expect(requestSend).toHaveBeenCalledWith('alice', captureId, {
     text: 'Two supports installed; welding remains.',
-    workDate: null,
+    workDate: '2026-09-24',
     activityId: null,
   });
+});
+
+it('shows the saved work date after reopening a queued voice report', async () => {
+  stored = {
+    ...stored,
+    sendRequested: true,
+    requestedWorkDate: '2026-09-24',
+  };
+  await render(<App />);
+  expect(await screen.findByText('2026-09-24')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Submit' })).toBeDisabled();
 });
 
 it('cancels local and reserved evidence through the outbox cancellation path', async () => {
@@ -194,4 +254,5 @@ it('reports a queued cancellation when server cleanup is still pending', async (
   expect(onCanceled).toHaveBeenCalledWith(
     'Cancellation queued. Server cleanup will retry after reconnecting.',
   );
+  expect(mockShowToast).toHaveBeenCalledWith('Cancellation queued for retry.');
 });

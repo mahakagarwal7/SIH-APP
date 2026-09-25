@@ -13,6 +13,25 @@ export const languageNames: Record<AppLocale, string> = {
 // English source copy is the key so untranslated additions remain readable.
 // The coverage test keeps every visible static phrase represented here.
 export const hiTranslations: Readonly<Record<string, string>> = {
+  'ACCEPTED PROGRESS': 'स्वीकृत प्रगति',
+  'Review before acceptance': 'स्वीकृति से पहले समीक्षा करें',
+  'Confirm acceptance': 'स्वीकृति की पुष्टि करें',
+  'Cancellation queued for retry.':
+    'रद्द करने का अनुरोध फिर प्रयास के लिए कतार में है।',
+  'Could not check whether drafts are queued. Discard is unavailable until this check succeeds.':
+    'ड्राफ़्ट की कतार स्थिति नहीं जाँची जा सकी। जाँच सफल होने तक हटाने का विकल्प उपलब्ध नहीं है।',
+  'Retry draft status': 'ड्राफ़्ट स्थिति फिर जाँचें',
+  'Sync pass finished, but some reports or server status need attention.':
+    'सिंक जाँच पूरी हुई, लेकिन कुछ रिपोर्ट या सर्वर स्थिति पर ध्यान देना आवश्यक है।',
+  'Some reports need attention.': 'कुछ रिपोर्ट पर ध्यान देना आवश्यक है।',
+  'Sync check complete.': 'सिंक जाँच पूरी हुई।',
+  'Retry server status': 'सर्वर स्थिति फिर जाँचें',
+  'Total is the mean accepted progress across':
+    'कुल मान इन सभी गतिविधियों की औसत स्वीकृत प्रगति है:',
+  'planned activities. Accepted-finished activities:':
+    'नियोजित गतिविधियाँ। स्वीकृत रूप से पूर्ण गतिविधियाँ:',
+  '. It does not infer progress from quantity, duration or cost.':
+    '। यह मात्रा, अवधि या लागत से प्रगति का अनुमान नहीं लगाता।',
   'Accepted field events by work date · evidence volume, not productivity.':
     'कार्य तिथि के अनुसार स्वीकृत फ़ील्ड घटनाएँ · यह साक्ष्य की मात्रा है, उत्पादकता नहीं।',
   'accepted-finished of': 'स्वीकृत रूप से पूर्ण, कुल',
@@ -1093,13 +1112,13 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   Delays: 'देरी',
   Variance: 'अंतर',
   'PROJECT HEALTH': 'परियोजना स्वास्थ्य',
-  'Tasks are': 'कार्य हैं',
-  'accepted-finished tasks out of': 'स्वीकृत-पूर्ण कार्य, कुल',
-  'planned. Worker, delay, health and variance definitions are not available in the current production contract.':
-    'नियोजित कार्यों में से। वर्तमान उत्पादन अनुबंध में कर्मचारी, देरी, स्वास्थ्य और अंतर की परिभाषाएँ उपलब्ध नहीं हैं।',
+  'Accepted-finished tasks:': 'स्वीकृत-पूर्ण कार्य:',
+  of: 'में से',
+  'planned. Bars show mean accepted progress; worker, delay, health and variance definitions are not available in the current production contract.':
+    'नियोजित कार्यों में से। बार औसत स्वीकृत प्रगति दिखाते हैं; वर्तमान उत्पादन अनुबंध में कर्मचारी, देरी, स्वास्थ्य और अंतर की परिभाषाएँ उपलब्ध नहीं हैं।',
   'TIMELINE SCHEDULER': 'समयरेखा अनुसूचक',
-  'Accepted-finished activity-count completion by discipline':
-    'विभाग के अनुसार स्वीकृत-पूर्ण गतिविधियों की संख्या',
+  'Mean accepted activity progress by discipline':
+    'विभाग के अनुसार औसत स्वीकृत गतिविधि प्रगति',
   'Open schedule': 'अनुसूची खोलें',
   'RECENT VERIFIED FIELD UPDATES': 'हाल के सत्यापित स्थल अपडेट',
   'Current accepted evidence only': 'केवल वर्तमान स्वीकृत साक्ष्य',

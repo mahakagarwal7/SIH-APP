@@ -251,7 +251,7 @@ it('requires deliberate activity selection and exact preview before acceptance',
   expect(screen.getByText('Proposed schedule change')).toBeVisible();
   expect(screen.getAllByText('Not recorded').length).toBeGreaterThan(0);
   await fireEvent.press(
-    screen.getByRole('button', { name: 'Accept verified event' }),
+    screen.getByRole('button', { name: 'Confirm acceptance' }),
   );
   await waitFor(() => expect(submitDecision).toHaveBeenCalledTimes(1));
   expect(jest.mocked(submitDecision).mock.calls[0]?.[1]).toEqual({
@@ -260,6 +260,29 @@ it('requires deliberate activity selection and exact preview before acceptance',
   });
   expect(finish).toHaveBeenCalledWith(true);
   expect(mockBack).toHaveBeenCalled();
+});
+
+it('shows the proposed change before a separate confirmation can accept it', async () => {
+  await render(<DecisionScreen claimId={claimId} />);
+  await selectCandidateAndReason();
+  const review = screen.getByRole('button', {
+    name: 'Review before acceptance',
+  });
+  expect(review).toBeEnabled();
+  await fireEvent.press(review);
+  await waitFor(() => expect(previewDecision).toHaveBeenCalledTimes(1));
+  expect(await screen.findByText('Proposed schedule change')).toBeVisible();
+  expect(submitDecision).not.toHaveBeenCalled();
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Confirm acceptance' }),
+  );
+  await waitFor(() => expect(submitDecision).toHaveBeenCalledTimes(1));
+  expect(jest.mocked(submitDecision).mock.calls[0]?.[1]).toMatchObject({
+    action: 'accept',
+    previewHash: preview.previewHash,
+    reason: 'Evidence confirms this activity.',
+  });
+  expect(finish).toHaveBeenCalledWith(true);
 });
 
 it('records rejection with a reason without inventing an activity selection', async () => {
@@ -392,8 +415,8 @@ it('clears a stale preview and refreshes current versions', async () => {
   expect(await screen.findByText(/no longer current/)).toBeVisible();
   expect(refresh).toHaveBeenCalled();
   expect(
-    screen.getByRole('button', { name: 'Accept verified event' }),
-  ).toBeDisabled();
+    screen.getByRole('button', { name: 'Review before acceptance' }),
+  ).toBeEnabled();
 });
 
 it('blocks writes offline and shows role/access failures explicitly', async () => {
@@ -405,7 +428,7 @@ it('blocks writes offline and shows role/access failures explicitly', async () =
     screen.getByText(/Decisions require a current production connection/),
   ).toBeVisible();
   expect(
-    screen.queryByRole('button', { name: 'Accept verified event' }),
+    screen.queryByRole('button', { name: 'Review before acceptance' }),
   ).toBeNull();
 
   jest
@@ -428,7 +451,7 @@ it('disables every decision write when cached context becomes offline', async ()
 
   for (const name of [
     'Preview change',
-    'Accept verified event',
+    'Confirm acceptance',
     'Reject claim',
     'Ask reporter',
     'Request supervisor verification',

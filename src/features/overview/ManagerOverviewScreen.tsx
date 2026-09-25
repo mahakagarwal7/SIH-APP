@@ -242,9 +242,10 @@ export function ManagerOverviewScreen() {
               />
             </View>
             <Text style={styles.basis}>
-              Tasks are {summary.completed} accepted-finished tasks out of{' '}
-              {summary.planned} planned. Worker, delay, health and variance
-              definitions are not available in the current production contract.
+              Accepted-finished tasks: {summary.completed} of {summary.planned}{' '}
+              planned. Bars show mean accepted progress; worker, delay, health
+              and variance definitions are not available in the current
+              production contract.
             </Text>
 
             {summary.unresolvedProgress > 0 && (
@@ -263,7 +264,7 @@ export function ManagerOverviewScreen() {
                   TIMELINE SCHEDULER
                 </Text>
                 <Text style={styles.sectionSubtitle}>
-                  Accepted-finished activity-count completion by discipline
+                  Mean accepted activity progress by discipline
                 </Text>
               </View>
               <Link href={'/manager/schedule' as Href} asChild>
@@ -287,12 +288,12 @@ export function ManagerOverviewScreen() {
                         </Text>
                       </View>
                       <View
-                        accessibilityLabel={`${row.discipline}: ${row.completed} of ${row.planned} activities complete`}
+                        accessibilityLabel={`${row.discipline}: ${row.percent}% mean accepted progress across ${row.planned} ${row.planned === 1 ? 'activity' : 'activities'}`}
                         accessibilityRole="progressbar"
                         accessibilityValue={{
                           min: 0,
-                          max: row.planned,
-                          now: row.completed,
+                          max: 100,
+                          now: row.percent,
                         }}
                         style={styles.track}
                       >

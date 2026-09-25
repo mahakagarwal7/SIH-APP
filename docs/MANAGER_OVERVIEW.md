@@ -28,15 +28,18 @@ load. Project switching clears the overview cache.
 - **Completed activities** have an accepted `actualFinish`.
 - **Tasks** shows accepted-finished activity count over planned activity count.
   It does not weight quantity, duration, cost or criticality.
+- **Total activity progress** is the arithmetic mean of each activity's
+  backend-provided `acceptedPercent`; an accepted finish contributes 100. It
+  does not infer a percentage from quantity, duration, cost or criticality.
 - **In progress** activities have an accepted `actualStart` and no accepted
   finish.
 - **Reported progress without a start** is shown separately and never counted
   as started or complete.
 - **Claims needing action** is the exact count returned by the actionable
   claims query. It counts claims, not distinct reports.
-- **Discipline completion** is completed activity count divided by planned
-  activity count within that discipline. The numerator and denominator remain
-  visible beside the bar.
+- **Discipline progress** is the mean accepted percentage within that
+  discipline. Accepted-finished and planned counts remain visible beside the
+  bar as separate context.
 - **Recent verified field updates** are the five newest effective events by
   acceptance time. They show the recorded reporter label from accepted
   provenance, the matched activity and a relative acceptance time. Missing

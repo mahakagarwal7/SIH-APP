@@ -36,7 +36,10 @@ export function ShellHeader() {
                   : 'Loading project…'
                 : 'No active project access'))}
         </Text>
-        <NavLink href="/projects" label="Change project" />
+        <View style={styles.switches}>
+          <NavLink href="/workspaces" label="Switch workspace" />
+          <NavLink href="/projects" label="Change project" />
+        </View>
       </View>
       {offline && (
         <Text accessibilityRole="alert" style={styles.offline}>
@@ -76,6 +79,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     flexShrink: 1,
   },
+  switches: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   offline: {
     color: '#17354c',
     backgroundColor: '#e8eff3',

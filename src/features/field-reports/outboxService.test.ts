@@ -109,9 +109,14 @@ it('freezes one manifest for a capture identifier', async () => {
 it('queues Send before transcription and submits automatically when media is ready', async () => {
   const { service, input, setInspected, transport } = setup();
   await service.enqueue(input);
-  const requested = await service.requestSend('user-one', captureId);
+  const requested = await service.requestSend('user-one', captureId, {
+    text: '',
+    workDate: '2026-09-24',
+    activityId: null,
+  });
   expect(requested).toMatchObject({
     sendRequested: true,
+    requestedWorkDate: '2026-09-24',
     submissionState: 'unconfirmed',
   });
   expect(transport.submit).not.toHaveBeenCalled();
@@ -126,7 +131,7 @@ it('queues Send before transcription and submits automatically when media is rea
     originalTranscript: 'Two supports installed.',
     confirmedPayload: {
       text: 'Two supports installed.',
-      workDate: null,
+      workDate: '2026-09-24',
       activityId: null,
     },
   });

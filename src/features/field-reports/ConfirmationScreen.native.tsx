@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { useToast } from '@/components/ToastProvider';
 import { WorkDatePicker } from '@/components/WorkDatePicker';
 import { useAuth } from '@/features/auth/AuthProvider';
 import {
@@ -57,6 +58,7 @@ function AccountConfirmation({
   captureId: string;
 }) {
   const auth = useAuth();
+  const { showToast } = useToast();
   const router = useRouter();
   const client = useQueryClient();
   const busyRef = useRef(false);
@@ -139,6 +141,7 @@ function AccountConfirmation({
         setMessage(
           'Confirmation saved on this device. It will send after reconnecting.',
         );
+        showToast('Report saved for sync.');
       } else {
         const result = await outbox.sync(userId, captureId, {
           includePaused: true,
@@ -147,6 +150,7 @@ function AccountConfirmation({
         client.setQueryData(['confirmation', userId, captureId], result);
         if (result.submissionState === 'submitted') {
           setMessage('Sent for review. Planner acceptance is still pending.');
+          showToast('Report sent for review.');
           await local.refetch();
         } else {
           setMessage(
@@ -164,6 +168,7 @@ function AccountConfirmation({
           ? reason.message
           : 'Could not save this confirmation.',
       );
+      showToast('Report could not be sent. Try again.', 'error');
     } finally {
       busyRef.current = false;
       if (mounted.current) setBusy(false);
@@ -188,10 +193,16 @@ function AccountConfirmation({
           ? 'Sent for review. Planner acceptance is still pending.'
           : 'Receipt is still pending. Your confirmed wording remains locked.',
       );
+      showToast(
+        result.submissionState === 'submitted'
+          ? 'Report sent for review.'
+          : 'Report sync is still pending.',
+      );
       await local.refetch();
     } catch (reason) {
       if (!mounted.current) return;
       setError(reason instanceof Error ? reason.message : 'Retry failed.');
+      showToast('Report sync failed. Try again.', 'error');
     } finally {
       busyRef.current = false;
       if (mounted.current) setBusy(false);

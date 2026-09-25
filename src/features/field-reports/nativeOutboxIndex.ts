@@ -2,7 +2,22 @@ import { openDatabaseAsync } from 'expo-sqlite';
 
 import { createOutboxIndex } from './outboxIndex';
 
-import type { OutboxIndex } from './outbox';
+import type { OutboxIndex, OutboxRecord } from './outbox';
+
+export const queuedDraftDiscardExplanation =
+  'This report has entered the outbox. Its device copy is required while it is queued or uploading. Discard becomes available after delivery is confirmed.';
+
+export function localDraftDiscardBlocker(record: OutboxRecord | null) {
+  if (
+    !record ||
+    (record.submissionState === 'submitted' &&
+      record.submittedAt &&
+      record.confirmedPayload &&
+      record.reportId)
+  )
+    return null;
+  return queuedDraftDiscardExplanation;
+}
 
 let index: Promise<OutboxIndex> | undefined;
 export function getNativeOutboxIndex() {
@@ -21,16 +36,6 @@ export async function assertLocalDraftCanBeDiscarded(
   captureId: string,
 ) {
   const record = await (await getNativeOutboxIndex()).get(userId, captureId);
-  if (
-    record &&
-    !(
-      record.submissionState === 'submitted' &&
-      record.submittedAt &&
-      record.confirmedPayload &&
-      record.reportId
-    )
-  )
-    throw new Error(
-      'This report has entered the outbox. Keep its device copy until confirmation is complete.',
-    );
+  const blocker = localDraftDiscardBlocker(record);
+  if (blocker) throw new Error(blocker);
 }

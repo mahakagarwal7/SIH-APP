@@ -76,26 +76,28 @@ it('uses the latest assignment before grouping with inclusive date boundaries', 
   expect(groups[0]?.items[0]?.assignment.version).toBe(2);
 });
 
-it('does not resurrect a reassigned activity from an older assignment', () => {
+it('uses latest assignment rows as the authority instead of a stale snapshot reporter field', () => {
   expect(
     groupMyWork(
       [{ ...activity, assignedReporterId: 'someone-else' }],
       [assignment],
       'reporter',
       '2026-09-23',
-    ).every((g) => g.items.length === 0),
-  ).toBe(true);
+    )[0]?.items.map((item) => item.activity.id),
+  ).toEqual(['task']);
 });
 
-it('rejects inconsistent or missing assignment details instead of showing a partial list', () => {
-  expect(() => groupMyWork([activity], [], 'reporter', '2026-09-23')).toThrow();
-  expect(() =>
+it('omits work reassigned to another reporter and rejects orphan assignment rows', () => {
+  expect(
     groupMyWork(
       [activity],
       [{ ...assignment, version: 2, reporter_id: 'someone-else' }],
       'reporter',
       '2026-09-23',
-    ),
+    ).every((group) => group.items.length === 0),
+  ).toBe(true);
+  expect(() =>
+    groupMyWork([], [assignment], 'reporter', '2026-09-23'),
   ).toThrow();
 });
 
@@ -134,13 +136,14 @@ it('presents only accepted progress and supported task states', () => {
   ).toEqual({ percent: 100, status: 'DONE' });
 });
 
-it('summarizes completed activities without treating quantities as completion', () => {
+it('summarizes accepted activity progress without treating quantities as completion', () => {
   expect(
     fieldHomeSummary(
       [
         {
           ...activity,
           acceptedQuantity: 8,
+          acceptedPercent: 40,
           actualStart: '2026-09-20',
           actualFinish: null,
           plannedFinish: '2026-09-26',
@@ -158,7 +161,7 @@ it('summarizes completed activities without treating quantities as completion', 
   ).toEqual({
     completed: 1,
     total: 2,
-    percent: 50,
+    percent: 70,
     timing: 'ON TIME',
   });
 });

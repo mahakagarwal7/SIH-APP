@@ -228,21 +228,28 @@ it('shows the manager panel with supported task counts and unavailable metrics',
   expect(screen.getByText('TIMELINE SCHEDULER')).toBeVisible();
   expect(screen.getByText('RECENT VERIFIED FIELD UPDATES')).toBeVisible();
   expect(
-    screen.getByText(/accepted-finished tasks out of 3 planned/),
+    screen.getByText(/Accepted-finished tasks: 1 of 3 planned/),
   ).toBeVisible();
   expect(screen.getAllByText('Not recorded')).toHaveLength(4);
+  expect(screen.getByText(/Bars show mean accepted progress/)).toBeVisible();
   expect(screen.queryByText(/healthy/i)).toBeNull();
 });
 
 it('renders real discipline progress and verified update provenance', async () => {
   await render(<ManagerOverviewScreen />);
   expect(
-    screen.getByLabelText('Civil: 0 of 1 activities complete'),
+    screen.getByLabelText(
+      'Civil: 50% mean accepted progress across 1 activity',
+    ),
   ).toBeVisible();
   expect(
-    screen.getByLabelText('Piping: 1 of 2 activities complete'),
+    screen.getByLabelText(
+      'Piping: 75% mean accepted progress across 2 activities',
+    ),
   ).toBeVisible();
-  expect(screen.getByText(/activity-count completion/)).toBeVisible();
+  expect(
+    screen.getByText(/Mean accepted activity progress by discipline/),
+  ).toBeVisible();
   expect(screen.getByText(/Actual start accepted/)).toBeVisible();
   expect(screen.getByText('Site reporter')).toBeVisible();
   expect(screen.getByText('PIP-1201 · Line erection')).toBeVisible();
