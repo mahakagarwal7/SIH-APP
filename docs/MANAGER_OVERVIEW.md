@@ -27,6 +27,9 @@ load. Project switching clears the overview cache.
 - **Planned activities** is the number of reportable activities in the active
   schedule snapshot.
 - **Completed activities** have an accepted `actualFinish`.
+- **Total activity completion** is accepted-finished activity count divided by
+  planned activity count. It is labeled as an activity-count ratio and does not
+  weight quantity, duration, cost or criticality.
 - **In progress** activities have an accepted `actualStart` and no accepted
   finish.
 - **Reported progress without a start** is shown separately and never counted
@@ -42,10 +45,9 @@ load. Project switching clears the overview cache.
 - **Recent accepted records** are the five newest effective events by acceptance
   time and retain their activity, evidence quote and reviewer context.
 
-The screen deliberately has no overall completion percentage, weighted health
-score, schedule variance claim, productivity rate, cost forecast or inferred
-status. Those measures require an agreed weighting/denominator or a new backend
-contract.
+The screen deliberately has no weighted schedule completion, health score,
+schedule variance claim, productivity rate, cost forecast or inferred status.
+Those measures require an agreed weighting or a new backend contract.
 
 ## Consistency and state
 
