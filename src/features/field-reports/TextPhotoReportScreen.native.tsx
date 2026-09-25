@@ -24,6 +24,7 @@ import {
   takePhoto,
 } from './nativePhotoPicker';
 import { getReportDraftStore } from './nativeReportDraftStore';
+import { PhotoCaptureView } from './PhotoCaptureView.native';
 import { ReportMethodLinks } from './ReportMethodLinks';
 
 import type { PickedLocalPhoto, PreparedLocalPhoto } from './nativePhotoPicker';
@@ -352,6 +353,38 @@ function AccountTextPhotoScreen({
       if (mounted.current) setDiscarding(null);
     }
   }
+
+  if (mode === 'photo' && context)
+    return (
+      <PhotoCaptureView
+        choosing={picking}
+        message={message}
+        offline={auth.offline}
+        onAdd={addPicked}
+        onCaption={(id, caption) =>
+          setPhotos((current) =>
+            current.map((photo) =>
+              photo.id === id ? { ...photo, caption } : photo,
+            ),
+          )
+        }
+        onChoose={() => void pick('library')}
+        onRemove={(id) =>
+          setPhotos((current) => current.filter((photo) => photo.id !== id))
+        }
+        onSave={() => void save()}
+        photos={photos.map((photo) => ({
+          id: photo.id,
+          caption: photo.caption,
+          previewUri: photo.previewUri,
+          ready: photo.prepared !== null,
+          error: photo.error,
+        }))}
+        projectName={context.project.name}
+        recovering={recovering}
+        saving={saving}
+      />
+    );
 
   return (
     <ShellPage title="Report progress" eyebrow="FIELD · TEXT AND PHOTO">

@@ -13,18 +13,29 @@ export const languageNames: Record<AppLocale, string> = {
 // English source copy is the key so untranslated additions remain readable.
 // The coverage test keeps every visible static phrase represented here.
 export const hiTranslations: Readonly<Record<string, string>> = {
+  'Camera access is needed to take a site photo.':
+    'साइट की फ़ोटो लेने के लिए कैमरा अनुमति आवश्यक है।',
+  'Enable camera': 'कैमरा चालू करें',
   English: 'अंग्रेज़ी',
+  'Flip camera': 'कैमरा पलटें',
+  'Loading camera…': 'कैमरा लोड हो रहा है…',
+  'Offline · Photos stay on this device.':
+    'ऑफ़लाइन · फ़ोटो इस डिवाइस पर रहती हैं।',
   'OTHER REPORT METHODS': 'अन्य रिपोर्ट तरीके',
   'READY TO RECORD': 'रिकॉर्ड करने के लिए तैयार',
   'RECORDING VOICE…': 'आवाज़ रिकॉर्ड हो रही है…',
   'Recording stops automatically at 25 seconds.':
     'रिकॉर्डिंग 25 सेकंड पर अपने आप रुक जाती है।',
+  'Retake last photo': 'पिछली फ़ोटो फिर से लें',
   'Say the location or line tag, work completed and what remains.':
     'स्थान या लाइन टैग, पूरा हुआ काम और बचा हुआ काम बोलें।',
   Submit: 'जमा करें',
   'Submit recording': 'रिकॉर्डिंग जमा करें',
   'Speak Progress': 'प्रगति बोलें',
+  'Turn flash off': 'फ़्लैश बंद करें',
+  'Turn flash on': 'फ़्लैश चालू करें',
   'Voice waveform': 'आवाज़ की तरंग',
+  'of 3 photos attached': 'में से 3 फ़ोटो संलग्न हैं',
   'ACTIVITIES DONE': 'पूर्ण गतिविधियाँ',
   DELAYED: 'विलंबित',
   Nirmaan: 'निर्माण',
