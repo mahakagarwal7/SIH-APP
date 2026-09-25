@@ -1082,4 +1082,15 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   'WEEKLY PROGRESS TREND': 'साप्ताहिक प्रगति रुझान',
   'WORK AREA COMPLETE': 'कार्य-क्षेत्र पूर्णता',
   '· Schedule v': '· अनुसूची संस्करण',
+  'Alerts & Approvals': 'अलर्ट और अनुमोदन',
+  Alerts: 'अलर्ट',
+  Critical: 'गंभीर',
+  'DESIGN PREVIEW · No live alerts or approvals are connected.':
+    'डिज़ाइन पूर्वावलोकन · कोई लाइव अलर्ट या अनुमोदन जुड़ा नहीं है।',
+  Pending: 'लंबित',
+  Profile: 'प्रोफ़ाइल',
+  'Reference navigation preview. Alerts selected.':
+    'संदर्भ नेविगेशन पूर्वावलोकन। अलर्ट चुना गया है।',
+  Tasks: 'कार्य',
+  'VIEW DETAILS': 'विवरण देखें',
 };

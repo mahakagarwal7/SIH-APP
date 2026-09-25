@@ -18,14 +18,21 @@ const context = getMockContext({
   '(app)/_layout': () => <Slot />,
   '(app)/workspaces': () => <Text>Workspace selection</Text>,
   '(app)/field/index': () => <Text>Protected field content</Text>,
+  '(app)/alerts-preview': () => <Text>Protected alerts preview</Text>,
 });
 
 const StatusContext = createContext<AuthViewState['status']>('signedOut');
 
-function Harness({ status }: { status: AuthViewState['status'] }) {
+function Harness({
+  status,
+  location = '/field',
+}: {
+  status: AuthViewState['status'];
+  location?: string;
+}) {
   return (
     <StatusContext.Provider value={status}>
-      <ExpoRoot context={context} location="/field" />
+      <ExpoRoot context={context} location={location} />
     </StatusContext.Provider>
   );
 }
@@ -61,5 +68,18 @@ describe('route access', () => {
     await waitFor(() =>
       expect(screen.queryByText('Protected field content')).toBeNull(),
     );
+  });
+
+  it('keeps the alerts design preview behind the signed-in route boundary', async () => {
+    const view = await render(
+      <Harness status="signedOut" location="/alerts-preview" />,
+    );
+    expect(await screen.findByText('Sign-in boundary')).toBeVisible();
+    expect(screen.queryByText('Protected alerts preview')).toBeNull();
+
+    await view.rerender(
+      <Harness status="signedIn" location="/alerts-preview" />,
+    );
+    expect(await screen.findByText('Protected alerts preview')).toBeVisible();
   });
 });
