@@ -73,6 +73,19 @@ export function useDecisionContext(claimId: string) {
       void queryClient.invalidateQueries({
         queryKey: ['review-queue', context.member.user_id, context.project.id],
       });
+      for (const key of [
+        'manager-overview',
+        'manager-schedule',
+        'execution-history',
+        'my-work',
+        'project-recent-reports',
+      ])
+        void queryClient.invalidateQueries({
+          queryKey: [key, context.member.user_id, context.project.id],
+        });
+      void queryClient.invalidateQueries({
+        queryKey: ['my-reports', context.member.user_id],
+      });
       queryClient.removeQueries({
         queryKey: [
           'claim-decision',

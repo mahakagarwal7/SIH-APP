@@ -53,6 +53,12 @@ export default function configure({ config }: ConfigContext): ExpoConfig {
     ...config,
     name: 'Nirmaan',
     slug: 'nirmaan-mobile',
-    extra: { supabase: publicConnection(process.env) },
+    extra: {
+      supabase: publicConnection(process.env),
+      // CI supplies this public identifier for the exact checkout it builds.
+      sourceCommit: /^[a-f0-9]{40}$/i.test(process.env.SOURCE_SHA ?? '')
+        ? process.env.SOURCE_SHA
+        : null,
+    },
   };
 }

@@ -68,13 +68,20 @@ function WorkCard({ item, today }: { item: WorkItem; today: string }) {
   const { t } = useLocalization();
   const activity = item.activity;
   const presentation = presentWorkActivity(activity, today);
+  const progressLabel =
+    presentation.percent === null
+      ? t('Progress not recorded')
+      : `${presentation.percent}%`;
   const theme = statusTheme[presentation.status];
   return (
     <Link href={`/task-hierarchy/${activity.id}` as Href} asChild>
       <Pressable
-        accessibilityLabel={`${activity.name}. ${t(presentation.status)}. ${presentation.percent}%. ${t('Open task hierarchy')}`}
+        accessibilityLabel={`${activity.name}. ${t(presentation.status)}. ${progressLabel}. ${t('Open task hierarchy')}`}
         accessibilityRole="button"
-        style={[styles.taskCard, { borderLeftColor: theme.accent }]}
+        style={StyleSheet.flatten([
+          styles.taskCard,
+          { borderLeftColor: theme.accent },
+        ])}
       >
         <View style={[styles.statusIcon, { backgroundColor: theme.pale }]}>
           <Feather color={theme.accent} name={theme.icon} size={18} />
@@ -93,8 +100,8 @@ function WorkCard({ item, today }: { item: WorkItem; today: string }) {
               accessibilityValue={{
                 min: 0,
                 max: 100,
-                now: presentation.percent,
-                text: `${presentation.percent}%`,
+                now: presentation.percent ?? undefined,
+                text: progressLabel,
               }}
               style={styles.progressTrack}
             >
@@ -103,13 +110,13 @@ function WorkCard({ item, today }: { item: WorkItem; today: string }) {
                   styles.progressFill,
                   {
                     backgroundColor: theme.accent,
-                    width: `${presentation.percent}%`,
+                    width: `${presentation.percent ?? 0}%`,
                   },
                 ]}
               />
             </View>
             <Text style={[styles.progressPercent, { color: theme.accent }]}>
-              {presentation.percent}%
+              {presentation.percent === null ? '—' : `${presentation.percent}%`}
             </Text>
           </View>
           <Text numberOfLines={2} style={styles.quantity}>
@@ -310,8 +317,16 @@ export function MyWorkScreen() {
                   No assignment for this date.
                 </Text>
                 <Text style={styles.emptyCopy}>
-                  Use the arrows to check another day.
+                  {['planner', 'manager'].includes(context.member.role)
+                    ? 'This is your personal task list. Open Manager Schedule to see all project activities.'
+                    : 'Use the arrows to check another day.'}
                 </Text>
+                {['planner', 'manager'].includes(context.member.role) && (
+                  <NavLink
+                    href="/manager/schedule"
+                    label="View project schedule"
+                  />
+                )}
               </View>
             )}
             {['supervisor', 'planner', 'manager'].includes(

@@ -20,6 +20,8 @@ export function ShellPage({
 }) {
   return (
     <ScrollView
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
       style={shellStyles.screen}
       contentContainerStyle={shellStyles.scroll}
     >
@@ -40,15 +42,34 @@ export function NavLink({
   href,
   label,
   detail,
+  compact = false,
 }: {
   href: Href;
   label: string;
   detail?: string;
+  compact?: boolean;
 }) {
   return (
     <Link href={href} asChild>
-      <Pressable style={detail ? shellStyles.card : shellStyles.link}>
-        <Text style={detail ? shellStyles.cardTitle : shellStyles.linkText}>
+      <Pressable
+        accessibilityRole="button"
+        style={
+          detail
+            ? shellStyles.card
+            : compact
+              ? shellStyles.compactLink
+              : shellStyles.link
+        }
+      >
+        <Text
+          style={
+            detail
+              ? shellStyles.cardTitle
+              : compact
+                ? shellStyles.compactLinkText
+                : shellStyles.linkText
+          }
+        >
           {label}
         </Text>
         {detail && <Text style={shellStyles.body}>{detail}</Text>}
@@ -80,7 +101,7 @@ export const shellStyles = StyleSheet.create({
     width: '100%',
     maxWidth: 640,
     padding: 24,
-    paddingVertical: 30,
+    paddingVertical: 22,
   },
   heading: {
     color: '#17354c',
@@ -108,6 +129,7 @@ export const shellStyles = StyleSheet.create({
     borderWidth: 1,
     borderLeftWidth: 3,
     borderLeftColor: '#266b8c',
+    borderRadius: 14,
     padding: 20,
     marginTop: 20,
     gap: 8,
@@ -128,6 +150,17 @@ export const shellStyles = StyleSheet.create({
     color: '#266b8c',
     fontSize: 16,
     lineHeight: 24,
+    fontWeight: '600',
+  },
+  compactLink: {
+    minHeight: 44,
+    paddingHorizontal: 6,
+    justifyContent: 'center',
+  },
+  compactLinkText: {
+    color: '#266b8c',
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: '600',
   },
   back: {

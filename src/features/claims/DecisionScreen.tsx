@@ -534,6 +534,45 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
               {message}
             </Text>
           )}
+          {!canPreview && (
+            <View style={styles.notice}>
+              <Text style={styles.detail}>Before accepting this claim:</Text>
+              {!reason.trim() && (
+                <Text style={styles.detail}>
+                  Add a decision reason. A reason is also required to reject a
+                  claim.
+                </Text>
+              )}
+              {!selected?.activity && (
+                <Text style={styles.detail}>
+                  Select a matching activity from the active schedule.
+                </Text>
+              )}
+              {!!selected?.mismatch_flags.length && (
+                <Text style={styles.detail}>
+                  {"Resolve the selected activity's mismatch before accepting."}
+                </Text>
+              )}
+              {data.claim.state !== 'pending' && (
+                <Text style={styles.detail}>
+                  {
+                    "Complete this claim's outstanding follow-up before accepting it."
+                  }
+                </Text>
+              )}
+              {!!unresolvedFlags.length && (
+                <Text style={styles.detail}>
+                  Resolve the validation flags shown above through clarification
+                  or review.
+                </Text>
+              )}
+              {needsDate && !validWorkDate(correctedDate) && (
+                <Text style={styles.detail}>
+                  Choose the work date supported by the evidence.
+                </Text>
+              )}
+            </View>
+          )}
           <View style={styles.actions}>
             <Pressable
               accessibilityRole="button"
@@ -686,6 +725,7 @@ const styles = StyleSheet.create({
     marginTop: 22,
   },
   candidate: {
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#d7e0e5',
     backgroundColor: '#fff',
@@ -705,6 +745,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   input: {
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#aebdc7',
     backgroundColor: '#fff',
@@ -717,6 +758,7 @@ const styles = StyleSheet.create({
   },
   optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   option: {
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#aebdc7',
     backgroundColor: '#fff',
@@ -731,6 +773,7 @@ const styles = StyleSheet.create({
   },
   optionText: { color: '#17354c', fontSize: 14, lineHeight: 21 },
   preview: {
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#266b8c',
     backgroundColor: '#fff',
@@ -757,6 +800,7 @@ const styles = StyleSheet.create({
   },
   actions: { gap: 10, marginTop: 16 },
   primaryButton: {
+    borderRadius: 12,
     minHeight: 50,
     backgroundColor: '#17354c',
     alignItems: 'center',
@@ -770,6 +814,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   secondaryButton: {
+    borderRadius: 12,
     minHeight: 48,
     borderWidth: 1,
     borderColor: '#aebdc7',
@@ -779,6 +824,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   dangerButton: {
+    borderRadius: 12,
     minHeight: 48,
     borderWidth: 1,
     borderColor: '#9b4638',

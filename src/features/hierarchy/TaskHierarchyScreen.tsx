@@ -373,7 +373,10 @@ export function TaskHierarchyScreen({ activityId }: { activityId: string }) {
                 <Pressable
                   accessibilityLabel="Speak progress for this task"
                   accessibilityRole="button"
-                  style={[styles.circleAction, styles.micAction]}
+                  style={StyleSheet.flatten([
+                    styles.circleAction,
+                    styles.micAction,
+                  ])}
                 >
                   <Feather color="#ef5656" name="mic" size={21} />
                 </Pressable>

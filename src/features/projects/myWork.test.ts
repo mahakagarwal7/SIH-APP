@@ -113,7 +113,7 @@ it('steps date-only task navigation across month and year boundaries', () => {
 
 it('presents only accepted progress and supported task states', () => {
   expect(presentWorkActivity(activity, '2026-09-25')).toEqual({
-    percent: 0,
+    percent: null,
     status: 'START',
   });
   expect(
@@ -134,6 +134,19 @@ it('presents only accepted progress and supported task states', () => {
       '2026-09-25',
     ),
   ).toEqual({ percent: 100, status: 'DONE' });
+});
+
+it('keeps missing progress distinct from recorded zero, even in mixed summaries', () => {
+  expect(
+    presentWorkActivity({ ...activity, acceptedPercent: 0 }, '2026-09-25')
+      .percent,
+  ).toBe(0);
+  expect(
+    fieldHomeSummary(
+      [activity, { ...activity, actualFinish: '2026-09-24' }],
+      '2026-09-25',
+    ).percent,
+  ).toBeNull();
 });
 
 it('summarizes accepted activity progress without treating quantities as completion', () => {

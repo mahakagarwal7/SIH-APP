@@ -6,6 +6,30 @@ const url = 'https://example.supabase.co';
 const key = 'sb_publishable_synthetic_test_key_only';
 
 describe('public app configuration', () => {
+  it.each([
+    ['a'.repeat(40), 'a'.repeat(40)],
+    ['not-a-commit', null],
+    ['', null],
+  ])(
+    'exports a source revision only when it is a full commit ID: %s',
+    (source, expected) => {
+      const previous = process.env.SOURCE_SHA;
+      try {
+        process.env.SOURCE_SHA = source ?? '';
+        expect(
+          configure({
+            config: {},
+            projectRoot: '.',
+            staticConfigPath: null,
+            packageJsonPath: null,
+          }).extra?.sourceCommit,
+        ).toBe(expected);
+      } finally {
+        if (previous === undefined) delete process.env.SOURCE_SHA;
+        else process.env.SOURCE_SHA = previous;
+      }
+    },
+  );
   it('stays unconfigured when either public value is missing', () => {
     expect(publicConnection({ NEXT_PUBLIC_SUPABASE_URL: url })).toBeNull();
     expect(
@@ -70,7 +94,10 @@ describe('public app configuration', () => {
       staticConfigPath: null,
       packageJsonPath: null,
     });
-    expect(Object.keys(result.extra ?? {})).toEqual(['supabase']);
+    expect(Object.keys(result.extra ?? {})).toEqual([
+      'supabase',
+      'sourceCommit',
+    ]);
     expect(JSON.stringify(result)).not.toContain('do-not-export');
   });
 });

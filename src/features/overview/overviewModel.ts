@@ -1,3 +1,5 @@
+import { meanAcceptedProgress } from '@/lib/acceptedProgress';
+
 import type { ReviewClaim } from '@/features/claims/reviewContracts';
 import type { ExecutionHistoryEntry } from '@/features/history/historyContracts';
 import type { ScheduleActivity } from '@/features/schedule/scheduleContracts';
@@ -7,13 +9,8 @@ export type DisciplineProgress = {
   planned: number;
   completed: number;
   inProgress: number;
-  percent: number;
+  percent: number | null;
 };
-
-function acceptedProgress(activity: ScheduleActivity) {
-  if (activity.actualFinish) return 100;
-  return Math.max(0, Math.min(100, activity.acceptedPercent ?? 0));
-}
 
 export type AcceptedEventWeek = {
   start: string;
@@ -58,14 +55,7 @@ export function overviewSummary(
   return {
     planned,
     completed,
-    completionPercent: planned
-      ? Math.round(
-          activities.reduce(
-            (sum, activity) => sum + acceptedProgress(activity),
-            0,
-          ) / planned,
-        )
-      : null,
+    completionPercent: meanAcceptedProgress(activities),
     inProgress: activities.filter(
       (activity) => activity.actualStart && !activity.actualFinish,
     ).length,
@@ -109,14 +99,7 @@ export function disciplineProgress(activities: ScheduleActivity[]) {
       planned: rows.length,
       completed,
       inProgress,
-      percent: rows.length
-        ? Math.round(
-            rows.reduce(
-              (sum, activity) => sum + acceptedProgress(activity),
-              0,
-            ) / rows.length,
-          )
-        : 0,
+      percent: meanAcceptedProgress(rows),
     };
   });
 }
