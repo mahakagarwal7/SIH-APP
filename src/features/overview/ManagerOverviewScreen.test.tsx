@@ -177,6 +177,7 @@ const data = {
     ],
   },
   history: [accepted],
+  reporterNamesByReportId: {},
   attention: attentions,
   actionableCount: 6,
 } as unknown as ManagerOverviewData;
@@ -259,6 +260,20 @@ it('renders real discipline progress and verified update provenance', async () =
   expect(screen.getByText('Site reporter')).toBeVisible();
   expect(screen.getByText('PIP-1201 · Line erection')).toBeVisible();
   expect(screen.getByText(/ago|Just now/)).toBeVisible();
+});
+
+it('shows the named author of a native accepted report in recent updates', async () => {
+  jest.mocked(useManagerOverview).mockReturnValue(
+    state({
+      data: {
+        ...data,
+        history: [{ ...accepted, provenance: null }],
+        reporterNamesByReportId: { [accepted.reportId]: 'Arun Saikia' },
+      } as ManagerOverviewData,
+    }),
+  );
+  await render(<ManagerOverviewScreen />);
+  expect(screen.getByText('Arun Saikia')).toBeVisible();
 });
 
 it('keeps no-schedule, unresolved progress and empty records explicit', async () => {

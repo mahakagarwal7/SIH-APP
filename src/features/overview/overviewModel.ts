@@ -144,8 +144,15 @@ export function recentAcceptedEvents(
     .slice(0, limit);
 }
 
-export function verifiedReporterLabel(entry: ExecutionHistoryEntry) {
-  return entry.provenance?.reportedByLabel?.trim() || 'Reporter not recorded';
+export function verifiedReporterLabel(
+  entry: ExecutionHistoryEntry,
+  reporterNamesByReportId: Record<string, string> = {},
+) {
+  return (
+    entry.provenance?.reportedByLabel?.trim() ||
+    reporterNamesByReportId[entry.reportId]?.trim() ||
+    'Reporter not recorded'
+  );
 }
 
 export function relativeAcceptedTime(acceptedAt: string, now: number) {
