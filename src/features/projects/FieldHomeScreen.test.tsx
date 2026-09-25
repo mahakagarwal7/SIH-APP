@@ -145,7 +145,12 @@ it('shows empty and offline states without inventing assignment counts', async (
     work: {
       data: {
         ...work,
-        snapshot: { ...work.snapshot, activities: [] },
+        snapshot: {
+          ...work.snapshot,
+          activities: [
+            { ...work.snapshot.activities[0], assignedReporterId: null },
+          ],
+        },
         assignments: [],
       },
       error: null,
@@ -154,11 +159,69 @@ it('shows empty and offline states without inventing assignment counts', async (
     offline: true,
   } as unknown as ReturnType<typeof useMyWork>);
   await render(<FieldHomeScreen />);
-  expect(screen.getByText('No assignment today.')).toBeVisible();
-  expect(screen.getByText('—')).toBeVisible();
-  expect(screen.getByText('TIMING NOT RECORDED')).toBeVisible();
+  expect(screen.getByText('No personal field assignments')).toBeVisible();
+  expect(
+    screen.getByText(
+      'No activities are assigned to you in this project. Ask your supervisor to check your assignments.',
+    ),
+  ).toBeVisible();
+  expect(screen.queryByText('ACCEPTED PROGRESS')).toBeNull();
   expect(screen.queryByText('0%')).toBeNull();
   expect(screen.getByText(/Offline · Showing project context/)).toBeVisible();
+});
+
+it('directs a planner without personal assignments to the project schedule', async () => {
+  jest.mocked(useMyWork).mockReturnValue({
+    project: {
+      data: { ...context, member: { ...context.member, role: 'planner' } },
+      error: null,
+      isPending: false,
+    },
+    work: {
+      data: {
+        ...work,
+        snapshot: {
+          ...work.snapshot,
+          activities: [
+            { ...work.snapshot.activities[0], assignedReporterId: null },
+          ],
+        },
+        assignments: [],
+      },
+      error: null,
+    },
+    refresh: jest.fn(),
+    offline: false,
+  } as unknown as ReturnType<typeof useMyWork>);
+  await render(<FieldHomeScreen />);
+  expect(screen.getByText('No personal field assignments')).toBeVisible();
+  expect(
+    screen.getByText(
+      'This is your personal task list. Open Manager Schedule to see all project activities.',
+    ),
+  ).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'View project schedule' }),
+  ).toBeVisible();
+});
+
+it('shows the missing-schedule state without a personal progress ring', async () => {
+  jest.mocked(useMyWork).mockReturnValue({
+    project: { data: context, error: null, isPending: false },
+    work: {
+      data: {
+        ...work,
+        snapshot: { ...work.snapshot, revisionId: null, activities: [] },
+        assignments: [],
+      },
+      error: null,
+    },
+    refresh: jest.fn(),
+    offline: false,
+  } as unknown as ReturnType<typeof useMyWork>);
+  await render(<FieldHomeScreen />);
+  expect(screen.getByText('No active schedule')).toBeVisible();
+  expect(screen.queryByText('ACCEPTED PROGRESS')).toBeNull();
 });
 
 it('recomputes current assignments when the project day changes at midnight', async () => {

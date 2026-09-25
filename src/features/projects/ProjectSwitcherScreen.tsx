@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { useLocalization } from '@/features/localization/LocalizationProvider';
 import {
   LocalizedText as Text,
   LocalizedPressable as Pressable,
@@ -13,6 +14,54 @@ import {
 } from '@/features/navigation/shellUi';
 
 import { useProjectSelection } from './useProjectSelection';
+
+import type { ProjectContext } from './myWorkService';
+
+function ProjectChoiceCard({
+  context,
+  selected,
+  busy,
+  disabled,
+  onPress,
+}: {
+  context: ProjectContext;
+  selected: boolean;
+  busy: boolean;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  const { t } = useLocalization();
+  const roleLabel = {
+    reporter: 'Reporter',
+    supervisor: 'Supervisor',
+    planner: 'Planner',
+    manager: 'Manager',
+  }[context.member.role];
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={
+        selected
+          ? `${context.project.name}, ${t('Selected')}`
+          : `${t('Select')} ${context.project.name}`
+      }
+      accessibilityState={{ selected, disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={[shellStyles.card, selected && styles.selected]}
+    >
+      <View style={styles.row}>
+        <Text style={shellStyles.cardTitle}>{context.project.name}</Text>
+        <Text style={styles.badge}>
+          {busy ? 'Changing…' : selected ? 'Selected' : 'Select'}
+        </Text>
+      </View>
+      <Text style={shellStyles.body}>
+        {context.member.display_name || 'Name not recorded'} · {roleLabel}
+      </Text>
+    </Pressable>
+  );
+}
 
 export function ProjectSwitcherScreen() {
   const router = useRouter();
@@ -49,7 +98,11 @@ export function ProjectSwitcherScreen() {
         Choose a project
       </Text>
       <Text style={shellStyles.body}>
-        Only projects with an active membership are available.
+        {!selection.isPending &&
+        !selection.error &&
+        selection.projects.length === 1
+          ? 'This is the only project available to your account.'
+          : 'Only projects with an active membership are available.'}
       </Text>
       {selection.offline && (
         <Text accessibilityRole="alert" style={styles.notice}>
@@ -95,31 +148,14 @@ export function ProjectSwitcherScreen() {
           const selected = context.project.id === selection.data?.project.id;
           const busy = changing === context.project.id;
           return (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Select ${context.project.name}`}
-              accessibilityState={{
-                selected,
-                disabled: selection.offline || !!changing,
-              }}
-              disabled={selection.offline || !!changing}
+            <ProjectChoiceCard
+              context={context}
+              selected={selected}
+              busy={busy}
+              disabled={selection.offline || !!changing || selected}
               key={context.project.id}
               onPress={() => void choose(context.project.id)}
-              style={[shellStyles.card, selected && styles.selected]}
-            >
-              <View style={styles.row}>
-                <Text style={shellStyles.cardTitle}>
-                  {context.project.name}
-                </Text>
-                <Text style={styles.badge}>
-                  {busy ? 'Changing…' : selected ? 'Selected' : 'Select'}
-                </Text>
-              </View>
-              <Text style={shellStyles.body}>
-                {context.member.display_name || 'Name not recorded'} ·{' '}
-                {context.member.role}
-              </Text>
-            </Pressable>
+            />
           );
         })
       )}
@@ -155,10 +191,19 @@ const styles = StyleSheet.create({
   },
   selected: { borderLeftColor: '#17354c', backgroundColor: '#f8fbfc' },
   row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
+    alignItems: 'flex-start',
+    gap: 4,
   },
-  badge: { color: '#266b8c', fontSize: 14, lineHeight: 22, fontWeight: '600' },
+  badge: {
+    alignSelf: 'flex-start',
+    overflow: 'hidden',
+    backgroundColor: '#e8eff3',
+    borderRadius: 999,
+    color: '#266b8c',
+    fontSize: 13,
+    lineHeight: 20,
+    fontWeight: '700',
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+  },
 });

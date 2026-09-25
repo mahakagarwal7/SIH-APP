@@ -76,6 +76,48 @@ function HomeHeader({ displayName }: { displayName: string }) {
   );
 }
 
+function EmptyWorkCard({
+  noSchedule,
+  isPlanner,
+}: {
+  noSchedule: boolean;
+  isPlanner: boolean;
+}) {
+  return (
+    <View style={styles.emptyWorkCard}>
+      <View style={styles.emptyWorkHeading}>
+        <View style={styles.emptyWorkIcon}>
+          <Feather color="#266b8c" name="clipboard" size={22} />
+        </View>
+        <Text accessibilityRole="header" style={styles.emptyWorkTitle}>
+          {noSchedule ? 'No active schedule' : 'No personal field assignments'}
+        </Text>
+      </View>
+      <Text style={styles.emptyWorkBody}>
+        {noSchedule
+          ? 'A planner has not activated a schedule for this project.'
+          : isPlanner
+            ? 'This is your personal task list. Open Manager Schedule to see all project activities.'
+            : 'No activities are assigned to you in this project. Ask your supervisor to check your assignments.'}
+      </Text>
+      {isPlanner && !noSchedule && (
+        <Link href="/manager/schedule" asChild>
+          <Pressable accessibilityRole="button" style={styles.emptyWorkAction}>
+            <Text style={styles.emptyWorkActionText}>
+              View project schedule
+            </Text>
+          </Pressable>
+        </Link>
+      )}
+      <Link href="/projects" asChild>
+        <Pressable accessibilityRole="button" style={styles.emptyWorkSecondary}>
+          <Text style={styles.emptyWorkSecondaryText}>Change project</Text>
+        </Pressable>
+      </Link>
+    </View>
+  );
+}
+
 export function FieldHomeScreen() {
   const [today, setToday] = useState(siteToday);
   const { project, work, refresh, offline } = useMyWork();
@@ -107,6 +149,9 @@ export function FieldHomeScreen() {
   const assignedActivities =
     groups?.flatMap((group) => group.items.map((item) => item.activity)) ?? [];
   const summary = fieldHomeSummary(assignedActivities, today);
+  const hasPersonalWork = assignedActivities.length > 0;
+  const isPlanner =
+    context?.member.role === 'planner' || context?.member.role === 'manager';
   const primary = current[0]?.activity;
   const location =
     primary?.location ?? assignedActivities[0]?.location ?? 'Site not recorded';
@@ -165,46 +210,53 @@ export function FieldHomeScreen() {
         </View>
       ) : (
         <>
-          <View style={styles.summaryCard}>
-            <View
-              style={[
-                styles.progressCircle,
-                summary.percent === 100 && styles.progressComplete,
-              ]}
-            >
-              <Text style={styles.percent}>
-                {summary.percent === null ? '—' : `${summary.percent}%`}
-              </Text>
-              <Text style={styles.doneLabel}>ACCEPTED PROGRESS</Text>
-            </View>
-            <View style={styles.summaryCopy}>
-              <Text numberOfLines={1} style={styles.projectLabel}>
-                {context.project.name}
-              </Text>
-              <Text numberOfLines={2} style={styles.location}>
-                {work.data.snapshot.revisionId === null
-                  ? 'No active schedule'
-                  : location}
-              </Text>
-              <Text numberOfLines={2} style={styles.assignment}>
-                {assignment}
-              </Text>
-              <View style={[styles.timingPill, timingStyle]}>
-                <Text style={[styles.timingText, timingStyle]}>
-                  {summary.timing}
+          {hasPersonalWork ? (
+            <View style={styles.summaryCard}>
+              <View
+                style={[
+                  styles.progressCircle,
+                  summary.percent === 100 && styles.progressComplete,
+                ]}
+              >
+                <Text style={styles.percent}>
+                  {summary.percent === null ? '—' : `${summary.percent}%`}
                 </Text>
+                <Text style={styles.doneLabel}>ACCEPTED PROGRESS</Text>
               </View>
-              <Link href="/projects" asChild>
-                <Pressable
-                  accessibilityLabel="Change project"
-                  accessibilityRole="button"
-                  style={styles.changeProject}
-                >
-                  <Text style={styles.changeProjectText}>Change project</Text>
-                </Pressable>
-              </Link>
+              <View style={styles.summaryCopy}>
+                <Text numberOfLines={1} style={styles.projectLabel}>
+                  {context.project.name}
+                </Text>
+                <Text numberOfLines={2} style={styles.location}>
+                  {work.data.snapshot.revisionId === null
+                    ? 'No active schedule'
+                    : location}
+                </Text>
+                <Text numberOfLines={2} style={styles.assignment}>
+                  {assignment}
+                </Text>
+                <View style={[styles.timingPill, timingStyle]}>
+                  <Text style={[styles.timingText, timingStyle]}>
+                    {summary.timing}
+                  </Text>
+                </View>
+                <Link href="/projects" asChild>
+                  <Pressable
+                    accessibilityLabel="Change project"
+                    accessibilityRole="button"
+                    style={styles.changeProject}
+                  >
+                    <Text style={styles.changeProjectText}>Change project</Text>
+                  </Pressable>
+                </Link>
+              </View>
             </View>
-          </View>
+          ) : (
+            <EmptyWorkCard
+              noSchedule={work.data.snapshot.revisionId === null}
+              isPlanner={isPlanner}
+            />
+          )}
 
           <View style={styles.actionGrid}>
             <ActionTile
@@ -305,6 +357,55 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 3,
+  },
+  emptyWorkCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e4e9ec',
+    padding: 20,
+    gap: 16,
+    shadowColor: '#17354c',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  emptyWorkHeading: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  emptyWorkIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e8eff3',
+  },
+  emptyWorkTitle: {
+    flex: 1,
+    color: '#17354c',
+    fontSize: 20,
+    lineHeight: 28,
+    fontWeight: '700',
+  },
+  emptyWorkBody: { color: '#586c7a', fontSize: 15, lineHeight: 23 },
+  emptyWorkAction: {
+    minHeight: 48,
+    borderRadius: 10,
+    backgroundColor: '#266b8c',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  emptyWorkActionText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  emptyWorkSecondary: {
+    minHeight: 44,
+    alignSelf: 'flex-start',
+    justifyContent: 'center',
+  },
+  emptyWorkSecondaryText: {
+    color: '#266b8c',
+    fontSize: 14,
+    fontWeight: '700',
   },
   progressCircle: {
     width: 104,
