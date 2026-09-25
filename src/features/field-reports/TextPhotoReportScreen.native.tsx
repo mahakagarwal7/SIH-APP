@@ -2,18 +2,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { randomUUID } from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Image, StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useLocalization } from '@/features/localization/LocalizationProvider';
+import {
+  formatDateTime,
+  LocalizedText as Text,
+  LocalizedAlert as Alert,
+  LocalizedPressable as Pressable,
+  LocalizedTextInput as TextInput,
+} from '@/features/localization/LocalizedText';
 import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
 import { useCaptureProject } from '@/features/projects/useCaptureProject';
 
@@ -78,6 +77,7 @@ function AccountTextPhotoScreen({
   userId: string;
   mode: 'text' | 'photo';
 }) {
+  useLocalization();
   const auth = useAuth();
   const project = useCaptureProject();
   const client = useQueryClient();
@@ -487,7 +487,7 @@ function AccountTextPhotoScreen({
             <Text style={styles.detail}>
               {draft.photos.length}{' '}
               {draft.photos.length === 1 ? 'photo' : 'photos'} ·{' '}
-              {new Date(draft.createdAt).toLocaleString()}
+              {formatDateTime(draft.createdAt)}
             </Text>
             <Text style={styles.detail}>Not sent for review</Text>
             <Action

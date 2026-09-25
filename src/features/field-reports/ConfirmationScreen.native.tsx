@@ -1,16 +1,14 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
+import {
+  LocalizedText as Text,
+  LocalizedPressable as Pressable,
+  LocalizedTextInput as TextInput,
+} from '@/features/localization/LocalizedText';
 import {
   BackButton,
   ShellPage,

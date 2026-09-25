@@ -1,13 +1,15 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import {
+  getActiveLocaleTag,
+  useLocalization,
+} from '@/features/localization/LocalizationProvider';
+import {
+  LocalizedText as Text,
+  LocalizedPressable as Pressable,
+} from '@/features/localization/LocalizedText';
 import {
   BackButton,
   ShellPage,
@@ -27,7 +29,7 @@ import type { ScheduleActivity } from '@/features/schedule/scheduleContracts';
 
 function dateLabel(value: string | null) {
   if (!value) return 'Not recorded';
-  return new Intl.DateTimeFormat('en-GB', {
+  return new Intl.DateTimeFormat(getActiveLocaleTag(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -36,12 +38,12 @@ function dateLabel(value: string | null) {
 }
 
 function quantityLabel(activity: ScheduleActivity) {
-  const accepted = new Intl.NumberFormat('en-IN').format(
+  const accepted = new Intl.NumberFormat(getActiveLocaleTag()).format(
     activity.acceptedQuantity,
   );
   if (activity.targetQuantity === null)
     return `${accepted}${activity.unit ? ` ${activity.unit}` : ''} accepted · Planned quantity not recorded`;
-  return `${accepted} of ${new Intl.NumberFormat('en-IN').format(activity.targetQuantity)} ${activity.unit ?? 'unit not recorded'} accepted`;
+  return `${accepted} of ${new Intl.NumberFormat(getActiveLocaleTag()).format(activity.targetQuantity)} ${activity.unit ?? 'unit not recorded'} accepted`;
 }
 
 function nodeDetail(node: HierarchyNode) {
@@ -128,6 +130,7 @@ function ActivityFacts({
 }
 
 export function TaskHierarchyScreen({ activityId }: { activityId: string }) {
+  useLocalization();
   const { project, hierarchy, refresh } = useTaskHierarchy(activityId);
   const data = hierarchy.data;
   const graph = data?.hierarchy;

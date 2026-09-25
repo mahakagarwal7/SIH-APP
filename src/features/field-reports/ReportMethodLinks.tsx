@@ -1,5 +1,7 @@
 import { Link } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+
+import { LocalizedText as Text } from '@/features/localization/LocalizedText';
 
 import type { Href } from 'expo-router';
 

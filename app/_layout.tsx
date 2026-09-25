@@ -3,6 +3,7 @@ import { StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '@/features/auth/AuthProvider';
+import { LocalizationProvider } from '@/features/localization/LocalizationProvider';
 import { RootNavigator } from '@/features/navigation/RootNavigator';
 import { ServerStateProvider } from '@/lib/queryClient';
 
@@ -11,11 +12,13 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <SafeAreaView style={styles.screen}>
         <StatusBar style="dark" />
-        <AuthProvider>
-          <ServerStateProvider>
-            <RootNavigator />
-          </ServerStateProvider>
-        </AuthProvider>
+        <LocalizationProvider>
+          <AuthProvider>
+            <ServerStateProvider>
+              <RootNavigator />
+            </ServerStateProvider>
+          </AuthProvider>
+        </LocalizationProvider>
       </SafeAreaView>
     </SafeAreaProvider>
   );

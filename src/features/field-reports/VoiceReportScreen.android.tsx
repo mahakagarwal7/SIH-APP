@@ -7,17 +7,16 @@ import {
 import { randomUUID } from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  AppState,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, AppState, StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
+import { useLocalization } from '@/features/localization/LocalizationProvider';
+import {
+  formatDateTime,
+  LocalizedText as Text,
+  LocalizedAlert as Alert,
+  LocalizedPressable as Pressable,
+} from '@/features/localization/LocalizedText';
 import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
 import { useCaptureProject } from '@/features/projects/useCaptureProject';
 
@@ -238,6 +237,7 @@ function CapturePanel({
 }
 
 function AccountVoiceScreen({ userId }: { userId: string }) {
+  useLocalization();
   const auth = useAuth();
   const project = useCaptureProject();
   const client = useQueryClient();
@@ -462,7 +462,7 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
             <Text style={shellStyles.cardTitle}>{draft.projectName}</Text>
             <Text style={shellStyles.body}>
               {draft.duration.toFixed(1)} seconds ·{' '}
-              {new Date(draft.createdAt).toLocaleString()}
+              {formatDateTime(draft.createdAt)}
             </Text>
             <Text style={styles.detail}>Not sent for review</Text>
             <View style={styles.actions}>

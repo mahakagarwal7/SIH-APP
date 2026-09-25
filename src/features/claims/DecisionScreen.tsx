@@ -1,15 +1,13 @@
 import { randomUUID } from 'expo-crypto';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import {
+  LocalizedText as Text,
+  LocalizedPressable as Pressable,
+  LocalizedTextInput as TextInput,
+} from '@/features/localization/LocalizedText';
 import {
   BackButton,
   ShellPage,

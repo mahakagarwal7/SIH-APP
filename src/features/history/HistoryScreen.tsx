@@ -1,14 +1,16 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import {
+  getActiveLocaleTag,
+  useLocalization,
+} from '@/features/localization/LocalizationProvider';
+import {
+  LocalizedText as Text,
+  LocalizedPressable as Pressable,
+  LocalizedTextInput as TextInput,
+} from '@/features/localization/LocalizedText';
 import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
 import { WorkReadError } from '@/features/projects/myWorkService';
 
@@ -29,7 +31,7 @@ import { useExecutionHistory } from './useExecutionHistory';
 const emptyHistoryEntries: ExecutionHistoryEntry[] = [];
 
 function dateLabel(value: string) {
-  return new Intl.DateTimeFormat('en-GB', {
+  return new Intl.DateTimeFormat(getActiveLocaleTag(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -38,7 +40,7 @@ function dateLabel(value: string) {
 }
 
 function acceptedLabel(value: string) {
-  return `${new Intl.DateTimeFormat('en-IN', {
+  return `${new Intl.DateTimeFormat(getActiveLocaleTag(), {
     dateStyle: 'medium',
     timeStyle: 'short',
     timeZone: 'Asia/Kolkata',
@@ -256,6 +258,7 @@ function HistoryCard({
 }
 
 export function HistoryScreen() {
+  useLocalization();
   const { project, history, refresh, authorized, accessDenied } =
     useExecutionHistory();
   const projectId = project.data?.project.id;

@@ -1,13 +1,15 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import {
+  getActiveLocaleTag,
+  useLocalization,
+} from '@/features/localization/LocalizationProvider';
+import {
+  LocalizedText as Text,
+  LocalizedPressable as Pressable,
+} from '@/features/localization/LocalizedText';
 import { NavLink, ShellPage, shellStyles } from '@/features/navigation/shellUi';
 import { siteToday } from '@/features/projects/myWork';
 
@@ -23,7 +25,7 @@ import { useManagerOverview } from './useManagerOverview';
 import type { Href } from 'expo-router';
 
 function dateLabel(value: string) {
-  return new Intl.DateTimeFormat('en-GB', {
+  return new Intl.DateTimeFormat(getActiveLocaleTag(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -32,7 +34,7 @@ function dateLabel(value: string) {
 }
 
 function acceptedLabel(value: string) {
-  return new Intl.DateTimeFormat('en-IN', {
+  return new Intl.DateTimeFormat(getActiveLocaleTag(), {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -54,6 +56,7 @@ function eventLabel(kind: string) {
 }
 
 export function ManagerOverviewScreen() {
+  useLocalization();
   const { project, overview, refresh, authorized } = useManagerOverview();
   const [today, setToday] = useState(siteToday);
   const data = overview.data;

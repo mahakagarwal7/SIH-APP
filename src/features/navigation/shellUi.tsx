@@ -1,12 +1,10 @@
 import { Link, useRouter } from 'expo-router';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+
 import {
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+  LocalizedText as Text,
+  LocalizedPressable as Pressable,
+} from '@/features/localization/LocalizedText';
 
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
