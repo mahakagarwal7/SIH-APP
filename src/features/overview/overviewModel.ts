@@ -142,6 +142,25 @@ export function recentAcceptedEvents(
     .slice(0, limit);
 }
 
+export function verifiedReporterLabel(entry: ExecutionHistoryEntry) {
+  return entry.provenance?.reportedByLabel?.trim() || 'Reporter not recorded';
+}
+
+export function relativeAcceptedTime(acceptedAt: string, now: number) {
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((now - Date.parse(acceptedAt)) / 1_000),
+  );
+  if (elapsedSeconds < 60) return 'Just now';
+  const minutes = Math.floor(elapsedSeconds / 60);
+  if (minutes < 60)
+    return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+}
+
 export function attentionReason(
   claim: Pick<ReviewClaim, 'manual_review' | 'state' | 'validation_flags'>,
 ) {

@@ -123,7 +123,7 @@ const accepted = {
   sourceId: 'VOICE-41',
   source: 'Line erection started',
   sourceUrl: `/planner/review?claim=${claimId}`,
-  provenance: {},
+  provenance: { reportedByLabel: 'Site reporter' },
   media: [],
   matchScore: 0.94,
   matchReasons: { location: 1 },
@@ -220,28 +220,21 @@ function state(
 beforeEach(() => jest.mocked(useManagerOverview).mockReturnValue(state()));
 afterEach(cleanup);
 
-it('shows the reference overview charts with an explicit activity-count basis', async () => {
+it('shows the manager panel with supported task counts and unavailable metrics', async () => {
   await render(<ManagerOverviewScreen />);
-  expect(
-    screen.getByRole('header', { name: 'Progress Overview' }),
-  ).toBeVisible();
+  expect(screen.getByRole('header', { name: 'Manager Panel' })).toBeVisible();
   expect(screen.getByText(/Imported baseline 01/)).toBeVisible();
+  expect(screen.getByText('1/3')).toBeVisible();
+  expect(screen.getByText('TIMELINE SCHEDULER')).toBeVisible();
+  expect(screen.getByText('RECENT VERIFIED FIELD UPDATES')).toBeVisible();
   expect(
-    screen.getByLabelText('33% total activity-count completion'),
+    screen.getByText(/accepted-finished tasks out of 3 planned/),
   ).toBeVisible();
-  expect(screen.getByText('WORK AREA COMPLETE')).toBeVisible();
-  expect(screen.getByText('WEEKLY PROGRESS TREND')).toBeVisible();
-  expect(
-    screen.getByText(/Total is 1 accepted-finished of 3 planned activities/),
-  ).toBeVisible();
-  expect(screen.getByText('Start date needs review')).toBeVisible();
-  expect(screen.getAllByText('Line erection')).toHaveLength(1);
-  expect(screen.getAllByText('Review claim')).toHaveLength(5);
-  expect(screen.getByText(/does not weight quantity/)).toBeVisible();
+  expect(screen.getAllByText('Not recorded')).toHaveLength(4);
   expect(screen.queryByText(/healthy/i)).toBeNull();
 });
 
-it('labels discipline ratios and weekly accepted events without calling them productivity', async () => {
+it('renders real discipline progress and verified update provenance', async () => {
   await render(<ManagerOverviewScreen />);
   expect(
     screen.getByLabelText('Civil: 0 of 1 activities complete'),
@@ -249,11 +242,11 @@ it('labels discipline ratios and weekly accepted events without calling them pro
   expect(
     screen.getByLabelText('Piping: 1 of 2 activities complete'),
   ).toBeVisible();
-  expect(screen.getByText(/evidence volume, not productivity/)).toBeVisible();
-  expect(screen.getByLabelText('23 Sept 2026: 1 accepted event')).toBeVisible();
-  expect(screen.getByText('Actual start accepted')).toBeVisible();
-  expect(screen.getByText(/Accepted 23 Sept/)).toBeVisible();
-  expect(screen.getByText(/Showing 5 of 6 current claims/)).toBeVisible();
+  expect(screen.getByText(/activity-count completion/)).toBeVisible();
+  expect(screen.getByText(/Actual start accepted/)).toBeVisible();
+  expect(screen.getByText('Site reporter')).toBeVisible();
+  expect(screen.getByText('PIP-1201 · Line erection')).toBeVisible();
+  expect(screen.getByText(/ago|Just now/)).toBeVisible();
 });
 
 it('keeps no-schedule, unresolved progress and empty records explicit', async () => {
@@ -276,12 +269,9 @@ it('keeps no-schedule, unresolved progress and empty records explicit', async ()
   );
   await render(<ManagerOverviewScreen />);
   expect(screen.getByText(/No active schedule · Schedule v7/)).toBeVisible();
-  expect(
-    screen.getByLabelText('Total activity completion not recorded'),
-  ).toBeVisible();
   expect(screen.getByText(/activity counts stay at zero/)).toBeVisible();
-  expect(screen.getByText(/No field claims currently need/)).toBeVisible();
-  expect(screen.getByText(/No current accepted field records/)).toBeVisible();
+  expect(screen.getByText('0/0')).toBeVisible();
+  expect(screen.getByText(/No verified field updates/)).toBeVisible();
   expect(screen.getByText(/No active schedule activities/)).toBeVisible();
 });
 
@@ -317,7 +307,7 @@ it('renders loading, no-access, wrong-role, error and offline states', async () 
   await view.rerender(<ManagerOverviewScreen />);
   expect(screen.getByText(/Showing the last loaded overview/)).toBeVisible();
   expect(
-    screen.getByTestId('progress-overview-scroll').props.refreshControl.props
+    screen.getByTestId('manager-panel-scroll').props.refreshControl.props
       .enabled,
   ).toBe(false);
 });
