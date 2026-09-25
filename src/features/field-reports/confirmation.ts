@@ -1,4 +1,7 @@
-import { isSelectableWorkDate } from '@/components/workDate';
+import {
+  isSelectableWorkDate,
+  parseLocalWorkDate,
+} from '@/components/workDate';
 
 import { OutboxSyncError } from './outbox';
 
@@ -10,6 +13,21 @@ const uuid =
 export function normalizeConfirmation(
   input: ConfirmedPayload,
 ): ConfirmedPayload {
+  const result = readStoredConfirmation(input);
+  if (result.workDate !== null && !isSelectableWorkDate(result.workDate))
+    throw new OutboxSyncError(
+      'Choose today or an earlier work date.',
+      'local',
+      false,
+    );
+  return result;
+}
+
+// Historical receipts are immutable. A newer input rule (or a device clock
+// change) must not prevent reading the whole outbox after an app upgrade.
+export function readStoredConfirmation(
+  input: ConfirmedPayload,
+): ConfirmedPayload {
   const text = input.text.trim();
   if (!text || text.length > 10_000)
     throw new OutboxSyncError(
@@ -17,9 +35,9 @@ export function normalizeConfirmation(
       'local',
       false,
     );
-  if (input.workDate !== null && !isSelectableWorkDate(input.workDate))
+  if (input.workDate !== null && !parseLocalWorkDate(input.workDate))
     throw new OutboxSyncError(
-      'Choose today or an earlier work date.',
+      'The saved work date is invalid.',
       'local',
       false,
     );

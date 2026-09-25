@@ -1,3 +1,5 @@
+import { warnInDevelopment } from '@/lib/devLog';
+
 import { PcmWavCapture } from './pcmWav';
 
 import type { PcmBuffer } from './pcmWav';
@@ -204,7 +206,8 @@ export class VoiceCapture {
         `${message ? `${message} ` : ''}Saved on device. Not sent for review.`,
       );
       this.pending = null;
-    } catch {
+    } catch (error) {
+      warnInDevelopment('Recording save failed', error);
       this.update(
         'error',
         'Could not save the recording. Keep this screen open and retry after freeing device storage.',

@@ -1,4 +1,4 @@
-import { normalizeConfirmation } from './confirmation';
+import { readStoredConfirmation } from './confirmation';
 import { validateManifest } from './outbox';
 
 import type {
@@ -35,7 +35,7 @@ function hydrate(row: StoredOutbox | null): OutboxRecord | null {
   const manifest = JSON.parse(row.manifest) as CaptureManifest;
   const uploadedFiles = JSON.parse(row.uploadedFiles) as string[];
   const confirmedPayload = row.confirmedPayload
-    ? normalizeConfirmation(
+    ? readStoredConfirmation(
         JSON.parse(row.confirmedPayload) as ConfirmedPayload,
       )
     : null;

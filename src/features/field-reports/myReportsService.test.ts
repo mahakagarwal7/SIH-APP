@@ -61,6 +61,47 @@ const remote = {
   jobs: [],
 };
 
+it('identifies remote reports using their project and current wording, never superseded wording', () => {
+  expect(
+    mergeMyReports(
+      [],
+      [],
+      [],
+      [
+        {
+          ...remote,
+          current_version: 2,
+          projects: { name: 'Plant expansion' },
+          report_versions: [
+            { version: 1, source_text: 'Superseded wording' },
+            { version: 2, source_text: '  Current verified wording  ' },
+          ],
+        },
+      ],
+    )[0],
+  ).toMatchObject({
+    projectName: 'Plant expansion',
+    summary: 'Current verified wording',
+  });
+});
+
+it('does not display an older version when the current wording is unavailable', () => {
+  expect(
+    mergeMyReports(
+      [],
+      [],
+      [],
+      [
+        {
+          ...remote,
+          current_version: 2,
+          report_versions: [{ version: 1, source_text: 'Superseded wording' }],
+        },
+      ],
+    )[0]?.summary,
+  ).toBe('');
+});
+
 it('deduplicates local/outbox/server identity and prefers accepted server status', () => {
   const items = mergeMyReports([], [], [outbox], [remote]);
   expect(items).toHaveLength(1);
@@ -118,6 +159,56 @@ it('labels early voice Send intent while transcription is pending', () => {
   ).toMatchObject({
     status: 'Sending for review',
     detail: 'The report will submit after its verified transcript is ready.',
+  });
+});
+
+it.each(['failed', 'paused'] as const)(
+  'does not hide a %s upload behind early Send intent',
+  (state) => {
+    expect(
+      mergeMyReports(
+        [],
+        [],
+        [
+          {
+            ...outbox,
+            state,
+            sendRequested: true,
+            lastError: 'Upload stopped.',
+          },
+        ],
+        [],
+      )[0],
+    ).toMatchObject({
+      status: state === 'failed' ? 'Sync needs attention' : 'Sync paused',
+      detail: 'Upload stopped.',
+    });
+  },
+);
+
+it('coalesces combined drafts and their server receipt when the outbox cannot be read', () => {
+  const shared = {
+    id: captureId,
+    userId,
+    projectId,
+    projectName: 'Site project',
+    createdAt: remote.received_at,
+    state: 'saved' as const,
+    available: true,
+  };
+  const result = mergeMyReports(
+    [{ ...shared, duration: 2, sampleRate: 16000, byteLength: 64044 }],
+    [{ ...shared, text: 'Combined wording', photos: [], photoUris: [] }],
+    [],
+    [remote],
+  );
+  expect(result).toHaveLength(1);
+  expect(result[0]).toMatchObject({
+    captureId,
+    status: 'Accepted',
+    summary: 'Combined wording',
+    canSync: false,
+    canOpen: true,
   });
 });
 
@@ -235,7 +326,8 @@ it('does not call a reserved server draft ready before local media processing fi
   expect(items).toHaveLength(1);
   expect(items[0]).toMatchObject({
     status: 'Processing evidence',
-    detail: 'Voice transcription or photo validation is in progress.',
+    detail:
+      'Uploaded. Waiting for the server to finish transcription or photo validation.',
   });
 });
 

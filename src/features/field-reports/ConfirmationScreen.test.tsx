@@ -147,6 +147,36 @@ it('shows the original transcript and requires an explicit wording check', async
   ).toBeVisible();
 });
 
+it('keeps Send reachable for a large schedule and lets the reporter search every activity', async () => {
+  jest.mocked(loadConfirmationActivities).mockResolvedValue(
+    Array.from({ length: 149 }, (_, index) => ({
+      id: `activity-${index}`,
+      externalId: `CIV-${index}`,
+      name: `Task ${index}`,
+      location: 'Site',
+    })) as never,
+  );
+  await render(<App />);
+  await screen.findByRole('button', { name: 'Choose activity' });
+  expect(screen.getAllByRole('radio')).toHaveLength(1);
+  expect(
+    screen.getByRole('button', { name: 'Confirm and send' }),
+  ).toBeVisible();
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Choose activity' }),
+  );
+  expect(screen.getAllByRole('radio')).toHaveLength(9);
+  await fireEvent.changeText(
+    screen.getByLabelText('Search activities'),
+    'CIV-148',
+  );
+  await fireEvent.press(screen.getByText('CIV-148 · Task 148'));
+  expect(screen.queryByLabelText('Search activities')).toBeNull();
+  expect(
+    screen.getByRole('radio', { checked: true, name: /CIV-148/ }),
+  ).toBeVisible();
+});
+
 it('persists confirmation offline without claiming it was sent', async () => {
   jest.mocked(useAuth).mockReturnValue({
     status: 'signedIn',

@@ -79,6 +79,8 @@ function AccountConfirmation({
   const [editedText, setEditedText] = useState<string>();
   const [editedWorkDate, setEditedWorkDate] = useState<string>();
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>();
+  const [choosingActivity, setChoosingActivity] = useState(false);
+  const [activitySearch, setActivitySearch] = useState('');
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -243,6 +245,18 @@ function AccountConfirmation({
       ? selectedActivityId
       : (record.confirmedPayload?.activityId ?? null);
   const evidence = getReportEvidenceState(record);
+  const allActivities = activities.data ?? [];
+  const largeSchedule = allActivities.length > 8;
+  const matches = allActivities.filter((activity) =>
+    `${activity.externalId} ${activity.name} ${activity.location}`
+      .toLocaleLowerCase()
+      .includes(activitySearch.trim().toLocaleLowerCase()),
+  );
+  const visibleActivities = largeSchedule
+    ? choosingActivity
+      ? matches.slice(0, 8)
+      : allActivities.filter((activity) => activity.id === activityId)
+    : allActivities;
   const ready =
     record.submissionRejected ||
     (evidence.canSubmit &&
@@ -347,13 +361,50 @@ function AccountConfirmation({
                 </Text>
               </View>
             )}
-          {activities.data?.map((activity) => (
+          {largeSchedule && !locked && (
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: choosingActivity }}
+                disabled={busy}
+                onPress={() => setChoosingActivity((value) => !value)}
+                style={shellStyles.link}
+              >
+                <Text style={shellStyles.linkText}>
+                  {choosingActivity
+                    ? 'Close activity search'
+                    : 'Choose activity'}
+                </Text>
+              </Pressable>
+              {choosingActivity && (
+                <>
+                  <TextInput
+                    accessibilityLabel="Search activities"
+                    placeholder="Search by name, code or location"
+                    value={activitySearch}
+                    onChangeText={setActivitySearch}
+                    style={styles.input}
+                    editable={!busy}
+                  />
+                  <Text style={styles.help}>
+                    {matches.length === 0
+                      ? 'No matching activities.'
+                      : 'Showing up to eight matches. Refine your search to find an activity.'}
+                  </Text>
+                </>
+              )}
+            </>
+          )}
+          {visibleActivities.map((activity) => (
             <Pressable
               accessibilityRole="radio"
               accessibilityState={{ checked: activityId === activity.id }}
               disabled={locked || busy}
               key={activity.id}
-              onPress={() => setSelectedActivityId(activity.id)}
+              onPress={() => {
+                setSelectedActivityId(activity.id);
+                setChoosingActivity(false);
+              }}
               style={[
                 styles.choice,
                 activityId === activity.id && styles.selected,
@@ -443,6 +494,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
+    borderRadius: 12,
     minHeight: 52,
     borderWidth: 1,
     borderColor: '#b8c8d1',
@@ -464,6 +516,7 @@ const styles = StyleSheet.create({
   },
   error: { color: '#9d3434', fontSize: 15, lineHeight: 23, marginTop: 14 },
   choice: {
+    borderRadius: 12,
     minHeight: 56,
     borderWidth: 1,
     borderColor: '#d7e0e5',
@@ -484,6 +537,7 @@ const styles = StyleSheet.create({
   boxChecked: { backgroundColor: '#266b8c', borderColor: '#266b8c' },
   checkText: { flex: 1, color: '#17354c', fontSize: 15, lineHeight: 23 },
   primary: {
+    borderRadius: 12,
     minHeight: 52,
     backgroundColor: '#17354c',
     alignItems: 'center',

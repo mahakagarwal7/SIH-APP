@@ -159,7 +159,7 @@ it('requires a work date and queues Submit without waiting for transcription', a
     requestSend,
   } as never);
   await render(<App />);
-  expect(await screen.findByText('Transcribing…')).toBeVisible();
+  expect(await screen.findByText('Waiting for upload.')).toBeVisible();
   const send = screen.getByRole('button', { name: 'Submit' });
   expect(send).toBeEnabled();
   await fireEvent.press(send);
@@ -191,7 +191,7 @@ it('requires a work date and queues Submit without waiting for transcription', a
 
 it('shows the worker transcript on the same screen and sends edited wording', async () => {
   await render(<App />);
-  await screen.findByText('Transcribing…');
+  await screen.findByText('Waiting for upload.');
   stored = {
     ...stored,
     reportId: '30000000-0000-4000-8000-000000000003',
@@ -234,7 +234,7 @@ it('cancels local and reserved evidence through the outbox cancellation path', a
     retryable: false,
   });
   await render(<App />);
-  await screen.findByText('Transcribing…');
+  await screen.findByText('Waiting for upload.');
   await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
   expect(cancelNativeOutboxCapture).toHaveBeenCalledWith('alice', captureId);
   expect(onCanceled).toHaveBeenCalledWith('Voice report canceled.');
@@ -249,10 +249,66 @@ it('reports a queued cancellation when server cleanup is still pending', async (
       'Cancellation is queued. Local evidence stays private until server cleanup succeeds.',
   });
   await render(<App />);
-  await screen.findByText('Transcribing…');
+  await screen.findByText('Waiting for upload.');
   await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
   expect(onCanceled).toHaveBeenCalledWith(
     'Cancellation queued. Server cleanup will retry after reconnecting.',
   );
   expect(mockShowToast).toHaveBeenCalledWith('Cancellation queued for retry.');
+});
+
+it('shows a retryable preparation error instead of claiming transcription is running', async () => {
+  jest
+    .mocked(prepareLocalOutbox)
+    .mockRejectedValueOnce(new Error('Local database could not open'));
+  jest
+    .mocked(getNativeOutbox)
+    .mockResolvedValue({ list: async () => [] } as never);
+  await render(<App />);
+  expect(
+    await screen.findByText(/Could not prepare this recording/),
+  ).toBeVisible();
+  expect(screen.queryByText('Transcribing…')).toBeNull();
+  expect(screen.queryByText('Preparing secure upload…')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Retry upload' })).toBeEnabled();
+});
+
+it('shows a failed upload reason even after an early Send request', async () => {
+  stored = {
+    ...stored,
+    state: 'failed',
+    sendRequested: true,
+    requestedWorkDate: '2026-09-24',
+    lastError: 'Upload could not reach the server.',
+  };
+  await render(<App />);
+  expect(
+    await screen.findByText('Upload could not reach the server.'),
+  ).toBeVisible();
+  expect(screen.queryByText('Transcribing…')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Retry upload' })).toBeEnabled();
+});
+
+it('allows an older queued recording without a work date to be completed', async () => {
+  stored = { ...stored, sendRequested: true, requestedWorkDate: null };
+  await render(<App />);
+  await fireEvent.press(
+    await screen.findByRole('button', { name: 'Choose work date' }),
+  );
+  await fireEvent.press(screen.getByRole('button', { name: 'Submit' }));
+  expect(requestSend).toHaveBeenCalledWith('alice', captureId, {
+    text: '',
+    workDate: '2026-09-24',
+    activityId: null,
+  });
+});
+
+it('describes server processing without claiming that a queued worker is transcribing', async () => {
+  stored = { ...stored, state: 'processing' };
+  await render(<App />);
+  expect(
+    await screen.findByText('Waiting for server transcription…'),
+  ).toBeVisible();
+  expect(screen.getByText(/The recording has uploaded/)).toBeVisible();
+  expect(screen.queryByText('Transcribing…')).toBeNull();
 });

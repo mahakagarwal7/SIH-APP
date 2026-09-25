@@ -30,6 +30,7 @@ import { useCaptureProject } from '@/features/projects/useCaptureProject';
 
 import { androidMicrophone } from './androidMicrophone';
 import { saveCombinedVoiceDraft } from './combinedDraftStore';
+import { outboxStatus } from './myReportsService';
 import { getVoiceDraftStore } from './nativeDraftStore';
 import {
   assertLocalDraftCanBeDiscarded,
@@ -883,14 +884,14 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
         <Text style={styles.empty}>No voice drafts saved yet.</Text>
       ) : (
         drafts.data?.map((draft) => {
-          const discardBlocker = localDraftDiscardBlocker(
-            outbox.data?.find((row) => row.captureId === draft.id) ?? null,
-          );
+          const record = outbox.data?.find((row) => row.captureId === draft.id);
+          const delivery = record ? outboxStatus(record) : null;
+          const discardBlocker = localDraftDiscardBlocker(record ?? null);
           return (
             <View key={draft.id} style={shellStyles.card}>
               <Text style={styles.mode}>
                 {draft.available
-                  ? 'Saved on device'
+                  ? (delivery?.[0] ?? 'Saved on device')
                   : draft.state === 'deleting'
                     ? 'Discard incomplete'
                     : 'Recording incomplete or missing'}
@@ -900,7 +901,9 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
                 {draft.duration.toFixed(1)} seconds ·{' '}
                 {formatDateTime(draft.createdAt)}
               </Text>
-              <Text style={styles.detail}>Not sent for review</Text>
+              <Text style={styles.detail}>
+                {delivery?.[1] ?? 'Not sent for review'}
+              </Text>
               {!!discardBlocker && (
                 <Text style={styles.detail}>{discardBlocker}</Text>
               )}
@@ -1036,7 +1039,7 @@ const styles = StyleSheet.create({
     color: '#17354c',
   },
   capture: {
-    paddingTop: 26,
+    paddingTop: 16,
     paddingHorizontal: 4,
     gap: 10,
     alignItems: 'center',
@@ -1057,19 +1060,19 @@ const styles = StyleSheet.create({
     maxWidth: 330,
   },
   recordHaloOuter: {
-    width: 146,
-    height: 146,
-    borderRadius: 73,
+    width: 128,
+    height: 128,
+    borderRadius: 64,
     backgroundColor: '#eee9ff',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
+    marginTop: 12,
   },
   recordHaloOuterActive: { backgroundColor: '#fde3e5' },
   recordHaloInner: {
-    width: 116,
-    height: 116,
-    borderRadius: 58,
+    width: 104,
+    height: 104,
+    borderRadius: 52,
     backgroundColor: '#dcd2ff',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1090,11 +1093,11 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '800',
     letterSpacing: 0.6,
-    marginTop: 16,
+    marginTop: 8,
   },
   recordingLabelActive: { color: '#ef3f49' },
   waveform: {
-    height: 58,
+    height: 50,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
