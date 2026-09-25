@@ -44,9 +44,30 @@ device checks below before distributing it.
 A pushed `v*` tag, or a manual run with an existing tag, still publishes a
 GitHub Release. Do not use a version tag for a build-only verification run.
 
-## Earlier structural artifact evidence — not current-head validation
+## Current APK build evidence — 25 September 2026
 
-The artifact recorded below was built from commit `51f93a2faa5bf02716d32a88aea2d246e9cb44a2`, before the report-status, outbox and current build-wrapper fixes. It is stale and must not be used to validate this PR's current head or for physical-device acceptance. No current-head APK has been built: this environment has no Java or Android SDK, and the Android Studio/Gradle wrapper has not been rerun on Windows after the review fixes.
+The [build-only run](https://github.com/mahakagarwal7/SIH-APP/actions/runs/36115406349)
+built commit `866de57ca530865c37c43beed4573cf90e5be3fe` with the public
+production Supabase configuration supplied by repository Actions secrets. The
+artifact contains `nirmaan-field-preview-arm64.apk` and `SHA256SUMS.txt`; the
+publish step was skipped, so no GitHub Release was created. The workflow passed
+typecheck, lint, tests, native build and upload, and its wrapper checked the
+package ID, ARM64-only ABI, bundled JavaScript and APK signature.
+
+- Package: `com.mahakagarwal.nirmaan`; ABI: `arm64-v8a`.
+- Size: 58,859,491 bytes.
+- SHA-256: `61796626c494d7196eeb7febfd0981b8de610ae6148dae7a9068fccd15111730`.
+- APK Signature Scheme v2 verified with the approved Android debug certificate,
+  SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+
+This is build evidence, not physical-device acceptance. Install this exact APK
+and complete the checks below before distributing it to field users. A later
+documentation-only commit does not alter the built app or workflow; use the
+recorded source commit and checksum to identify the tested binary.
+
+## Earlier structural artifact evidence — superseded
+
+The artifact recorded below was built from commit `51f93a2faa5bf02716d32a88aea2d246e9cb44a2`, before the report-status, outbox and current build-wrapper fixes. It is stale and must not be used for physical-device acceptance. Use the newer build recorded above.
 
 The earlier build was verified on 24 September 2026 with these details:
 
@@ -59,9 +80,9 @@ The earlier build was verified on 24 September 2026 with these details:
 - SHA-256: `b988717a65505a5f841673ad03ca77edb8fff0f46a19dd9a5960df6c7da0a44c`.
 - `apksigner` verified APK Signature Scheme v2 with one signer. Certificate: Android Debug, RSA 2048, SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
 
-The build-helper tests added during review passed under PowerShell 7.4.7 in a Linux container. A current-head Windows build and device install remain required before claiming APK acceptance evidence.
+The build-helper tests added during that earlier review passed under PowerShell 7.4.7 in a Linux container. They did not provide device acceptance evidence.
 
-No physical device was connected during this check. The local production URL exists, but the publishable key is still empty, so login, restart, real media capture, offline recovery, web arrival and accepted-status evidence remain pending. The generated APK is therefore structural build evidence rather than an acceptance build.
+No physical device was connected during either build check. Login, restart, real media capture, offline recovery, web arrival and accepted-status evidence remain pending for the current configured APK.
 
 ## Physical-device acceptance record
 
