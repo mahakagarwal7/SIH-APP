@@ -14,6 +14,7 @@ export const languageNames: Record<AppLocale, string> = {
 // The coverage test keeps every visible static phrase represented here.
 export const hiTranslations: Readonly<Record<string, string>> = {
   '% · Basis:': '% · आधार:',
+  ', row': ', पंक्ति',
   '. Recording stops at 25 seconds.':
     '. रिकॉर्डिंग 25 सेकंड पर बंद हो जाती है।',
   '. The earlier event remains in history; accepting this proposal would replace it.':
@@ -74,12 +75,14 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   'Browser preview: sign-in is cleared when you reload or close this page.':
     'ब्राउज़र पूर्वावलोकन: जब आप इस पृष्ठ को पुनः लोड करते हैं या बंद करते हैं तो साइन-इन साफ़ हो जाता है।',
   Calendar: 'कैलेंडर',
+  'Calendar:': 'कैलेंडर:',
   'Can you confirm this exact reported work and date?':
     'क्या आप इस सटीक रिपोर्ट किए गए कार्य और तारीख की पुष्टि कर सकते हैं?',
   Candidate: 'उम्मीदवार',
   'Candidate activities': 'उम्मीदवार गतिविधियाँ',
   'Candidate belongs to the report’s earlier schedule revision.':
     'उम्मीदवार रिपोर्ट के पूर्व शेड्यूल संशोधन से संबंधित है।',
+  'Captured evidence': 'दर्ज किया गया साक्ष्य',
   Change: 'परिवर्तन',
   'Change project': 'प्रोजेक्ट बदलें',
   'Check and Send are implemented in later approved slices.':
@@ -215,11 +218,13 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   MOBILE: 'मोबाइल',
   Manager: 'मैनेजर',
   'Manager access required': 'प्रबंधक पहुंच आवश्यक है',
+  'Message time:': 'संदेश का समय:',
   'Milestone date:': 'मील का पत्थर तिथि:',
   'Milestone occurrence': 'मील का पत्थर घटना',
   'Milestone occurrence:': 'मील का पत्थर घटना:',
   'My reports': 'मेरी रिपोर्ट',
   'My work': 'मेरा काम',
+  'Named in source:': 'स्रोत में नामित:',
   'Needs your attention': 'आपका ध्यान चाहिए',
   Next: 'अगला',
   'Next activities': 'अगली गतिविधियाँ',
@@ -244,6 +249,7 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   'No assignment today.': 'आज कोई असाइनमेंट नहीं.',
   'No candidate activity was recorded. This claim needs manual review.':
     'किसी भी उम्मीदवार की गतिविधि दर्ज नहीं की गई. इस दावे की मैन्युअल समीक्षा की आवश्यकता है.',
+  'No caption supplied': 'कोई कैप्शन नहीं दिया गया',
   'No child branches in this snapshot.':
     'इस स्नैपशॉट में कोई चाइल्ड ब्रांच नहीं है.',
   'No completed activities match these work filters. Source IDs and field wording can still match accepted records below.':
@@ -362,6 +368,8 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   Refresh: 'ताज़ा करें',
   'Refresh access': 'पहुंच ताज़ा करें',
   'Refresh drafts': 'ड्राफ्ट ताज़ा करें',
+  'Refresh failed · Showing previously loaded history. It may be out of date.':
+    'ताज़ा करना विफल · पहले से लोड किया गया इतिहास दिखा रहा है। यह पुराना हो सकता है.',
   'Refresh project': 'प्रोजेक्ट ताज़ा करें',
   'Reject claim': 'दावा अस्वीकार करें',
   'Remove photo': 'फ़ोटो हटाएँ',
@@ -384,6 +392,7 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   'Return to previous page': 'पिछले पृष्ठ पर लौटें',
   'Review claim': 'दावे की समीक्षा करें',
   'Review decision': 'निर्णय की समीक्षा करें',
+  'Review detail': 'समीक्षा विवरण',
   'Review progress': 'प्रगति की समीक्षा करें',
   'Review queue': 'समीक्षा कतार',
   'Review queue unavailable': 'समीक्षा कतार अनुपलब्ध',
