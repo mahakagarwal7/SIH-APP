@@ -93,8 +93,52 @@ A move there would require a separately reviewed backend rewrite.
 
 Application source: `157b70f8a484cac9deea16fae5aa550bb941ecad`, preceded by report
 recovery commit `2894658`. Both commits verified locally with the owner's GPG key.
-Final standalone APK, installed source screen and hosted CI results are recorded
-here after those checks finish.
+The standalone ARM64 build completed with the bundled JavaScript, expected
+package ID and approved Android debug certificate verified by the build helper:
+
+- File: `nirmaan-157b70f-arm64.apk` in the private audit output directory (also
+  `dist/nirmaan-field-preview-arm64.apk`).
+- Size: **58,890,887 bytes**.
+- SHA-256: `f514f901a5336166a427fe0e65e7e465880562702bf568a225a2e3707d0d766a`.
+- Embedded source: `157b70f8a484cac9deea16fae5aa550bb941ecad`. Subsequent commits
+  currently contain documentation and test formatting only.
+- PR: [#41](https://github.com/mahakagarwal7/SIH-APP/pull/41). All three initial branch commits were verified
+  by GitHub as well as locally.
+
+The first PR CI run correctly rejected an unformatted updated test assertion;
+`f85884b` formats that assertion. [CI run 36143862794](https://github.com/mahakagarwal7/SIH-APP/actions/runs/36143862794)
+passed quality (including all-platform export) and Android helper checks. The
+APK job is deliberately skipped on PRs; main builds it after successful quality
+checks. PR #38's main CI was canceled by the subsequent merge; main's later
+CI and automatic APK job both passed in run 36134006575.
+
+The standalone APK was installed in place and rendered without the Metro USB
+forward. Account displayed **Source 157b70f8**; English/Hindi switching worked.
+The debug APK was then restored in place, USB forwarding restored, and a fresh
+React Native DevTools session connected to the phone for the owner's debugging.
+The standalone file remains available separately. Neither install cleared drafts
+or the signed-in session.
+
+## Restoring USB debugging
+
+During the audit the development phone showed **Unable to load script**. Metro
+was unresponsive, then its cache rebuild and a localhost-only IPv6 listener
+prevented the USB-forwarded IPv4 connection. Android Studio remained running.
+The following development server configuration restored the HTTP status endpoint:
+
+```powershell
+$env:REACT_NATIVE_PACKAGER_HOSTNAME = '127.0.0.1'
+npx expo start --dev-client --host lan --port 8081 --max-workers 2
+```
+
+Set `adb reverse tcp:8081 tcp:8081` for the connected device, reload the debug app,
+then press `j` in that Metro terminal to open React Native DevTools. Add `--clear`
+once if Metro reports an unreadable cache. The standalone preview APK includes
+its JavaScript and does not need Metro. After the owner unlocked the phone, the
+app rendered again and Metro listed the phone's active Hermes target. DevTools
+opened with the title **Nirmaan (vivo I2301)**. Switching temporarily to the release
+APK disconnected the old debugger as expected; the debug build and fresh session
+were restored afterward.
 
 Full manager acceptance, clarification/verification mutations, alternate-role
 RLS denial, long-duration recording, and controlled transcription accuracy are
