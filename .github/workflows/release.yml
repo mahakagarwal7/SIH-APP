@@ -1,6 +1,18 @@
 name: Release
 
 on:
+  workflow_call:
+    inputs:
+      automatic:
+        description: Publish an automatic prerelease after green main CI
+        type: boolean
+        required: false
+        default: false
+    secrets:
+      NEXT_PUBLIC_SUPABASE_URL:
+        required: true
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
+        required: true
   push:
     tags: ['v*']
   workflow_dispatch:
@@ -26,7 +38,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.tag || github.sha }}
+          fetch-depth: 0
+
+      - name: Stamp the source commit and Android version code
+        shell: pwsh
+        run: |
+          $source = (git rev-parse HEAD).Trim()
+          $versionCode = [int](git rev-list --count HEAD)
+          if ($versionCode -lt 1 -or $versionCode -gt 2100000000) {
+            throw "Invalid Android version code $versionCode."
+          }
+          $config = Get-Content -LiteralPath app.json -Raw | ConvertFrom-Json
+          $config.expo.android | Add-Member -NotePropertyName versionCode -NotePropertyValue $versionCode -Force
+          $config | ConvertTo-Json -Depth 50 | Set-Content -LiteralPath app.json -Encoding utf8
+          "SOURCE_SHA=$source" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "APK_VERSION_CODE=$versionCode" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - uses: actions/setup-node@v4
         with:
@@ -114,19 +141,29 @@ jobs:
           retention-days: 30
 
       - name: Publish the release
-        if: github.event_name == 'push' || inputs.tag != ''
+        if: inputs.automatic || github.ref_type == 'tag' || inputs.tag != ''
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag || github.ref_name }}
+          TAG: ${{ inputs.automatic && format('preview-{0}-{1}', github.run_id, github.run_attempt) || inputs.tag || github.ref_name }}
+          AUTOMATIC: ${{ inputs.automatic }}
         run: |
+          if ($env:AUTOMATIC -eq 'true') {
+            $currentMain = (gh api "repos/$env:GITHUB_REPOSITORY/commits/main" --jq .sha).Trim()
+            if ($LASTEXITCODE -ne 0) { throw 'Could not verify the current main commit.' }
+            if ($currentMain -ne $env:SOURCE_SHA) {
+              Write-Host "Skipping a stale preview: main is $currentMain, APK source is $env:SOURCE_SHA."
+              exit 0
+            }
+          }
           $lines = @(
-            "ARM64 Android preview build of ``$env:TAG`` from commit ``$env:GITHUB_SHA``."
+            "ARM64 Android preview build of ``$env:TAG`` from commit ``$env:SOURCE_SHA``."
             ''
             '| | |'
             '|---|---|'
             '| Package | `com.mahakagarwal.nirmaan` |'
             '| ABI | `arm64-v8a` |'
+            "| Android version code | $env:APK_VERSION_CODE |"
             "| Size | $env:APK_BYTES bytes |"
             "| SHA-256 | ``$env:APK_SHA256`` |"
             ''
@@ -147,4 +184,9 @@ jobs:
             'Publishing this artifact does not record device acceptance. The checks in `docs/FIELD_PREVIEW.md` still require an owner-designated Field account and a physical ARM64 phone.'
           )
           Set-Content -LiteralPath release-notes.md -Encoding utf8 -Value $lines
-          gh release create "$env:TAG" dist/nirmaan-field-preview-arm64.apk dist/SHA256SUMS.txt --title "Nirmaan field preview $env:TAG" --notes-file release-notes.md --verify-tag
+          if ($env:AUTOMATIC -eq 'true') {
+            gh release create "$env:TAG" dist/nirmaan-field-preview-arm64.apk dist/SHA256SUMS.txt --title "Nirmaan automatic preview $env:TAG" --notes-file release-notes.md --target "$env:SOURCE_SHA" --prerelease --latest=false
+          } else {
+            gh release create "$env:TAG" dist/nirmaan-field-preview-arm64.apk dist/SHA256SUMS.txt --title "Nirmaan field preview $env:TAG" --notes-file release-notes.md --verify-tag
+          }
+          if ($LASTEXITCODE -ne 0) { throw "Could not publish $env:TAG." }
