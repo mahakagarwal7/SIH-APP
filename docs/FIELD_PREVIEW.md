@@ -30,6 +30,20 @@ Install the configured preview on a connected ARM64 device:
 
 The preview does not require Metro. Release/store signing remains a separate delivery decision.
 
+## Build from GitHub Actions without publishing
+
+After the repository Actions secrets `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are configured with the public production
+values, run the Release workflow manually with the **tag input left blank**.
+The workflow builds the same verified ARM64 APK and uploads it as the
+`nirmaan-field-preview-arm64` run artifact, but does not create a GitHub Release.
+Download the APK and `SHA256SUMS.txt` from that run and compare the checksum
+before installing it. Record the run's source commit and complete the physical
+device checks below before distributing it.
+
+A pushed `v*` tag, or a manual run with an existing tag, still publishes a
+GitHub Release. Do not use a version tag for a build-only verification run.
+
 ## Earlier structural artifact evidence — not current-head validation
 
 The artifact recorded below was built from commit `51f93a2faa5bf02716d32a88aea2d246e9cb44a2`, before the report-status, outbox and current build-wrapper fixes. It is stale and must not be used to validate this PR's current head or for physical-device acceptance. No current-head APK has been built: this environment has no Java or Android SDK, and the Android Studio/Gradle wrapper has not been rerun on Windows after the review fixes.
