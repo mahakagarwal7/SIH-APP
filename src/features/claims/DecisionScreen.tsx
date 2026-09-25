@@ -3,6 +3,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { useToast } from '@/components/ToastProvider';
 import { WorkDatePicker } from '@/components/WorkDatePicker';
 import {
   LocalizedText as Text,
@@ -117,6 +118,7 @@ function ChangePreview({
 }
 
 export function DecisionScreen({ claimId }: { claimId: string }) {
+  const { showToast } = useToast();
   const router = useRouter();
   const { project, decision, refresh, finish, authorized } =
     useDecisionContext(claimId);
@@ -202,7 +204,9 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
     return { ...stable.payload, commandId: stable.id };
   };
   const handleError = async (error: unknown) => {
-    setMessage(errorMessage(error));
+    const detail = errorMessage(error);
+    setMessage(detail);
+    showToast(detail, 'error');
     if (error instanceof DecisionWriteError && error.kind === 'stale') {
       setPreview(null);
       await refresh();
@@ -227,8 +231,12 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
     }
   };
   const accept = async () => {
+    if (!currentPreview) {
+      await runPreview();
+      return;
+    }
     const client = getSupabase();
-    if (!canWrite || !currentPreview || !client) return;
+    if (!canWrite || !client) return;
     setBusy(true);
     setMessage('');
     try {
@@ -236,6 +244,7 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
         ...currentPreview.command,
         previewHash: currentPreview.data.previewHash,
       });
+      showToast('Claim accepted.');
       leave(true);
     } catch (error) {
       await handleError(error);
@@ -251,6 +260,7 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
     setMessage('');
     try {
       await submitDecision(client, command);
+      showToast('Claim rejected.');
       leave(true);
     } catch (error) {
       await handleError(error);
@@ -542,16 +552,20 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
             <Pressable
               accessibilityRole="button"
               accessibilityState={{
-                disabled: busy || !canWrite || !currentPreview,
+                disabled: busy || !canPreview || !dateValid,
               }}
-              disabled={busy || !canWrite || !currentPreview}
+              disabled={busy || !canPreview || !dateValid}
               onPress={() => void accept()}
               style={[
                 styles.primaryButton,
-                (busy || !canWrite || !currentPreview) && styles.disabled,
+                (busy || !canPreview || !dateValid) && styles.disabled,
               ]}
             >
-              <Text style={styles.primaryText}>Accept verified event</Text>
+              <Text style={styles.primaryText}>
+                {currentPreview
+                  ? 'Confirm acceptance'
+                  : 'Review before acceptance'}
+              </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"

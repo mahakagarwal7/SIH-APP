@@ -93,6 +93,7 @@ export class OutboxService {
       uploadedFiles: [],
       originalTranscript: null,
       sendRequested: false,
+      requestedWorkDate: null,
       cancelRequested: false,
       confirmedPayload: null,
       confirmedActivityLabel: null,
@@ -181,6 +182,13 @@ export class OutboxService {
           'local',
           false,
         );
+      const requestedWorkDate = input
+        ? normalizeConfirmation({
+            ...input,
+            text: input.text.trim() || 'Pending verified transcript',
+            activityId: null,
+          }).workDate
+        : null;
       if (evidence.voiceTranscriptReady)
         return this.confirmRecord(
           userId,
@@ -194,6 +202,7 @@ export class OutboxService {
         );
       return this.save(record, {
         sendRequested: true,
+        requestedWorkDate,
         lastError: null,
         lastErrorKind: null,
         retryable: true,
@@ -363,7 +372,7 @@ export class OutboxService {
     const pending = await this.save(record, {
       confirmedPayload: normalizeConfirmation({
         text: initialConfirmationText(record),
-        workDate: null,
+        workDate: record.requestedWorkDate ?? null,
         activityId: null,
       }),
       confirmedActivityLabel: null,

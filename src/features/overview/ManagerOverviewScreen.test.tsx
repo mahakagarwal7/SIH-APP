@@ -220,34 +220,42 @@ function state(
 beforeEach(() => jest.mocked(useManagerOverview).mockReturnValue(state()));
 afterEach(cleanup);
 
-it('shows the reference overview charts with an explicit activity-count basis', async () => {
+it('shows the reference overview charts with an explicit accepted-progress basis', async () => {
   await render(<ManagerOverviewScreen />);
   expect(
     screen.getByRole('header', { name: 'Progress Overview' }),
   ).toBeVisible();
   expect(screen.getByText(/Imported baseline 01/)).toBeVisible();
   expect(
-    screen.getByLabelText('33% total activity-count completion'),
+    screen.getByLabelText('67% mean accepted activity progress'),
   ).toBeVisible();
   expect(screen.getByText('WORK AREA COMPLETE')).toBeVisible();
   expect(screen.getByText('WEEKLY PROGRESS TREND')).toBeVisible();
   expect(
-    screen.getByText(/Total is 1 accepted-finished of 3 planned activities/),
+    screen.getByText(
+      /Total is the mean accepted progress across 3 planned activities. Accepted-finished activities: 1/,
+    ),
   ).toBeVisible();
   expect(screen.getByText('Start date needs review')).toBeVisible();
   expect(screen.getAllByText('Line erection')).toHaveLength(1);
   expect(screen.getAllByText('Review claim')).toHaveLength(5);
-  expect(screen.getByText(/does not weight quantity/)).toBeVisible();
+  expect(
+    screen.getByText(/does not infer progress from quantity/),
+  ).toBeVisible();
   expect(screen.queryByText(/healthy/i)).toBeNull();
 });
 
 it('labels discipline ratios and weekly accepted events without calling them productivity', async () => {
   await render(<ManagerOverviewScreen />);
   expect(
-    screen.getByLabelText('Civil: 0 of 1 activities complete'),
+    screen.getByLabelText(
+      'Civil: 50% mean accepted progress across 1 activities',
+    ),
   ).toBeVisible();
   expect(
-    screen.getByLabelText('Piping: 1 of 2 activities complete'),
+    screen.getByLabelText(
+      'Piping: 75% mean accepted progress across 2 activities',
+    ),
   ).toBeVisible();
   expect(screen.getByText(/evidence volume, not productivity/)).toBeVisible();
   expect(screen.getByLabelText('23 Sept 2026: 1 accepted event')).toBeVisible();

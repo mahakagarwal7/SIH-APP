@@ -4,6 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, StyleSheet, View } from 'react-native';
 
+import { useToast } from '@/components/ToastProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useLocalization } from '@/features/localization/LocalizationProvider';
 import {
@@ -16,7 +17,11 @@ import {
 import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
 import { useCaptureProject } from '@/features/projects/useCaptureProject';
 
-import { assertLocalDraftCanBeDiscarded } from './nativeOutbox';
+import {
+  assertLocalDraftCanBeDiscarded,
+  getNativeOutbox,
+  localDraftDiscardBlocker,
+} from './nativeOutbox';
 import {
   choosePhoto,
   preparePickedPhoto,
@@ -98,6 +103,7 @@ function AccountTextPhotoScreen({
 }) {
   useLocalization();
   const auth = useAuth();
+  const { showToast } = useToast();
   const project = useCaptureProject();
   const client = useQueryClient();
   const [text, setText] = useState('');
@@ -116,6 +122,11 @@ function AccountTextPhotoScreen({
     queryKey: ['report-drafts', userId],
     networkMode: 'always',
     queryFn: async () => (await getReportDraftStore()).list(userId),
+  });
+  const outbox = useQuery({
+    queryKey: ['field-outbox', userId],
+    networkMode: 'always',
+    queryFn: async () => (await getNativeOutbox()).list(userId),
   });
   const context =
     !project.error && project.data?.member.user_id === userId
@@ -191,6 +202,7 @@ function AccountTextPhotoScreen({
   useFocusEffect(
     useCallback(() => {
       void client.invalidateQueries({ queryKey: ['report-drafts', userId] });
+      void client.invalidateQueries({ queryKey: ['field-outbox', userId] });
     }, [client, userId]),
   );
 
@@ -304,6 +316,7 @@ function AccountTextPhotoScreen({
     try {
       await assertLocalDraftCanBeDiscarded(userId, id);
       await (await getReportDraftStore()).discard(userId, id);
+      showToast('Report discarded.');
       if (mounted.current)
         client.setQueryData<LocalReportDraft[]>(
           ['report-drafts', userId],
@@ -316,6 +329,7 @@ function AccountTextPhotoScreen({
             ? error.message
             : 'Could not finish discarding. Retry the discard action.',
         );
+        showToast('Report could not be discarded.', 'error');
         await client.invalidateQueries({ queryKey: ['report-drafts', userId] });
       }
     } finally {
@@ -555,6 +569,19 @@ function AccountTextPhotoScreen({
           onPress={() => void drafts.refetch()}
         />
       </View>
+      {outbox.error && (
+        <View>
+          <Text accessibilityRole="alert" style={styles.error}>
+            Could not check whether drafts are queued. Discard is unavailable
+            until this check succeeds.
+          </Text>
+          <Action
+            label="Retry draft status"
+            disabled={outbox.isFetching}
+            onPress={() => void outbox.refetch()}
+          />
+        </View>
+      )}
       {drafts.isPending ? (
         <Text style={shellStyles.body}>Loading drafts from this device…</Text>
       ) : drafts.error ? (
@@ -564,47 +591,63 @@ function AccountTextPhotoScreen({
       ) : drafts.data?.length === 0 ? (
         <Text style={styles.empty}>No text or photo drafts saved yet.</Text>
       ) : (
-        drafts.data?.map((draft) => (
-          <View key={draft.id} style={shellStyles.card}>
-            <Text style={styles.mode}>
-              {draft.available
-                ? 'Saved on device'
-                : draft.state === 'deleting'
-                  ? 'Discard incomplete'
-                  : 'Draft incomplete or missing'}
-            </Text>
-            <Text style={shellStyles.cardTitle}>{draft.projectName}</Text>
-            {!!draft.text.trim() && (
-              <Text numberOfLines={4} style={shellStyles.body}>
-                {draft.text.trim()}
+        drafts.data?.map((draft) => {
+          const discardBlocker = localDraftDiscardBlocker(
+            outbox.data?.find((row) => row.captureId === draft.id) ?? null,
+          );
+          return (
+            <View key={draft.id} style={shellStyles.card}>
+              <Text style={styles.mode}>
+                {draft.available
+                  ? 'Saved on device'
+                  : draft.state === 'deleting'
+                    ? 'Discard incomplete'
+                    : 'Draft incomplete or missing'}
               </Text>
-            )}
-            <Text style={styles.detail}>
-              {draft.photos.length}{' '}
-              {draft.photos.length === 1 ? 'photo' : 'photos'} ·{' '}
-              {formatDateTime(draft.createdAt)}
-            </Text>
-            <Text style={styles.detail}>Not sent for review</Text>
-            <Action
-              label={discarding === draft.id ? 'Discarding…' : 'Discard draft'}
-              disabled={busy}
-              onPress={() =>
-                Alert.alert(
-                  'Discard local report?',
-                  'Its text and photos will be permanently removed from this device.',
-                  [
-                    { text: 'Keep draft', style: 'cancel' },
-                    {
-                      text: 'Discard',
-                      style: 'destructive',
-                      onPress: () => mounted.current && void discard(draft.id),
-                    },
-                  ],
-                )
-              }
-            />
-          </View>
-        ))
+              <Text style={shellStyles.cardTitle}>{draft.projectName}</Text>
+              {!!draft.text.trim() && (
+                <Text numberOfLines={4} style={shellStyles.body}>
+                  {draft.text.trim()}
+                </Text>
+              )}
+              <Text style={styles.detail}>
+                {draft.photos.length}{' '}
+                {draft.photos.length === 1 ? 'photo' : 'photos'} ·{' '}
+                {formatDateTime(draft.createdAt)}
+              </Text>
+              <Text style={styles.detail}>Not sent for review</Text>
+              {!!discardBlocker && (
+                <Text style={styles.detail}>{discardBlocker}</Text>
+              )}
+              <Action
+                label={
+                  discarding === draft.id ? 'Discarding…' : 'Discard draft'
+                }
+                disabled={
+                  busy ||
+                  !!discardBlocker ||
+                  !outbox.isSuccess ||
+                  outbox.isFetching
+                }
+                onPress={() =>
+                  Alert.alert(
+                    'Discard local report?',
+                    'Its text and photos will be permanently removed from this device.',
+                    [
+                      { text: 'Keep draft', style: 'cancel' },
+                      {
+                        text: 'Discard',
+                        style: 'destructive',
+                        onPress: () =>
+                          mounted.current && void discard(draft.id),
+                      },
+                    ],
+                  )
+                }
+              />
+            </View>
+          );
+        })
       )}
     </ShellPage>
   );

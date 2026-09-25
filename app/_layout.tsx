@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
+import { ToastProvider } from '@/components/ToastProvider';
 import { AuthProvider } from '@/features/auth/AuthProvider';
 import { LocalizationProvider } from '@/features/localization/LocalizationProvider';
 import { RootNavigator } from '@/features/navigation/RootNavigator';
@@ -14,9 +15,11 @@ export default function RootLayout() {
         <StatusBar style="dark" />
         <LocalizationProvider>
           <AuthProvider>
-            <ServerStateProvider>
-              <RootNavigator />
-            </ServerStateProvider>
+            <ToastProvider>
+              <ServerStateProvider>
+                <RootNavigator />
+              </ServerStateProvider>
+            </ToastProvider>
           </AuthProvider>
         </LocalizationProvider>
       </SafeAreaView>

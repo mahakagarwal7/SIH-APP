@@ -47,6 +47,7 @@ export type OutboxRecord = {
   uploadedFiles: string[];
   originalTranscript: string | null;
   sendRequested?: boolean;
+  requestedWorkDate?: string | null;
   cancelRequested?: boolean;
   confirmedPayload: ConfirmedPayload | null;
   confirmedActivityLabel: string | null;

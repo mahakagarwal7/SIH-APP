@@ -98,7 +98,7 @@ function ActivityDonut({ percent }: { percent: number | null }) {
       accessibilityLabel={
         percent === null
           ? 'Total activity completion not recorded'
-          : `${percent}% total activity-count completion`
+          : `${percent}% mean accepted activity progress`
       }
       accessibilityRole="progressbar"
       accessibilityValue={
@@ -282,8 +282,9 @@ export function ManagerOverviewScreen() {
               </View>
             </View>
             <Text style={styles.basis}>
-              Total is {summary.completed} accepted-finished of{' '}
-              {summary.planned} planned activities. It does not weight quantity,
+              Total is the mean accepted progress across {summary.planned}{' '}
+              planned activities. Accepted-finished activities:{' '}
+              {summary.completed}. It does not infer progress from quantity,
               duration or cost.
             </Text>
             {summary.unresolvedProgress > 0 && (
@@ -314,7 +315,7 @@ export function ManagerOverviewScreen() {
                         </Text>
                       </View>
                       <View
-                        accessibilityLabel={`${row.discipline}: ${row.completed} of ${row.planned} activities complete`}
+                        accessibilityLabel={`${row.discipline}: ${row.percent}% mean accepted progress across ${row.planned} activities`}
                         style={styles.track}
                       >
                         <View
