@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabase';
 import {
   getReportEvidenceState,
   initialConfirmationText,
+  reportEvidenceLabel,
 } from './reportEvidence';
 import { reportDeliveryStatus } from './reportStatus';
 
@@ -65,6 +66,7 @@ export type MyReportItem = {
   projectName: string;
   createdAt: string;
   kind: 'voice' | 'report' | 'remote';
+  evidenceLabel: string;
   summary: string;
   mediaCount: number | null;
   status: string;
@@ -312,6 +314,7 @@ export function mergeMyReports(
       projectName: row.projectName,
       createdAt: row.createdAt,
       kind: row.kind,
+      evidenceLabel: reportEvidenceLabel(evidence),
       summary: (
         row.confirmedPayload?.text ?? initialConfirmationText(row)
       ).trim(),
@@ -346,6 +349,7 @@ export function mergeMyReports(
       projectName: row.projectName,
       createdAt: row.createdAt,
       kind: 'voice',
+      evidenceLabel: 'Voice',
       summary: '',
       mediaCount: 1,
       status: row.available ? 'Saved on device' : 'Local draft incomplete',
@@ -367,6 +371,11 @@ export function mergeMyReports(
       projectName: row.projectName,
       createdAt: row.createdAt,
       kind: 'report',
+      evidenceLabel: reportEvidenceLabel({
+        hasVoice: false,
+        hasText: row.text.trim().length > 0,
+        hasPhoto: row.photos.length > 0,
+      }),
       summary: row.text.trim(),
       mediaCount: row.photos.length,
       status: row.available ? 'Saved on device' : 'Local draft incomplete',
@@ -388,6 +397,7 @@ export function mergeMyReports(
       projectName: 'Production project',
       createdAt: row.received_at,
       kind: 'remote',
+      evidenceLabel: 'Production evidence',
       summary: '',
       mediaCount: null,
       status: delivery.status,

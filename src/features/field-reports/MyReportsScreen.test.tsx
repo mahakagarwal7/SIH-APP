@@ -114,17 +114,36 @@ it('shows active background delivery as a distinct Uploading chip', async () => 
     userId: 'alice',
     projectId: '30000000-0000-4000-8000-000000000003',
     projectName: 'Site project',
-    kind: 'report',
+    kind: 'voice',
     createdAt: '2026-09-24T00:00:00Z',
     text: 'Installed two supports.',
     manifest: {
       captureId: '10000000-0000-4000-8000-000000000001',
       language: 'auto',
-      files: [],
+      files: [
+        {
+          id: '20000000-0000-4000-8000-000000000002',
+          name: 'report.wav',
+          kind: 'audio',
+          mime: 'audio/wav',
+          bytes: 3,
+          sha256: 'a'.repeat(64),
+          caption: '',
+        },
+        {
+          id: '20000000-0000-4000-8000-000000000003',
+          name: 'evidence.jpg',
+          kind: 'photo',
+          mime: 'image/jpeg',
+          bytes: 3,
+          sha256: 'b'.repeat(64),
+          caption: 'Installed support',
+        },
+      ],
     },
     reportId: null,
     uploadedFiles: [],
-    originalTranscript: null,
+    originalTranscript: 'Voice progress update.',
     sendRequested: false,
     cancelRequested: false,
     confirmedPayload: null,
@@ -150,6 +169,7 @@ it('shows active background delivery as a distinct Uploading chip', async () => 
   expect(
     await screen.findByLabelText('Upload status: Uploading'),
   ).toBeVisible();
+  expect(screen.getByText('Voice + text + photo · 2 files')).toBeVisible();
   expect(
     screen.getByText(
       'Saved on device. Upload continues in the background and resumes after reconnecting.',

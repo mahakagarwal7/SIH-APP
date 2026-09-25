@@ -72,10 +72,22 @@ it('disables submission for no evidence and while included voice is transcribing
 });
 
 it('builds honest editable wording for photo-only and combined reports', () => {
+  expect(
+    initialConfirmationText(evidence({ voice: true, transcript: false })),
+  ).toBe('Voice transcription pending.');
   expect(initialConfirmationText(evidence({ photo: true }))).toBe(
     'Photo evidence submitted.',
   );
   expect(initialConfirmationText(evidence({ voice: true, text: true }))).toBe(
     'Two supports installed.\n\nVoice transcript: Voice progress update.',
   );
+});
+
+it('keeps partial work wording explicit without inventing a percentage', () => {
+  const partial = evidence({ text: true });
+  partial.text = '2 of 8 spools installed; 6 remain; NDT pending.';
+  expect(initialConfirmationText(partial)).toBe(
+    '2 of 8 spools installed; 6 remain; NDT pending.',
+  );
+  expect(initialConfirmationText(partial)).not.toContain('%');
 });
