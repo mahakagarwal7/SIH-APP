@@ -228,9 +228,7 @@ it('shows the manager panel with supported task counts and unavailable metrics',
   expect(screen.getByText('TIMELINE SCHEDULER')).toBeVisible();
   expect(screen.getByText('RECENT VERIFIED FIELD UPDATES')).toBeVisible();
   expect(
-    screen.getByText(
-      /Tasks show accepted completions against the plan/,
-    ),
+    screen.getByText(/Tasks show accepted completions against the plan/),
   ).toBeVisible();
   expect(screen.getAllByText('Not recorded')).toHaveLength(4);
   expect(screen.getByText(/Bars show mean accepted progress/)).toBeVisible();
