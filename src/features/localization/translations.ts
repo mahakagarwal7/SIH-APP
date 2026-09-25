@@ -13,16 +13,28 @@ export const languageNames: Record<AppLocale, string> = {
 // English source copy is the key so untranslated additions remain readable.
 // The coverage test keeps every visible static phrase represented here.
 export const hiTranslations: Readonly<Record<string, string>> = {
+  'Could not open sharing. Try again.':
+    'साझा करने का विकल्प नहीं खुल सका। फिर प्रयास करें।',
+  'CURRENT TASK': 'वर्तमान कार्य',
   DONE: 'पूर्ण',
+  'NEXT LEVEL': 'अगला स्तर',
   'Next day': 'अगला दिन',
   'No assignment for this date.': 'इस तारीख के लिए कोई कार्य नहीं है।',
   'Percentages show accepted progress. Quantity alone does not mark a task complete.':
     'प्रतिशत स्वीकृत प्रगति दिखाते हैं। केवल मात्रा से कार्य पूर्ण नहीं माना जाता।',
+  'Percentages are accepted activity facts. A dash means the source snapshot records no accepted percentage for that level.':
+    'प्रतिशत स्वीकृत गतिविधि तथ्य हैं। डैश का अर्थ है कि स्रोत स्नैपशॉट में उस स्तर का स्वीकृत प्रतिशत दर्ज नहीं है।',
   'Previous day': 'पिछला दिन',
+  'Progress not recorded': 'प्रगति दर्ज नहीं है',
+  'Share task hierarchy': 'कार्य पदानुक्रम साझा करें',
+  'Speak progress for this task': 'इस कार्य की प्रगति बोलें',
   START: 'शुरू करें',
+  'Task Hierarchy': 'कार्य पदानुक्रम',
   TODAY: 'आज',
   'Use the arrows to check another day.':
     'दूसरा दिन देखने के लिए तीरों का उपयोग करें।',
+  'UPDATE STATUS': 'स्थिति अपडेट करें',
+  'Update status with a field report': 'फ़ील्ड रिपोर्ट से स्थिति अपडेट करें',
   WORKING: 'कार्य जारी',
   'Camera access is needed to take a site photo.':
     'साइट की फ़ोटो लेने के लिए कैमरा अनुमति आवश्यक है।',
