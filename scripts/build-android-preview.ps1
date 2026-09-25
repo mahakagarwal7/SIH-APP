@@ -261,6 +261,10 @@ try {
   if ($package -notmatch "name='com\.mahakagarwal\.nirmaan'") {
     throw 'The generated APK has an unexpected Android package ID.'
   }
+  if ($env:APK_VERSION_CODE -and
+      $package -notmatch "versionCode='$([regex]::Escape($env:APK_VERSION_CODE))'") {
+    throw "The generated APK does not have Android version code $env:APK_VERSION_CODE."
+  }
 
   $signatureReport = @(
     & $apksigner.FullName 'verify' '--verbose' '--print-certs' $builtApk

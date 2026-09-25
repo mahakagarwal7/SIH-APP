@@ -30,7 +30,28 @@ Install the configured preview on a connected ARM64 device:
 
 The preview does not require Metro. Release/store signing remains a separate delivery decision.
 
-## Build from GitHub Actions without publishing
+## Automatic previews from main
+
+Every push or merge to `main` runs CI. After the Android helper, typecheck,
+lint, formatting, tests and bundle check pass, CI calls the Release workflow
+to build the exact checked commit as an ARM64 APK. The build requires the
+repository's public Supabase configuration secrets; a missing value fails the
+run instead of publishing a setup-unavailable APK. It stamps Android
+`versionCode` from the commit's history count, so later main builds can be
+installed over earlier previews signed by the same certificate.
+
+Each successful build uploads a 30-day Actions artifact and publishes an
+automatically named **prerelease** with the APK and `SHA256SUMS.txt` on the
+[GitHub Releases page](https://github.com/mahakagarwal7/SIH-APP/releases).
+The prerelease records its source commit, version code and checksum. If main
+moves during a build, the old build is not published as the current preview.
+Tagged `v*` releases remain a separate, explicit path. This is an installable
+debug-signed preview, not physical-device acceptance or a store release.
+Android does not install a newly published APK by itself: download the latest
+prerelease, verify its checksum and use `adb install -r` or the device's file
+installer to update an existing copy.
+
+## Manual build without publishing
 
 After the repository Actions secrets `NEXT_PUBLIC_SUPABASE_URL` and
 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are configured with the public production
@@ -42,7 +63,8 @@ before installing it. Record the run's source commit and complete the physical
 device checks below before distributing it.
 
 A pushed `v*` tag, or a manual run with an existing tag, still publishes a
-GitHub Release. Do not use a version tag for a build-only verification run.
+versioned GitHub Release. Do not use a version tag for a build-only
+verification run.
 
 ## Current APK build evidence — 25 September 2026
 

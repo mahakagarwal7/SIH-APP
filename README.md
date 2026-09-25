@@ -15,6 +15,8 @@ npm start
 
 Use `npm run android` to generate/build/install a local Android debug app with a compatible JDK, Android SDK and emulator/device. Use `npm run android:preview` for the verified ARM64 standalone APK after both public production values are configured. The approved package ID is `com.mahakagarwal.nirmaan`; debug signing is separate from release signing. Voice capture, outbox delivery, confirmation and status polling require the native build. Web shows unavailable states for these native flows. See [Field preview build and acceptance](docs/FIELD_PREVIEW.md), [voice capture and build evidence](docs/VOICE_CAPTURE.md), the [text/photo persistence contract](docs/TEXT_PHOTO_CAPTURE.md), the [outbox contract](docs/OUTBOX_SYNC.md), the [confirmation contract](docs/CONFIRMATION_SUBMISSION.md) and the [status contract](docs/REPORT_STATUS.md).
 
+After green CI on `main`, the [Releases page](https://github.com/mahakagarwal7/SIH-APP/releases) receives an automatic ARM64 preview prerelease with the APK and checksum. Installing an updated APK on a device is still a separate step.
+
 Configure the public connection below to sign in with an existing account. Without both values, the app displays an incomplete-setup message. Browser and Metro export checks do not prove installation or operation on a physical device.
 
 ## Checks
