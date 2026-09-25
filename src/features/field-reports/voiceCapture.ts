@@ -15,6 +15,7 @@ export type Microphone = {
 export type CaptureState = {
   phase: 'idle' | 'permission' | 'recording' | 'saving' | 'saved' | 'error';
   duration: number;
+  level: number;
   message: string;
   canRetry: boolean;
 };
@@ -29,6 +30,7 @@ export class VoiceCapture {
   private state: CaptureState = {
     phase: 'idle',
     duration: 0,
+    level: 0,
     message: 'Ready to record',
     canRetry: false,
   };
@@ -42,10 +44,15 @@ export class VoiceCapture {
 
   constructor(private deps: CaptureDependencies) {}
 
-  private update(phase: CaptureState['phase'], message: string) {
+  private update(
+    phase: CaptureState['phase'],
+    message: string,
+    level = phase === 'recording' ? this.state.level : 0,
+  ) {
     this.state = {
       phase,
       message,
+      level,
       duration:
         this.capture?.duration ?? this.pending?.duration ?? this.state.duration,
       canRetry: phase === 'error' && !!this.pending,
@@ -102,7 +109,17 @@ export class VoiceCapture {
         try {
           const limit = this.capture.append(buffer);
           this.lastBufferAt = Date.now();
-          this.update('recording', 'Recording… Speak clearly.');
+          const samples = new Int16Array(buffer.data);
+          let square = 0;
+          for (const sample of samples) square += (sample / 32768) ** 2;
+          const rms = samples.length ? Math.sqrt(square / samples.length) : 0;
+          // Speech uses a small part of the PCM range. Amplify it for a useful
+          // meter while keeping the value bounded for rendering.
+          this.update(
+            'recording',
+            'Recording… Speak clearly.',
+            Math.min(1, rms * 12),
+          );
           if (limit) void this.stop('25-second limit reached.');
         } catch (error) {
           ++this.generation;
@@ -200,10 +217,26 @@ export class VoiceCapture {
       await this.persist();
   }
 
+  cancel() {
+    if (!['permission', 'recording'].includes(this.state.phase)) return;
+    ++this.generation;
+    try {
+      this.release();
+    } catch {
+      // The capture is being abandoned; still clear it if native teardown
+      // reports an error after releasing its resources.
+    } finally {
+      this.capture = null;
+      this.pending = null;
+      this.state = { ...this.state, duration: 0, level: 0 };
+      this.update('idle', 'Recording cancelled. Tap Record when ready.');
+    }
+  }
+
   discardUnsaved() {
     if (this.state.phase !== 'error') return;
     this.pending = null;
-    this.state = { ...this.state, duration: 0 };
+    this.state = { ...this.state, duration: 0, level: 0 };
     this.update('idle', 'Recording discarded.');
   }
 

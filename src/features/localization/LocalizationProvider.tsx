@@ -63,6 +63,7 @@ function translate(source: string, locale: AppLocale) {
     [/^Recorded reply: (.+)$/, (_all, reply) => `दर्ज उत्तर: ${reply}`],
     [/^Match score (.+)$/, (_all, score) => `मिलान स्कोर ${score}`],
     [/^Language (.+)$/, (_all, language) => `भाषा ${language}`],
+    [/^Voice level (\d+)%$/, (_all, level) => `आवाज़ का स्तर ${level}%`],
     [
       /^Open original (audio|photo|evidence): (.+)$/,
       (_all, kind, file) =>

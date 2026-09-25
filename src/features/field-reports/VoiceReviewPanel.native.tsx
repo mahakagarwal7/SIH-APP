@@ -25,10 +25,12 @@ function ReviewAction({
   label,
   disabled,
   onPress,
+  tone = 'neutral',
 }: {
   label: string;
   disabled: boolean;
   onPress: () => void;
+  tone?: 'neutral' | 'cancel' | 'submit';
 }) {
   return (
     <Pressable
@@ -36,9 +38,22 @@ function ReviewAction({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.action, disabled && styles.disabled]}
+      style={[
+        styles.action,
+        tone === 'cancel' && styles.cancelAction,
+        tone === 'submit' && styles.submitAction,
+        disabled && styles.disabled,
+      ]}
     >
-      <Text style={styles.actionText}>{label}</Text>
+      <Text
+        style={[
+          styles.actionText,
+          tone === 'cancel' && styles.cancelActionText,
+          tone === 'submit' && styles.submitActionText,
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -283,11 +298,13 @@ export function VoiceReviewPanel({
             label={busy === 'cancel' ? 'Canceling…' : 'Cancel'}
             disabled={busy !== null}
             onPress={() => void cancel()}
+            tone="cancel"
           />
           <ReviewAction
-            label={busy === 'send' ? 'Queuing…' : 'Send'}
+            label={busy === 'send' ? 'Queuing…' : 'Submit'}
             disabled={busy !== null || sendQueued}
             onPress={() => void send()}
+            tone="submit"
           />
         </View>
       )}
@@ -299,8 +316,10 @@ const styles = StyleSheet.create({
   panel: {
     backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#d7e0e5',
+    borderColor: '#e1e7ea',
+    borderRadius: 16,
     padding: 20,
+    marginTop: 24,
     gap: 12,
   },
   preparing: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -324,15 +343,22 @@ const styles = StyleSheet.create({
   },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   action: {
+    flexGrow: 1,
+    flexBasis: '42%',
     minHeight: 48,
     minWidth: 112,
     borderWidth: 1,
     borderColor: '#266b8c',
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 18,
   },
   actionText: { color: '#266b8c', fontSize: 16, fontWeight: '700' },
+  cancelAction: { borderColor: '#f2a0a5', backgroundColor: '#fff1f2' },
+  cancelActionText: { color: '#ef5c64' },
+  submitAction: { borderColor: '#27c76f', backgroundColor: '#27c76f' },
+  submitActionText: { color: '#ffffff' },
   disabled: { opacity: 0.45 },
   help: { color: '#586c7a', fontSize: 14, lineHeight: 22 },
   success: { color: '#27734f', fontSize: 15, fontWeight: '700' },
