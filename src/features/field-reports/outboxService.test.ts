@@ -1,5 +1,6 @@
 import { OutboxSyncError } from './outbox';
 import { OutboxService } from './outboxService';
+import { initialConfirmationText } from './reportEvidence';
 
 import type {
   OutboxFileReader,
@@ -142,6 +143,59 @@ it('moves processed media to needs confirmation without submitting it', async ()
   expect(transport.finalize).toHaveBeenCalledTimes(1);
   expect(transport.submit).not.toHaveBeenCalled();
 });
+
+it.each([
+  ['voice', true, false, false],
+  ['text', false, true, false],
+  ['photo', false, false, true],
+  ['voice + text', true, true, false],
+  ['voice + photo', true, false, true],
+  ['text + photo', false, true, true],
+  ['voice + text + photo', true, true, true],
+])(
+  'confirms and submits %s evidence',
+  async (_name, hasVoice, hasText, hasPhoto) => {
+    const { service, input, rows, transport } = setup();
+    const photo = {
+      id: '40000000-0000-4000-8000-000000000004',
+      name: 'evidence.jpg',
+      kind: 'photo' as const,
+      mime: 'image/jpeg' as const,
+      bytes: bytes.length,
+      sha256: digest,
+      caption: '',
+    };
+    const files = [
+      ...(hasVoice ? input.manifest.files : []),
+      ...(hasPhoto ? [photo] : []),
+    ];
+    const capture = {
+      ...input,
+      kind: hasVoice ? ('voice' as const) : ('report' as const),
+      text: hasText ? 'Two supports installed.' : '',
+      manifest: { ...input.manifest, files },
+    };
+    await service.enqueue(capture);
+    if (files.length) {
+      rows.set(captureId, {
+        ...rows.get(captureId)!,
+        reportId,
+        state: 'needs_confirmation',
+        originalTranscript: hasVoice ? 'Voice progress update.' : null,
+      });
+    }
+    const ready = rows.get(captureId)!;
+    await service.confirm('user-one', captureId, {
+      text: initialConfirmationText(ready),
+      workDate: null,
+      activityId: null,
+    });
+    await expect(service.sync('user-one', captureId)).resolves.toMatchObject({
+      submissionState: 'submitted',
+    });
+    expect(transport.submit).toHaveBeenCalledTimes(1);
+  },
+);
 
 it('locks the confirmed payload before submit and retries a lost response unchanged', async () => {
   const { service, input, setInspected, transport, releaseEvidence } = setup();

@@ -2,6 +2,10 @@ import { z } from 'zod';
 
 import { getSupabase } from '@/lib/supabase';
 
+import {
+  getReportEvidenceState,
+  initialConfirmationText,
+} from './reportEvidence';
 import { reportDeliveryStatus } from './reportStatus';
 
 import type { LocalVoiceDraft } from './draftStore';
@@ -282,6 +286,11 @@ export function mergeMyReports(
     const [status, detail] = serverStatus
       ? [serverStatus.status, serverStatus.detail]
       : outboxStatus(row);
+    const evidence = getReportEvidenceState(row);
+    const confirmationReady =
+      evidence.canSubmit &&
+      ((row.manifest.files.length === 0 && !row.reportId) ||
+        row.state === 'needs_confirmation');
     items.push({
       captureId: row.captureId,
       reportId: server?.id ?? row.reportId,
@@ -289,7 +298,9 @@ export function mergeMyReports(
       projectName: row.projectName,
       createdAt: row.createdAt,
       kind: row.kind,
-      summary: (row.confirmedPayload?.text ?? row.text).trim(),
+      summary: (
+        row.confirmedPayload?.text ?? initialConfirmationText(row)
+      ).trim(),
       mediaCount: row.manifest.files.length,
       status,
       detail,
@@ -304,16 +315,10 @@ export function mergeMyReports(
       canConfirm:
         (!server || server.lifecycle === 'draft') &&
         (row.submissionRejected ||
-          (row.submissionState === 'unconfirmed' &&
-            ((row.kind === 'report' && row.manifest.files.length === 0) ||
-              (row.state === 'needs_confirmation' &&
-                (row.kind !== 'voice' || !!row.originalTranscript))))),
+          (row.submissionState === 'unconfirmed' && confirmationReady)),
       canOpenConfirmation:
         !!row.confirmedPayload ||
-        ((!server || server.lifecycle === 'draft') &&
-          ((row.kind === 'report' && row.manifest.files.length === 0) ||
-            (row.state === 'needs_confirmation' &&
-              (row.kind !== 'voice' || !!row.originalTranscript)))),
+        ((!server || server.lifecycle === 'draft') && confirmationReady),
       canOpen: server?.lifecycle === 'submitted',
     });
     remoteByCapture.delete(row.captureId);

@@ -921,6 +921,12 @@ export const hiTranslations: Readonly<Record<string, string>> = {
     'आपकी पुष्टि की गई शब्दावली तब तक सहेजी और लॉक की जाती है जब तक कि उसकी रसीद सत्यापित न हो जाए।',
   'Your session has expired. Sign in again.':
     'आपका सत्र समाप्त हो गया है. पुनः साइन इन करें.',
+  'Add a voice note, typed details or photos in any combination.':
+    'वॉइस नोट, लिखित विवरण या फ़ोटो किसी भी संयोजन में जोड़ें।',
+  'Add typed details (optional)': 'लिखित विवरण जोड़ें (वैकल्पिक)',
+  'Optional photo caption': 'वैकल्पिक फ़ोटो विवरण',
+  'OPTIONAL SUPPORTING EVIDENCE': 'वैकल्पिक सहायक साक्ष्य',
+  'of 3 photos selected': 'में से 3 फ़ोटो चुनी गईं',
   'activities have': 'गतिविधियाँ हैं',
   'activity has': 'गतिविधि है',
   'basis not recorded': 'आधार दर्ज नहीं किया गया',

@@ -114,6 +114,28 @@ implemented before 1.4. Each numbered item remains its own tested PR.
   Devanagari under system font scaling. Tamil remains a separate product
   decision. This is approved delivery-plan slice 14.
 
+## Phase 7 — Field-reporting fixes
+
+The post-Feature-2 fixes are specified in `docs/FIXES.md`. Each numbered item
+ships as its own tested PR.
+
+- **7.1** Treat voice, typed text and photos as independent evidence inputs.
+  Any one of the three, any two, or all three form a valid report; voice must
+  have its verified transcript before final confirmation.
+- **7.2** Start voice upload/transcription automatically after recording and
+  show the immediate playback, transcription, Cancel and Send review state.
+- **7.3** Remove capture latency with local-first state, background sync,
+  compressed media and a visible non-blocking Uploading state.
+- **7.4** Replace report-date text entry with a native picker, local-today UI,
+  future-date prevention and explicit confirmation before sending a date.
+- **7.5** Run the seven-combination and delivery-state regression pass.
+
+## Phase 8 — Mobile UI specification
+
+Implement the eight visual slices in `docs/UI_SPEC.md` only after the Phase 7
+behavior fixes. The manager-panel persona question in step 8.8 remains an
+owner decision and must be resolved before that step begins.
+
 ---
 
 ## After every step

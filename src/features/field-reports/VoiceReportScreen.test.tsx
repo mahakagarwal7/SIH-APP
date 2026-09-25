@@ -12,8 +12,10 @@ import { useAuth } from '@/features/auth/AuthProvider';
 import { useCaptureProject } from '@/features/projects/useCaptureProject';
 
 import { androidMicrophone } from './androidMicrophone';
+import { saveCombinedVoiceDraft } from './combinedDraftStore';
 import { getVoiceDraftStore } from './nativeDraftStore';
 import { assertLocalDraftCanBeDiscarded } from './nativeOutbox';
+import { choosePhoto } from './nativePhotoPicker';
 import { VoiceReportScreen } from './VoiceReportScreen.android';
 
 import type { VoiceDraftStore } from './draftStore';
@@ -28,7 +30,14 @@ jest.mock('@/features/projects/useCaptureProject', () => ({
 jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('./androidMicrophone', () => ({ androidMicrophone: jest.fn() }));
+jest.mock('./combinedDraftStore', () => ({
+  saveCombinedVoiceDraft: jest.fn(),
+}));
 jest.mock('./nativeDraftStore', () => ({ getVoiceDraftStore: jest.fn() }));
+jest.mock('./nativePhotoPicker', () => ({
+  takePhoto: jest.fn(),
+  choosePhoto: jest.fn(),
+}));
 jest.mock('./nativeOutbox', () => ({
   assertLocalDraftCanBeDiscarded: jest.fn(async () => {}),
 }));
@@ -99,11 +108,55 @@ beforeEach(() => {
     return { start: async () => {}, stop: jest.fn(), release: jest.fn() };
   });
   save.mockReset().mockResolvedValue(undefined);
+  jest
+    .mocked(saveCombinedVoiceDraft)
+    .mockImplementation(async (draft, bytes) => save(draft, bytes));
+  jest.mocked(choosePhoto).mockReset().mockResolvedValue(null);
   list.mockReset().mockResolvedValue([]);
   jest.mocked(assertLocalDraftCanBeDiscarded).mockResolvedValue(undefined);
   jest
     .mocked(getVoiceDraftStore)
     .mockResolvedValue({ save, list } as unknown as VoiceDraftStore);
+});
+
+it('freezes voice, typed text and a selected photo as one capture', async () => {
+  jest.mocked(choosePhoto).mockResolvedValue({
+    uri: 'cache/evidence.jpg',
+    width: 100,
+    height: 80,
+    byteLength: 4,
+    mimeType: 'image/jpeg',
+    bytes: new Uint8Array([1, 2, 3, 4]),
+  });
+  await render(<App />);
+  await screen.findByText('No voice drafts saved yet.');
+  await fireEvent.changeText(
+    screen.getByLabelText('Report details'),
+    'Two supports installed.',
+  );
+  await fireEvent.press(screen.getByRole('button', { name: 'Choose photo' }));
+  await screen.findByLabelText('Selected photo 1');
+  await recordOneSecond();
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Stop and save recording' }),
+  );
+  expect(
+    await screen.findByText('Saved on device. Not sent for review.'),
+  ).toBeVisible();
+  expect(saveCombinedVoiceDraft).toHaveBeenCalledWith(
+    expect.objectContaining({ id: 'draft-id' }),
+    expect.any(Uint8Array),
+    expect.objectContaining({
+      draft: expect.objectContaining({
+        id: 'draft-id',
+        text: 'Two supports installed.',
+        photos: [expect.objectContaining({ mimeType: 'image/jpeg' })],
+      }),
+      prepared: [
+        expect.objectContaining({ bytes: new Uint8Array([1, 2, 3, 4]) }),
+      ],
+    }),
+  );
 });
 
 function renameProject() {

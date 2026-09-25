@@ -21,6 +21,10 @@ import {
 } from './confirmationService';
 import { getNativeOutbox } from './nativeOutbox';
 import { subscribeOutboxChanges } from './outboxEvents';
+import {
+  getReportEvidenceState,
+  initialConfirmationText,
+} from './reportEvidence';
 
 function PrimaryAction({
   label,
@@ -217,7 +221,7 @@ function AccountConfirmation({
     (locked ? record.confirmedPayload?.text : undefined) ??
     editedText ??
     record.confirmedPayload?.text ??
-    (record.kind === 'voice' ? (record.originalTranscript ?? '') : record.text);
+    initialConfirmationText(record);
   const workDate = locked
     ? (record.confirmedPayload?.workDate ?? '')
     : (editedWorkDate ?? record.confirmedPayload?.workDate ?? '');
@@ -226,11 +230,12 @@ function AccountConfirmation({
     : selectedActivityId !== undefined
       ? selectedActivityId
       : (record.confirmedPayload?.activityId ?? null);
+  const evidence = getReportEvidenceState(record);
   const ready =
     record.submissionRejected ||
-    (record.kind === 'report' && record.manifest.files.length === 0) ||
-    (record.state === 'needs_confirmation' &&
-      (record.kind !== 'voice' || !!record.originalTranscript));
+    (evidence.canSubmit &&
+      ((record.manifest.files.length === 0 && !record.reportId) ||
+        record.state === 'needs_confirmation'));
 
   return (
     <ShellPage title="Check your report" eyebrow="FIELD · CHECK · SEND">
@@ -256,7 +261,7 @@ function AccountConfirmation({
           {(submitted ? '' : error) || record.lastError}
         </Text>
       )}
-      {record.kind === 'voice' && (
+      {evidence.hasVoice && (
         <View style={shellStyles.card}>
           <Text style={styles.label}>Original voice transcript</Text>
           <Text style={styles.quote}>

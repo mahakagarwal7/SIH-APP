@@ -7,7 +7,13 @@ import {
 import { randomUUID } from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  AppState,
+  Image,
+  StyleSheet,
+  View,
+} from 'react-native';
 
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useLocalization } from '@/features/localization/LocalizationProvider';
@@ -16,18 +22,42 @@ import {
   LocalizedText as Text,
   LocalizedAlert as Alert,
   LocalizedPressable as Pressable,
+  LocalizedTextInput as TextInput,
 } from '@/features/localization/LocalizedText';
 import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
 import { useCaptureProject } from '@/features/projects/useCaptureProject';
 
 import { androidMicrophone } from './androidMicrophone';
+import { saveCombinedVoiceDraft } from './combinedDraftStore';
 import { getVoiceDraftStore } from './nativeDraftStore';
 import { assertLocalDraftCanBeDiscarded } from './nativeOutbox';
+import { choosePhoto, takePhoto } from './nativePhotoPicker';
 import { ReportMethodLinks } from './ReportMethodLinks';
 import { VoiceCapture } from './voiceCapture';
 
 import type { VoiceDraft } from './draftStore';
+import type { PreparedLocalPhoto } from './nativePhotoPicker';
+import type {
+  PreparedDraftPhoto,
+  ReportDraft,
+  SavedPhoto,
+} from './reportDraftStore';
 import type { CaptureState, RecordedVoice } from './voiceCapture';
+
+type LocalPhoto = PreparedLocalPhoto & { id: string; caption: string };
+type CombinedEvidence = { text: string; photos: LocalPhoto[] };
+
+function toSavedPhoto(photo: LocalPhoto): SavedPhoto {
+  return {
+    id: photo.id,
+    fileName: `${photo.id}.jpg`,
+    mimeType: 'image/jpeg',
+    caption: photo.caption,
+    byteLength: photo.byteLength,
+    width: photo.width,
+    height: photo.height,
+  };
+}
 
 function Action({
   label,
@@ -55,12 +85,16 @@ function CapturePanel({
   userId,
   projectId,
   projectName,
+  evidence,
   onBusy,
+  onSaved,
 }: {
   userId: string;
   projectId: string;
   projectName: string;
+  evidence: CombinedEvidence;
   onBusy: (busy: boolean) => void;
+  onSaved: () => void;
 }) {
   const client = useQueryClient();
   const [discarding, setDiscarding] = useState(false);
@@ -78,9 +112,13 @@ function CapturePanel({
   } | null>(null);
   const controller = useRef<VoiceCapture | null>(null);
   const currentProjectName = useRef(projectName);
+  const currentEvidence = useRef(evidence);
   useEffect(() => {
     currentProjectName.current = projectName;
   }, [projectName]);
+  useEffect(() => {
+    currentEvidence.current = evidence;
+  }, [evidence]);
   useEffect(() => {
     mounted.current = true;
     const capture = new VoiceCapture({
@@ -112,8 +150,35 @@ function CapturePanel({
             },
           };
         const draft = identity.current.draft;
+        const selected = currentEvidence.current;
+        const savedPhotos = selected.photos.map(toSavedPhoto);
+        const companion:
+          | {
+              draft: ReportDraft;
+              prepared: PreparedDraftPhoto[];
+            }
+          | undefined =
+          selected.text.trim() || savedPhotos.length
+            ? {
+                draft: {
+                  id: draft.id,
+                  userId: draft.userId,
+                  projectId: draft.projectId,
+                  projectName: draft.projectName,
+                  createdAt: draft.createdAt,
+                  text: selected.text,
+                  photos: savedPhotos,
+                  state: 'saving',
+                },
+                prepared: savedPhotos.map((photo, position) => ({
+                  photo,
+                  bytes: selected.photos[position]!.bytes,
+                })),
+              }
+            : undefined;
         try {
-          await (await getVoiceDraftStore()).save(draft, recording.bytes);
+          await saveCombinedVoiceDraft(draft, recording.bytes, companion);
+          if (mounted.current) onSaved();
         } finally {
           void client.invalidateQueries({
             queryKey: ['voice-drafts', userId],
@@ -131,7 +196,7 @@ function CapturePanel({
       capture.dispose();
       onBusy(false);
     };
-  }, [client, onBusy, projectId, userId]);
+  }, [client, onBusy, onSaved, projectId, userId]);
   useFocusEffect(useCallback(() => () => controller.current?.interrupt(), []));
   const busy = ['permission', 'recording', 'saving'].includes(state.phase);
 
@@ -242,6 +307,9 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
   const project = useCaptureProject();
   const client = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [text, setText] = useState('');
+  const [photos, setPhotos] = useState<LocalPhoto[]>([]);
+  const [picking, setPicking] = useState(false);
   const [playing, setPlaying] = useState<string | null>(null);
   const [loadingPlayback, setLoadingPlayback] = useState(false);
   const [error, setError] = useState('');
@@ -277,6 +345,33 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
     },
     [stopPlayback],
   );
+  const clearEvidence = useCallback(() => {
+    setText('');
+    setPhotos([]);
+  }, []);
+  async function pick(source: 'camera' | 'library') {
+    if (busy || picking || photos.length >= 3) return;
+    setPicking(true);
+    setError('');
+    try {
+      const prepared =
+        source === 'camera' ? await takePhoto() : await choosePhoto();
+      if (mounted.current && prepared)
+        setPhotos((current) => [
+          ...current,
+          { ...prepared, id: randomUUID(), caption: '' },
+        ]);
+    } catch (reason) {
+      if (mounted.current)
+        setError(
+          reason instanceof Error
+            ? reason.message
+            : 'Could not prepare this photo.',
+        );
+    } finally {
+      if (mounted.current) setPicking(false);
+    }
+  }
   useEffect(() => {
     mounted.current = true;
     const listener = AppState.addEventListener('change', (next) => {
@@ -375,7 +470,7 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
       </View>
       <ReportMethodLinks active="voice" />
       <Text style={shellStyles.body}>
-        Speak a short update and save it on this device.
+        Add a voice note, typed details or photos in any combination.
       </Text>
       {auth.offline && (
         <Text style={styles.notice}>
@@ -383,13 +478,81 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
         </Text>
       )}
       {context ? (
-        <CapturePanel
-          key={`${userId}:${context.project.id}`}
-          userId={userId}
-          projectId={context.project.id}
-          projectName={context.project.name}
-          onBusy={captureBusy}
-        />
+        <>
+          <View style={styles.companion}>
+            <Text style={styles.mode}>OPTIONAL SUPPORTING EVIDENCE</Text>
+            <TextInput
+              accessibilityLabel="Report details"
+              editable={!busy && !picking}
+              maxLength={10_000}
+              multiline
+              onChangeText={setText}
+              placeholder="Add typed details (optional)"
+              style={styles.input}
+              textAlignVertical="top"
+              value={text}
+            />
+            {photos.map((photo, position) => (
+              <View key={photo.id} style={styles.photoRow}>
+                <Image
+                  accessibilityLabel={`Selected photo ${position + 1}`}
+                  source={{ uri: photo.uri }}
+                  style={styles.thumbnail}
+                />
+                <View style={styles.photoDetail}>
+                  <TextInput
+                    accessibilityLabel={`Caption for photo ${position + 1}`}
+                    editable={!busy && !picking}
+                    maxLength={500}
+                    onChangeText={(caption) =>
+                      setPhotos((current) =>
+                        current.map((item) =>
+                          item.id === photo.id ? { ...item, caption } : item,
+                        ),
+                      )
+                    }
+                    placeholder="Optional photo caption"
+                    style={styles.caption}
+                    value={photo.caption}
+                  />
+                  <Action
+                    label="Remove photo"
+                    disabled={busy || picking}
+                    onPress={() =>
+                      setPhotos((current) =>
+                        current.filter((item) => item.id !== photo.id),
+                      )
+                    }
+                  />
+                </View>
+              </View>
+            ))}
+            <View style={styles.actions}>
+              <Action
+                label={picking ? 'Preparing photo…' : 'Take photo'}
+                disabled={busy || picking || photos.length >= 3}
+                onPress={() => void pick('camera')}
+              />
+              <Action
+                label="Choose photo"
+                disabled={busy || picking || photos.length >= 3}
+                onPress={() => void pick('library')}
+              />
+            </View>
+            <Text style={styles.detail}>
+              {photos.length} of 3 photos selected
+            </Text>
+          </View>
+          <CapturePanel
+            key={`${userId}:${context.project.id}`}
+            userId={userId}
+            projectId={context.project.id}
+            projectName={context.project.name}
+            evidence={{ text, photos }}
+            onBusy={captureBusy}
+            onSaved={clearEvidence}
+          />
+        </>
       ) : (
         <View style={shellStyles.card}>
           {project.isPending && !auth.offline && (
@@ -511,6 +674,37 @@ const styles = StyleSheet.create({
   steps: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 18 },
   mode: { color: '#266b8c', fontWeight: '700', fontSize: 13, lineHeight: 21 },
   detail: { color: '#586c7a', fontSize: 13, lineHeight: 21 },
+  companion: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#d7e0e5',
+    padding: 20,
+    gap: 10,
+  },
+  input: {
+    minHeight: 100,
+    borderWidth: 1,
+    borderColor: '#b8c8d1',
+    padding: 14,
+    color: '#17354c',
+    fontSize: 16,
+  },
+  photoRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#d7e0e5',
+    paddingTop: 12,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  thumbnail: { width: 76, height: 76, backgroundColor: '#e7edf0' },
+  photoDetail: { flex: 1, gap: 6 },
+  caption: {
+    minHeight: 48,
+    borderWidth: 1,
+    borderColor: '#b8c8d1',
+    padding: 10,
+    color: '#17354c',
+  },
   capture: {
     backgroundColor: '#fff',
     borderWidth: 1,
