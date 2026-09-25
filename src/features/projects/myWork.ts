@@ -40,6 +40,33 @@ export type FieldHomeSummary = {
   timing: 'ON TIME' | 'DELAYED' | 'TIMING NOT RECORDED';
 };
 
+export type WorkPresentation = {
+  percent: number;
+  status: 'DONE' | 'WORKING' | 'START' | 'DELAYED';
+};
+
+export function presentWorkActivity(
+  activity: WorkActivity,
+  today: string,
+): WorkPresentation {
+  const acceptedPercent = Math.max(
+    0,
+    Math.min(100, activity.acceptedPercent ?? 0),
+  );
+  if (activity.actualFinish) return { percent: 100, status: 'DONE' };
+  if (activity.plannedFinish && activity.plannedFinish < today)
+    return { percent: acceptedPercent, status: 'DELAYED' };
+  if (activity.actualStart || acceptedPercent > 0)
+    return { percent: acceptedPercent, status: 'WORKING' };
+  return { percent: 0, status: 'START' };
+}
+
+export function shiftSiteDate(date: string, days: number): string {
+  const [year, month, day] = date.split('-').map(Number);
+  const value = new Date(Date.UTC(year!, month! - 1, day! + days, 12));
+  return value.toISOString().slice(0, 10);
+}
+
 export function fieldHomeSummary(
   activities: WorkActivity[],
   today: string,
