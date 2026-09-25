@@ -126,6 +126,19 @@ function App() {
   );
 }
 
+async function pullToRefresh() {
+  await act(async () =>
+    screen
+      .getByTestId('my-tasks-scroll')
+      .props.refreshControl.props.onRefresh(),
+  );
+}
+
+function refreshEnabled() {
+  return screen.getByTestId('my-tasks-scroll').props.refreshControl.props
+    .enabled as boolean;
+}
+
 const originalAppState = AppState.currentState;
 afterAll(() => {
   AppState.currentState = originalAppState;
@@ -150,16 +163,88 @@ afterEach(() => {
   notifyManager.setScheduler((callback) => setTimeout(callback, 0));
 });
 
-it('shows accepted quantity separately from completion and missing actual dates', async () => {
+it('matches the task-list shell without treating quantity as completion', async () => {
   await render(<App />);
   expect(await screen.findByText('2 of 8 spools accepted')).toBeVisible();
-  expect(screen.getByText('Actual start: Not recorded')).toBeVisible();
-  expect(screen.getByText('Actual finish: Not recorded')).toBeVisible();
-  expect(screen.getByText('Assigned')).toBeVisible();
-  expect(screen.queryByText('Complete')).toBeNull();
+  expect(screen.getByRole('header', { name: 'My Tasks' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Open settings' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Previous day' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Next day' })).toBeVisible();
+  expect(screen.getByText('START')).toBeVisible();
+  expect(screen.getByText('0%')).toBeVisible();
+  expect(screen.queryByText('DONE')).toBeNull();
   expect(screen.getByText('Site project')).toBeVisible();
-  expect(screen.getByText('Open task hierarchy')).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: /Open task hierarchy/ }),
+  ).toBeVisible();
 }, 20_000);
+
+it('shows done, working, start, and delayed status treatments from accepted data', async () => {
+  const activities = [
+    { ...activity, id: 'done', name: 'Done task', actualFinish: '2026-09-24' },
+    {
+      ...activity,
+      id: 'working',
+      name: 'Working task',
+      actualStart: '2026-09-24',
+      acceptedPercent: 45,
+    },
+    { ...activity, id: 'start', name: 'Start task' },
+    {
+      ...activity,
+      id: 'delayed',
+      name: 'Delayed task',
+      plannedFinish: '2026-09-24',
+      acceptedPercent: 15,
+    },
+  ];
+  jest.mocked(loadMyWork).mockResolvedValue({
+    ...work,
+    snapshot: { ...work.snapshot, activities },
+    assignments: activities.map((row) => ({
+      ...assignment,
+      activity_id: row.id,
+    })),
+  });
+  await render(<App />);
+  expect(await screen.findByText('DONE')).toBeVisible();
+  expect(screen.getByText('WORKING')).toBeVisible();
+  expect(screen.getByText('START')).toBeVisible();
+  expect(screen.getByText('DELAYED')).toBeVisible();
+  expect(screen.getByText('100%')).toBeVisible();
+  expect(screen.getByText('45%')).toBeVisible();
+  expect(screen.getByText('15%')).toBeVisible();
+});
+
+it('steps the date navigator without another server read', async () => {
+  const currentDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+    .formatToParts(new Date())
+    .reduce<Record<string, string>>((parts, part) => {
+      parts[part.type] = part.value;
+      return parts;
+    }, {});
+  const selected = `${currentDate.year}-${currentDate.month}-${currentDate.day}`;
+  jest.mocked(loadMyWork).mockResolvedValue({
+    ...work,
+    assignments: [
+      { ...assignment, effective_from: selected, effective_to: selected },
+    ],
+  });
+  await render(<App />);
+  expect(await screen.findByText('Line erection')).toBeVisible();
+  expect(screen.getByText(/^TODAY,/)).toBeVisible();
+  const reads = jest.mocked(loadMyWork).mock.calls.length;
+  await fireEvent.press(screen.getByRole('button', { name: 'Next day' }));
+  expect(await screen.findByText('No assignment for this date.')).toBeVisible();
+  expect(loadMyWork).toHaveBeenCalledTimes(reads);
+  await fireEvent.press(screen.getByRole('button', { name: 'Previous day' }));
+  expect(await screen.findByText('Line erection')).toBeVisible();
+});
 
 it.each([
   {
@@ -222,15 +307,15 @@ it('shows an empty assignment period and no-active-schedule as different states'
     assignments: [],
   });
   await render(<App />);
-  expect(await screen.findByText('No assignment today.')).toBeVisible();
+  expect(await screen.findByText('No assignment for this date.')).toBeVisible();
   jest.mocked(loadMyWork).mockResolvedValue({
     ...work,
     snapshot: { ...work.snapshot, revisionId: null, activities: [] },
     assignments: [],
   });
-  await fireEvent.press(screen.getByRole('button', { name: 'Refresh' }));
+  await pullToRefresh();
   expect(await screen.findByText('No active schedule')).toBeVisible();
-  expect(screen.queryByText('No assignment today.')).toBeNull();
+  expect(screen.queryByText('No assignment for this date.')).toBeNull();
 });
 
 it('does not fetch offline and fetches after reconnect', async () => {
@@ -239,7 +324,7 @@ it('does not fetch offline and fetches after reconnect', async () => {
   expect(
     screen.getByText('Offline · Connect to load your assigned work.'),
   ).toBeVisible();
-  expect(await screen.findByRole('button', { name: 'Refresh' })).toBeDisabled();
+  expect(refreshEnabled()).toBe(false);
   expect(loadActiveProjects).not.toHaveBeenCalled();
   jest.mocked(useAuth).mockReturnValue(auth());
   await screen.rerender(<App />);
@@ -272,7 +357,7 @@ it('hides previous records after access is revoked, then supports retry', async 
   await render(<App />);
   await screen.findByText('Line erection');
   jest.mocked(loadMyWork).mockRejectedValue(new WorkReadError('access'));
-  await fireEvent.press(screen.getByRole('button', { name: 'Refresh' }));
+  await pullToRefresh();
   expect(await screen.findByText('Work unavailable')).toBeVisible();
   expect(screen.queryByText('Line erection')).toBeNull();
   jest.mocked(loadMyWork).mockResolvedValue(work);
@@ -284,7 +369,7 @@ it('drops the previous project records when membership disappears on refresh', a
   await render(<App />);
   await screen.findByText('Line erection');
   jest.mocked(loadActiveProjects).mockResolvedValue([]);
-  await fireEvent.press(screen.getByRole('button', { name: 'Refresh' }));
+  await pullToRefresh();
   expect(await screen.findByText('No active project access')).toBeVisible();
   expect(screen.queryByText('Line erection')).toBeNull();
 });

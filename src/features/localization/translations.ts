@@ -13,6 +13,17 @@ export const languageNames: Record<AppLocale, string> = {
 // English source copy is the key so untranslated additions remain readable.
 // The coverage test keeps every visible static phrase represented here.
 export const hiTranslations: Readonly<Record<string, string>> = {
+  DONE: 'पूर्ण',
+  'Next day': 'अगला दिन',
+  'No assignment for this date.': 'इस तारीख के लिए कोई कार्य नहीं है।',
+  'Percentages show accepted progress. Quantity alone does not mark a task complete.':
+    'प्रतिशत स्वीकृत प्रगति दिखाते हैं। केवल मात्रा से कार्य पूर्ण नहीं माना जाता।',
+  'Previous day': 'पिछला दिन',
+  START: 'शुरू करें',
+  TODAY: 'आज',
+  'Use the arrows to check another day.':
+    'दूसरा दिन देखने के लिए तीरों का उपयोग करें।',
+  WORKING: 'कार्य जारी',
   'Camera access is needed to take a site photo.':
     'साइट की फ़ोटो लेने के लिए कैमरा अनुमति आवश्यक है।',
   'Enable camera': 'कैमरा चालू करें',

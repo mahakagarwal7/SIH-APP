@@ -1,4 +1,10 @@
-import { fieldHomeSummary, groupMyWork, siteToday } from './myWork';
+import {
+  fieldHomeSummary,
+  groupMyWork,
+  presentWorkActivity,
+  shiftSiteDate,
+  siteToday,
+} from './myWork';
 
 import type { Assignment, WorkActivity } from './myWork';
 
@@ -96,6 +102,36 @@ it('rejects inconsistent or missing assignment details instead of showing a part
 it('uses India Standard Time at the UTC day boundary', () => {
   expect(siteToday(new Date('2026-09-23T18:29:59Z'))).toBe('2026-09-23');
   expect(siteToday(new Date('2026-09-23T18:30:00Z'))).toBe('2026-09-24');
+});
+
+it('steps date-only task navigation across month and year boundaries', () => {
+  expect(shiftSiteDate('2026-01-01', -1)).toBe('2025-12-31');
+  expect(shiftSiteDate('2026-01-31', 1)).toBe('2026-02-01');
+});
+
+it('presents only accepted progress and supported task states', () => {
+  expect(presentWorkActivity(activity, '2026-09-25')).toEqual({
+    percent: 0,
+    status: 'START',
+  });
+  expect(
+    presentWorkActivity(
+      { ...activity, acceptedPercent: 45, actualStart: '2026-09-24' },
+      '2026-09-25',
+    ),
+  ).toEqual({ percent: 45, status: 'WORKING' });
+  expect(
+    presentWorkActivity(
+      { ...activity, acceptedPercent: 20, plannedFinish: '2026-09-24' },
+      '2026-09-25',
+    ),
+  ).toEqual({ percent: 20, status: 'DELAYED' });
+  expect(
+    presentWorkActivity(
+      { ...activity, acceptedPercent: 10, actualFinish: '2026-09-24' },
+      '2026-09-25',
+    ),
+  ).toEqual({ percent: 100, status: 'DONE' });
 });
 
 it('summarizes completed activities without treating quantities as completion', () => {
