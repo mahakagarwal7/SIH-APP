@@ -31,6 +31,14 @@
           "cameraPermission": "Allow Nirmaan to take photos for your progress report.",
           "microphonePermission": "Allow Nirmaan to record your spoken progress report."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Nirmaan to take photos for your progress report.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
+        }
       ]
     ],
     "experiments": {

@@ -43,7 +43,41 @@ jest.mock('./nativePhotoPicker', () => ({
   recoverPendingPhoto: jest.fn(),
 }));
 jest.mock('./ReportMethodLinks', () => ({ ReportMethodLinks: () => null }));
-jest.mock('expo-router', () => ({ useFocusEffect: jest.fn() }));
+const mockRouter = {
+  back: jest.fn(),
+  canGoBack: jest.fn(() => true),
+  replace: jest.fn(),
+};
+jest.mock('expo-router', () => ({
+  useFocusEffect: jest.fn(),
+  useRouter: () => mockRouter,
+}));
+jest.mock('@expo/vector-icons/Feather', () => () => null);
+const mockTakePictureAsync = jest.fn();
+const mockRequestCameraPermission = jest.fn();
+let mockCameraPermission = { granted: true, canAskAgain: true };
+jest.mock('expo-camera', () => {
+  const React = jest.requireActual('react') as typeof import('react');
+  const { View } = jest.requireActual(
+    'react-native',
+  ) as typeof import('react-native');
+  return {
+    CameraView: React.forwardRef(function MockCameraView(
+      { onCameraReady }: { onCameraReady?: () => void },
+      ref: import('react').ForwardedRef<unknown>,
+    ) {
+      React.useImperativeHandle(ref, () => ({
+        takePictureAsync: mockTakePictureAsync,
+      }));
+      React.useEffect(() => onCameraReady?.(), [onCameraReady]);
+      return React.createElement(View, { accessibilityLabel: 'Camera view' });
+    }),
+    useCameraPermissions: () => [
+      mockCameraPermission,
+      mockRequestCameraPermission,
+    ],
+  };
+});
 
 let mockUuid = 0;
 jest.mock('expo-crypto', () => ({ randomUUID: () => `local-${++mockUuid}` }));
@@ -97,6 +131,17 @@ beforeEach(() => {
   } as unknown as ReportDraftStore);
   jest.mocked(recoverPendingPhoto).mockResolvedValue(null);
   jest.mocked(choosePhoto).mockResolvedValue(null);
+  mockTakePictureAsync.mockReset().mockResolvedValue({
+    uri: 'cache/camera.jpg',
+    width: 1600,
+    height: 1200,
+    format: 'jpg',
+  });
+  mockCameraPermission = { granted: true, canAskAgain: true };
+  mockRequestCameraPermission
+    .mockReset()
+    .mockResolvedValue(mockCameraPermission);
+  Object.values(mockRouter).forEach((mock) => mock.mockClear());
   jest.mocked(preparePickedPhoto).mockResolvedValue({
     uri: 'cache/normalized.jpg',
     width: 1200,
@@ -106,6 +151,61 @@ beforeEach(() => {
     mimeType: 'image/jpeg',
     bytes: new Uint8Array([1, 2, 3, 4]),
   });
+});
+
+it('renders the in-app viewfinder and attaches a shutter photo before compression', async () => {
+  let finish!: (photo: Awaited<ReturnType<typeof preparePickedPhoto>>) => void;
+  jest.mocked(preparePickedPhoto).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await render(<App mode="photo" />);
+  expect(await screen.findByLabelText('Camera view')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Back' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Turn flash on' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Flip camera' })).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Retake last photo' }),
+  ).toBeDisabled();
+  await fireEvent.press(screen.getByRole('button', { name: 'Turn flash on' }));
+  expect(screen.getByRole('button', { name: 'Turn flash off' })).toBeVisible();
+  await fireEvent.press(screen.getByRole('button', { name: 'Flip camera' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Take photo' }));
+  expect(mockTakePictureAsync).toHaveBeenCalledWith({ quality: 1 });
+  expect(await screen.findByLabelText('Selected photo 1')).toBeVisible();
+  expect(
+    screen.getByText(
+      'Photo attached. Compression continues in the background.',
+    ),
+  ).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Take photo' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Save on device' })).toBeDisabled();
+  await act(async () =>
+    finish({
+      uri: 'cache/camera-compressed.jpg',
+      width: 1200,
+      height: 900,
+      byteLength: 4,
+      sourceByteLength: null,
+      mimeType: 'image/jpeg',
+      bytes: new Uint8Array([1, 2, 3, 4]),
+    }),
+  );
+  expect(screen.getByRole('button', { name: 'Save on device' })).toBeEnabled();
+});
+
+it('shows a recoverable camera permission state', async () => {
+  mockCameraPermission = { granted: false, canAskAgain: true };
+  await render(<App mode="photo" />);
+  expect(
+    await screen.findByText('Camera access is needed to take a site photo.'),
+  ).toBeVisible();
+  expect(screen.queryByLabelText('Camera view')).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Enable camera' }));
+  expect(mockRequestCameraPermission).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('button', { name: 'Take photo' })).toBeDisabled();
 });
 
 it('does not claim a text draft is saved until durable persistence completes', async () => {
@@ -153,7 +253,7 @@ it('normalizes a chosen photo, keeps its caption, and saves the actual bytes', a
     fileSize: 40,
   });
   await render(<App mode="photo" />);
-  await screen.findByText('No text or photo drafts saved yet.');
+  await screen.findByLabelText('Camera view');
   await fireEvent.press(screen.getByRole('button', { name: 'Choose photo' }));
   expect(await screen.findByLabelText('Selected photo 1')).toBeVisible();
   await fireEvent.changeText(
@@ -194,11 +294,15 @@ it('shows a picked photo immediately while compression continues in the backgrou
       }),
   );
   await render(<App mode="photo" />);
-  await screen.findByText('No text or photo drafts saved yet.');
+  await screen.findByLabelText('Camera view');
   await fireEvent.press(screen.getByRole('button', { name: 'Choose photo' }));
   expect(await screen.findByLabelText('Selected photo 1')).toBeVisible();
-  expect(screen.getByText('Photo 1 · Compressing…')).toBeVisible();
-  expect(screen.getByLabelText('Report details')).toBeEnabled();
+  expect(
+    screen.getByText(
+      'Photo attached. Compression continues in the background.',
+    ),
+  ).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Take photo' })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Save on device' })).toBeDisabled();
   await act(async () =>
     finish({
@@ -212,7 +316,7 @@ it('shows a picked photo immediately while compression continues in the backgrou
     }),
   );
   expect(
-    await screen.findByText(/3.8 MB → 391 KB · 90% smaller/),
+    await screen.findByText('Photo compressed and ready to save.'),
   ).toBeVisible();
   expect(screen.getByRole('button', { name: 'Save on device' })).toBeEnabled();
 });
@@ -228,13 +332,15 @@ it('keeps a failed background compression removable without locking the form', a
     .mocked(preparePickedPhoto)
     .mockRejectedValue(new Error('Photo codec unavailable.'));
   await render(<App mode="photo" />);
-  await screen.findByText('No text or photo drafts saved yet.');
+  await screen.findByLabelText('Camera view');
   await fireEvent.press(screen.getByRole('button', { name: 'Choose photo' }));
   expect(await screen.findByText('Photo codec unavailable.')).toBeVisible();
-  expect(screen.getByLabelText('Report details')).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Save on device' })).toBeDisabled();
-  await fireEvent.press(screen.getByRole('button', { name: 'Remove photo' }));
-  expect(screen.getByRole('button', { name: 'Save on device' })).toBeEnabled();
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Retake last photo' }),
+  );
+  expect(screen.queryByRole('button', { name: 'Save on device' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Take photo' })).toBeEnabled();
 });
 
 it('retains a failed save for same-identity retry', async () => {

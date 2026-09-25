@@ -65,6 +65,10 @@ function translate(source: string, locale: AppLocale) {
     [/^Language (.+)$/, (_all, language) => `भाषा ${language}`],
     [/^Voice level (\d+)%$/, (_all, level) => `आवाज़ का स्तर ${level}%`],
     [
+      /^Edit caption for photo (\d+)$/,
+      (_all, position) => `फ़ोटो ${position} का विवरण संपादित करें`,
+    ],
+    [
       /^Open original (audio|photo|evidence): (.+)$/,
       (_all, kind, file) =>
         `मूल ${kind === 'audio' ? 'ऑडियो' : kind === 'photo' ? 'फ़ोटो' : 'साक्ष्य'} खोलें: ${file}`,

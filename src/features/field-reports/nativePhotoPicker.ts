@@ -5,15 +5,20 @@ import * as ImagePicker from 'expo-image-picker';
 import { preparePhoto } from './photoPreparation';
 
 import type { PreparedPhoto, Resize } from './photoPreparation';
-import type { ImagePickerAsset, ImagePickerResult } from 'expo-image-picker';
+import type { ImagePickerResult } from 'expo-image-picker';
 
 export type PreparedLocalPhoto = PreparedPhoto & {
   sourceByteLength: number | null;
 };
-export type PickedLocalPhoto = ImagePickerAsset;
+export type PickedLocalPhoto = {
+  uri: string;
+  width: number;
+  height: number;
+  fileSize?: number | null;
+};
 
 export async function preparePickedPhoto(
-  asset: ImagePickerAsset,
+  asset: PickedLocalPhoto,
 ): Promise<PreparedLocalPhoto> {
   const prepared = await preparePhoto(
     asset,
