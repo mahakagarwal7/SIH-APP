@@ -13,6 +13,15 @@ export const languageNames: Record<AppLocale, string> = {
 // English source copy is the key so untranslated additions remain readable.
 // The coverage test keeps every visible static phrase represented here.
 export const hiTranslations: Readonly<Record<string, string>> = {
+  'Choose corrected work date': 'सही कार्य तिथि चुनें',
+  'Choose date': 'तिथि चुनें',
+  'Choose work date': 'कार्य तिथि चुनें',
+  'Clear corrected work date': 'सही कार्य तिथि हटाएँ',
+  'Clear date': 'तिथि हटाएँ',
+  'Clear work date': 'कार्य तिथि हटाएँ',
+  Optional: 'वैकल्पिक',
+  Required: 'आवश्यक',
+  'Use date': 'तिथि उपयोग करें',
   '% · Basis:': '% · आधार:',
   ', row': ', पंक्ति',
   '. Recording stops at 25 seconds.':

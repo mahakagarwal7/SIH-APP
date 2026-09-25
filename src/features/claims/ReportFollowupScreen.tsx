@@ -3,6 +3,8 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { formatWorkDate } from '@/components/workDate';
+import { WorkDatePicker } from '@/components/WorkDatePicker';
 import {
   LocalizedText as Text,
   LocalizedPressable as Pressable,
@@ -212,7 +214,10 @@ export function ReportFollowupScreen({ reportId }: { reportId: string }) {
               {data.original.source_text}
             </Text>
             <Text style={styles.detail}>
-              Work date: {data.original.work_date ?? 'Not recorded'}
+              Work date:{' '}
+              {data.original.work_date
+                ? formatWorkDate(data.original.work_date)
+                : 'Not recorded'}
             </Text>
           </View>
 
@@ -224,7 +229,9 @@ export function ReportFollowupScreen({ reportId }: { reportId: string }) {
               <Text style={styles.historyStatus}>{claim.state}</Text>
               <Text style={styles.question}>
                 {claim.facts.kind.replaceAll('_', ' ')} ·{' '}
-                {claim.facts.eventDate ?? 'Date not recorded'}
+                {claim.facts.eventDate
+                  ? formatWorkDate(claim.facts.eventDate)
+                  : 'Date not recorded'}
               </Text>
               <Text style={styles.detail}>{claim.facts.evidenceQuote}</Text>
               {claim.validation_flags.map((flag) => (
@@ -325,15 +332,12 @@ export function ReportFollowupScreen({ reportId }: { reportId: string }) {
                   </>
                 )}
               {question.reason_code === 'date' && (
-                <TextInput
-                  accessibilityLabel="Work date"
-                  autoCapitalize="none"
-                  editable={!busy}
-                  maxLength={10}
-                  onChangeText={(value) => updateDraft({ date: value })}
-                  placeholder="YYYY-MM-DD"
-                  style={styles.input}
-                  value={draft.date}
+                <WorkDatePicker
+                  disabled={busy}
+                  label="Work date"
+                  onChange={(value) => updateDraft({ date: value ?? '' })}
+                  required
+                  value={draft.date || null}
                 />
               )}
               {(question.reason_code === 'scope' ||

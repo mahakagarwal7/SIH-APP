@@ -1,18 +1,11 @@
+import { isSelectableWorkDate } from '@/components/workDate';
+
 import { OutboxSyncError } from './outbox';
 
 import type { ConfirmedPayload } from './outbox';
 
 const uuid =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function validDate(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith('0000-'))
-    return false;
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return (
-    !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value
-  );
-}
 
 export function normalizeConfirmation(
   input: ConfirmedPayload,
@@ -24,8 +17,12 @@ export function normalizeConfirmation(
       'local',
       false,
     );
-  if (input.workDate !== null && !validDate(input.workDate))
-    throw new OutboxSyncError('Enter a valid work date.', 'local', false);
+  if (input.workDate !== null && !isSelectableWorkDate(input.workDate))
+    throw new OutboxSyncError(
+      'Choose today or an earlier work date.',
+      'local',
+      false,
+    );
   if (input.activityId !== null && !uuid.test(input.activityId))
     throw new OutboxSyncError(
       'Select a valid authorized activity.',

@@ -43,3 +43,13 @@ it('rejects year zero before locking a payload that the database cannot accept',
     }),
   ).toThrow('date');
 });
+
+it('rejects a future work date before locking the submission', () => {
+  expect(() =>
+    normalizeConfirmation({
+      text: 'Progress recorded.',
+      workDate: '2999-01-01',
+      activityId: null,
+    }),
+  ).toThrow('date');
+});

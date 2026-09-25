@@ -98,6 +98,7 @@ it('reuses a command ID only while the exact payload remains unchanged', () => {
 });
 
 it('validates real calendar dates before a decision reaches production', () => {
-  expect(validWorkDate('2028-02-29')).toBe(true);
+  expect(validWorkDate('2024-02-29')).toBe(true);
   expect(validWorkDate('2026-02-30')).toBe(false);
+  expect(validWorkDate('2999-01-01')).toBe(false);
 });
