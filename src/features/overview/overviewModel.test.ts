@@ -1,4 +1,5 @@
 import {
+  acceptedEventDays,
   acceptedEventWeeks,
   attentionReason,
   disciplineProgress,
@@ -22,7 +23,7 @@ const event = {
   effective: true,
 } as ExecutionHistoryEntry;
 
-it('counts exact accepted activity states without producing an overall percentage', () => {
+it('counts exact accepted activity states and labels the activity-count ratio', () => {
   const activities: ScheduleActivity[] = [
     activity,
     { ...activity, actualFinish: '2026-09-23' },
@@ -37,10 +38,12 @@ it('counts exact accepted activity states without producing an overall percentag
   expect(overviewSummary(activities, 7)).toEqual({
     planned: 4,
     completed: 1,
+    completionPercent: 25,
     inProgress: 1,
     unresolvedProgress: 1,
     actionableClaims: 7,
   });
+  expect(overviewSummary([], 0).completionPercent).toBeNull();
   expect(disciplineProgress(activities)).toEqual([
     {
       discipline: 'Civil',
@@ -56,6 +59,35 @@ it('counts exact accepted activity states without producing an overall percentag
       inProgress: 1,
       percent: 50,
     },
+  ]);
+});
+
+it('groups only effective accepted events into the current site week by day', () => {
+  const days = acceptedEventDays(
+    [
+      event,
+      { ...event, eventId: 'event-2', eventDate: '2026-09-22' },
+      { ...event, eventId: 'event-3', eventDate: '2026-09-24' },
+      {
+        ...event,
+        eventId: 'event-replaced',
+        eventDate: '2026-09-22',
+        effective: false,
+      },
+      { ...event, eventId: 'event-old', eventDate: '2026-09-20' },
+      { ...event, eventId: 'event-future', eventDate: '2026-09-28' },
+    ] as ExecutionHistoryEntry[],
+    '2026-09-24',
+  );
+
+  expect(days).toEqual([
+    { date: '2026-09-21', day: 'M', count: 0 },
+    { date: '2026-09-22', day: 'T', count: 2 },
+    { date: '2026-09-23', day: 'W', count: 0 },
+    { date: '2026-09-24', day: 'T', count: 1 },
+    { date: '2026-09-25', day: 'F', count: 0 },
+    { date: '2026-09-26', day: 'S', count: 0 },
+    { date: '2026-09-27', day: 'S', count: 0 },
   ]);
 });
 

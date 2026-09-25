@@ -13,6 +13,11 @@ export const languageNames: Record<AppLocale, string> = {
 // English source copy is the key so untranslated additions remain readable.
 // The coverage test keeps every visible static phrase represented here.
 export const hiTranslations: Readonly<Record<string, string>> = {
+  'Accepted field events by work date · evidence volume, not productivity.':
+    'कार्य तिथि के अनुसार स्वीकृत फ़ील्ड घटनाएँ · यह साक्ष्य की मात्रा है, उत्पादकता नहीं।',
+  'accepted-finished of': 'स्वीकृत रूप से पूर्ण, कुल',
+  'accepted-finished ·': 'स्वीकृत रूप से पूर्ण ·',
+  'awaiting action': 'कार्रवाई की प्रतीक्षा में',
   'Could not open sharing. Try again.':
     'साझा करने का विकल्प नहीं खुल सका। फिर प्रयास करें।',
   'CURRENT TASK': 'वर्तमान कार्य',
@@ -1062,4 +1067,19 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   signedOut: 'हस्ताक्षरित',
   'stop and save': 'रुकें और बचाएं',
   '· Automatic checks active': '· स्वचालित जाँच सक्रिय',
+  'current claims. Open Review for the complete paged list.':
+    'वर्तमान दावे। पूरी पृष्ठांकित सूची के लिए समीक्षा खोलें।',
+  'NEEDS YOUR ATTENTION': 'आपके ध्यान की आवश्यकता है',
+  'No active disciplines recorded': 'कोई सक्रिय कार्य-क्षेत्र दर्ज नहीं है',
+  'Open review': 'समीक्षा खोलें',
+  'planned activities. It does not weight quantity, duration or cost.':
+    'नियोजित गतिविधियों में से। इसमें मात्रा, अवधि या लागत का भार शामिल नहीं है।',
+  'Progress Overview': 'प्रगति अवलोकन',
+  'RECENT ACCEPTED RECORDS': 'हाल के स्वीकृत रिकॉर्ड',
+  TOTAL: 'कुल',
+  'Total activity completion not recorded': 'कुल गतिविधि पूर्णता दर्ज नहीं है',
+  'Total is': 'कुल',
+  'WEEKLY PROGRESS TREND': 'साप्ताहिक प्रगति रुझान',
+  'WORK AREA COMPLETE': 'कार्य-क्षेत्र पूर्णता',
+  '· Schedule v': '· अनुसूची संस्करण',
 };
