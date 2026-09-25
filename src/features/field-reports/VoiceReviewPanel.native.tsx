@@ -12,6 +12,7 @@ import {
   LocalizedTextInput as TextInput,
 } from '@/features/localization/LocalizedText';
 import { shellStyles } from '@/features/navigation/shellUi';
+import { warnInDevelopment } from '@/lib/devLog';
 
 import { getVoiceDraftStore } from './nativeDraftStore';
 import {
@@ -81,6 +82,9 @@ export function VoiceReviewPanel({
   const [playing, setPlaying] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [preparationError, setPreparationError] = useState('');
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const [preparing, setPreparing] = useState(true);
   const review = useQuery({
     queryKey: ['voice-review', userId, captureId],
     networkMode: 'always',
@@ -94,6 +98,7 @@ export function VoiceReviewPanel({
   });
 
   useEffect(() => {
+    let active = true;
     mounted.current = true;
     const unsubscribe = subscribeOutboxChanges((owner, id) => {
       if (owner === userId && id === captureId)
@@ -102,20 +107,37 @@ export function VoiceReviewPanel({
         });
     });
     void prepareLocalOutbox(userId)
-      .then(() => (auth.offline ? undefined : syncNativeOutbox(userId)))
+      .then(async () => {
+        if (active) setPreparationError('');
+        const rows = await (await getNativeOutbox()).list(userId);
+        if (!rows.some((row) => row.captureId === captureId))
+          throw new Error('The saved recording could not enter the outbox.');
+        if (!auth.offline)
+          await syncNativeOutbox(userId, { includePaused: retryAttempt > 0 });
+      })
+      .catch((reason) => {
+        warnInDevelopment('Voice upload preparation failed', reason);
+        if (active)
+          setPreparationError(
+            'Could not prepare this recording for upload. The device copy is still saved.',
+          );
+      })
       .finally(() => {
-        if (mounted.current)
+        if (active) {
+          setPreparing(false);
           void client.invalidateQueries({
             queryKey: ['voice-review', userId, captureId],
           });
+        }
       });
     return () => {
+      active = false;
       mounted.current = false;
       unsubscribe();
       playerRelease.current?.();
       playerRelease.current = null;
     };
-  }, [auth.offline, captureId, client, userId]);
+  }, [auth.offline, captureId, client, retryAttempt, userId]);
 
   function stopPlayback() {
     playerRelease.current?.();
@@ -201,12 +223,20 @@ export function VoiceReviewPanel({
       client.setQueryData(['voice-review', userId, captureId], next);
       showToast('Report queued for review.');
       if (!auth.offline)
-        void syncNativeOutbox(userId).finally(() => {
-          if (mounted.current)
-            void client.invalidateQueries({
-              queryKey: ['voice-review', userId, captureId],
-            });
-        });
+        void syncNativeOutbox(userId)
+          .catch((reason) => {
+            warnInDevelopment('Queued voice upload failed', reason);
+            if (mounted.current)
+              setPreparationError(
+                'Could not upload this recording. Your Send request is saved; retry when connected.',
+              );
+          })
+          .finally(() => {
+            if (mounted.current)
+              void client.invalidateQueries({
+                queryKey: ['voice-review', userId, captureId],
+              });
+          });
     } catch (reason) {
       if (mounted.current) {
         setLocalSendRequested(false);
@@ -252,6 +282,25 @@ export function VoiceReviewPanel({
   const transcript = record?.originalTranscript?.trim() ?? '';
   const submitted = record?.submissionState === 'submitted';
   const sendQueued = localSendRequested || Boolean(record?.sendRequested);
+  const savedWorkDate =
+    record?.requestedWorkDate ?? record?.confirmedPayload?.workDate;
+  const sendLocked =
+    localSendRequested ||
+    (Boolean(record?.sendRequested) && Boolean(savedWorkDate));
+  const uploadIssue =
+    preparationError ||
+    (review.error
+      ? 'Could not read upload status. The device copy is still saved.'
+      : ['failed', 'paused'].includes(record?.state ?? '')
+        ? record?.lastError || 'Upload needs attention. Retry when connected.'
+        : '');
+  const transcriptStatus = uploadIssue
+    ? 'Transcript unavailable until upload resumes.'
+    : auth.offline
+      ? 'Waiting for a connection.'
+      : record?.state === 'processing'
+        ? 'Waiting for server transcription…'
+        : 'Waiting for upload.';
   const text =
     editedText ?? (record && transcript ? initialConfirmationText(record) : '');
 
@@ -261,10 +310,26 @@ export function VoiceReviewPanel({
       <Text accessibilityRole="header" style={shellStyles.cardTitle}>
         Recording saved on this device
       </Text>
-      {(review.isPending || !record) && (
+      {!uploadIssue && (review.isPending || (!record && preparing)) && (
         <View style={styles.preparing}>
           <ActivityIndicator color="#266b8c" />
           <Text style={shellStyles.body}>Preparing secure upload…</Text>
+        </View>
+      )}
+      {!!uploadIssue && (
+        <View style={{ gap: 8 }}>
+          <Text accessibilityRole="alert" style={styles.error}>
+            {uploadIssue}
+          </Text>
+          <ReviewAction
+            label="Retry upload"
+            disabled={preparing || busy !== null}
+            onPress={() => {
+              setPreparing(true);
+              setPreparationError('');
+              setRetryAttempt((value) => value + 1);
+            }}
+          />
         </View>
       )}
       <ReviewAction
@@ -285,11 +350,17 @@ export function VoiceReviewPanel({
         />
       ) : (
         <Text accessibilityLiveRegion="polite" style={styles.transcribing}>
-          Transcribing…
+          {transcriptStatus}
+        </Text>
+      )}
+      {!transcript && record?.state === 'processing' && !uploadIssue && (
+        <Text style={styles.help}>
+          The recording has uploaded. You can leave this screen; progress
+          appears in My reports.
         </Text>
       )}
       <WorkDatePicker
-        disabled={sendQueued || submitted || busy !== null}
+        disabled={sendLocked || submitted || busy !== null}
         label="Work date"
         onChange={(value) => {
           setWorkDate(value);
@@ -297,7 +368,7 @@ export function VoiceReviewPanel({
         }}
         required
         value={
-          sendQueued || submitted
+          sendLocked || submitted
             ? (record?.requestedWorkDate ??
               record?.confirmedPayload?.workDate ??
               workDate)
@@ -314,7 +385,7 @@ export function VoiceReviewPanel({
           {message}
         </Text>
       )}
-      {sendQueued && !submitted && (
+      {sendQueued && !submitted && !uploadIssue && (
         <Text style={styles.help}>
           Send requested · Waiting for verified media.
         </Text>
@@ -335,7 +406,7 @@ export function VoiceReviewPanel({
           />
           <ReviewAction
             label={busy === 'send' ? 'Queuing…' : 'Submit'}
-            disabled={busy !== null || sendQueued}
+            disabled={busy !== null || sendLocked}
             onPress={() => void send()}
             tone="submit"
           />
@@ -360,6 +431,7 @@ const styles = StyleSheet.create({
   label: { color: '#17354c', fontSize: 15, fontWeight: '700' },
   transcript: {
     minHeight: 120,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#b8c8d1',
     padding: 14,
@@ -369,6 +441,7 @@ const styles = StyleSheet.create({
   },
   transcribing: {
     minHeight: 64,
+    borderRadius: 12,
     backgroundColor: '#e7edf0',
     color: '#17354c',
     padding: 16,

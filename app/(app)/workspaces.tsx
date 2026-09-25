@@ -20,8 +20,8 @@ export default function Workspaces() {
         detail="Review field updates and follow the accepted plan."
       />
       <Text style={[shellStyles.body, { marginTop: 24 }]}>
-        Workspace selection does not change your project access. Project tools
-        are not available yet.
+        Both workspaces use the same project. Your role determines the actions
+        available to you.
       </Text>
     </ShellPage>
   );

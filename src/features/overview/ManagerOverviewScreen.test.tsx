@@ -228,9 +228,7 @@ it('shows the manager panel with supported task counts and unavailable metrics',
   expect(screen.getByText('TIMELINE SCHEDULER')).toBeVisible();
   expect(screen.getByText('RECENT VERIFIED FIELD UPDATES')).toBeVisible();
   expect(
-    screen.getByText(
-      /Tasks count accepted-finished activities over planned activities/,
-    ),
+    screen.getByText(/Tasks show accepted completions against the plan/),
   ).toBeVisible();
   expect(screen.getAllByText('Not recorded')).toHaveLength(4);
   expect(screen.getByText(/Bars show mean accepted progress/)).toBeVisible();
@@ -253,7 +251,7 @@ it('renders real discipline progress and verified update provenance', async () =
     screen.getByLabelText(
       'Piping: 75% mean accepted progress across 2 activities',
     ).props.accessibilityValue,
-  ).toEqual({ min: 0, max: 100, now: 75 });
+  ).toEqual({ min: 0, max: 100, now: 75, text: '75%' });
   expect(
     screen.getByText(/Mean accepted activity progress by discipline/),
   ).toBeVisible();

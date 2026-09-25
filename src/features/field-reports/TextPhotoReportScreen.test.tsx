@@ -53,6 +53,7 @@ const mockRouter = {
   replace: jest.fn(),
 };
 jest.mock('expo-router', () => ({
+  Link: jest.requireActual('expo-router/build/ui/Slot').Slot,
   useFocusEffect: jest.fn(),
   useRouter: () => mockRouter,
 }));

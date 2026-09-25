@@ -1,3 +1,5 @@
+import { acceptedProgress, meanAcceptedProgress } from '@/lib/acceptedProgress';
+
 export type Assignment = {
   project_id: string;
   activity_id: string;
@@ -41,7 +43,7 @@ export type FieldHomeSummary = {
 };
 
 export type WorkPresentation = {
-  percent: number;
+  percent: number | null;
   status: 'DONE' | 'WORKING' | 'START' | 'DELAYED';
 };
 
@@ -49,16 +51,13 @@ export function presentWorkActivity(
   activity: WorkActivity,
   today: string,
 ): WorkPresentation {
-  const acceptedPercent = Math.max(
-    0,
-    Math.min(100, activity.acceptedPercent ?? 0),
-  );
+  const acceptedPercent = acceptedProgress(activity);
   if (activity.actualFinish) return { percent: 100, status: 'DONE' };
   if (activity.plannedFinish && activity.plannedFinish < today)
     return { percent: acceptedPercent, status: 'DELAYED' };
-  if (activity.actualStart || acceptedPercent > 0)
+  if (activity.actualStart || (acceptedPercent ?? 0) > 0)
     return { percent: acceptedPercent, status: 'WORKING' };
-  return { percent: 0, status: 'START' };
+  return { percent: acceptedPercent, status: 'START' };
 }
 
 export function shiftSiteDate(date: string, days: number): string {
@@ -90,18 +89,7 @@ export function fieldHomeSummary(
   return {
     completed,
     total: activities.length,
-    percent: activities.length
-      ? Math.round(
-          activities.reduce(
-            (sum, activity) =>
-              sum +
-              (activity.actualFinish
-                ? 100
-                : Math.max(0, Math.min(100, activity.acceptedPercent ?? 0))),
-            0,
-          ) / activities.length,
-        )
-      : null,
+    percent: meanAcceptedProgress(activities),
     timing,
   };
 }

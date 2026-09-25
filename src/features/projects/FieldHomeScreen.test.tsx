@@ -7,7 +7,7 @@ jest.mock('./useMyWork', () => ({ useMyWork: jest.fn() }));
 jest.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) =>
     jest.requireActual('react').useEffect(callback, [callback]),
-  Link: ({ children }: { children: React.ReactNode }) => children,
+  Link: jest.requireActual('expo-router/build/ui/Slot').Slot,
 }));
 
 const context = {
@@ -71,7 +71,7 @@ it('matches the field home summary and action layout', async () => {
   await render(<FieldHomeScreen />);
   expect(screen.getByText('Nirmaan')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Open settings' })).toBeVisible();
-  expect(screen.getByText('0%')).toBeVisible();
+  expect(screen.getByText('—')).toBeVisible();
   expect(screen.getByText('ACCEPTED PROGRESS')).toBeVisible();
   expect(screen.getByText('Site project')).toBeVisible();
   expect(screen.getByText('Unit 2')).toBeVisible();
@@ -113,7 +113,7 @@ it('computes the ring only from activities assigned to the signed-in reporter', 
     offline: false,
   } as unknown as ReturnType<typeof useMyWork>);
   await render(<FieldHomeScreen />);
-  expect(screen.getByText('0%')).toBeVisible();
+  expect(screen.getByText('—')).toBeVisible();
   expect(screen.queryByText('50%')).toBeNull();
 });
 

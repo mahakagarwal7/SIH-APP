@@ -14,9 +14,10 @@ import {
   LocalizedPressable as Pressable,
   LocalizedTextInput as TextInput,
 } from '@/features/localization/LocalizedText';
-import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
+import { NavLink, ShellPage, shellStyles } from '@/features/navigation/shellUi';
 import { useCaptureProject } from '@/features/projects/useCaptureProject';
 
+import { outboxStatus } from './myReportsService';
 import {
   assertLocalDraftCanBeDiscarded,
   getNativeOutbox,
@@ -557,8 +558,9 @@ function AccountTextPhotoScreen({
         </Text>
       )}
       <Text style={styles.detail}>
-        Check and Send are implemented in later approved slices.
+        Open My reports to check your saved draft and send it for review.
       </Text>
+      <NavLink href="/field/reports" label="Open My reports" />
       <View style={styles.savedHeader}>
         <Text accessibilityRole="header" style={shellStyles.cardTitle}>
           Your local text and photo drafts
@@ -592,14 +594,14 @@ function AccountTextPhotoScreen({
         <Text style={styles.empty}>No text or photo drafts saved yet.</Text>
       ) : (
         drafts.data?.map((draft) => {
-          const discardBlocker = localDraftDiscardBlocker(
-            outbox.data?.find((row) => row.captureId === draft.id) ?? null,
-          );
+          const record = outbox.data?.find((row) => row.captureId === draft.id);
+          const delivery = record ? outboxStatus(record) : null;
+          const discardBlocker = localDraftDiscardBlocker(record ?? null);
           return (
             <View key={draft.id} style={shellStyles.card}>
               <Text style={styles.mode}>
                 {draft.available
-                  ? 'Saved on device'
+                  ? (delivery?.[0] ?? 'Saved on device')
                   : draft.state === 'deleting'
                     ? 'Discard incomplete'
                     : 'Draft incomplete or missing'}
@@ -615,7 +617,9 @@ function AccountTextPhotoScreen({
                 {draft.photos.length === 1 ? 'photo' : 'photos'} ·{' '}
                 {formatDateTime(draft.createdAt)}
               </Text>
-              <Text style={styles.detail}>Not sent for review</Text>
+              <Text style={styles.detail}>
+                {delivery?.[1] ?? 'Not sent for review'}
+              </Text>
               {!!discardBlocker && (
                 <Text style={styles.detail}>{discardBlocker}</Text>
               )}

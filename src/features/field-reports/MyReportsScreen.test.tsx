@@ -119,6 +119,41 @@ it('shows a device-saved report without claiming it reached review', async () =>
   expect(prepareLocalOutbox).not.toHaveBeenCalled();
 });
 
+it('keeps server reports and readable drafts visible when one local store fails', async () => {
+  jest
+    .mocked(getReportDraftStore)
+    .mockRejectedValue(new Error('database unavailable'));
+  jest.mocked(loadRemoteReports).mockResolvedValue([
+    {
+      id: 'remote-report',
+      capture_id: 'remote-capture',
+      project_id: 'project',
+      author_id: 'alice',
+      current_version: 1,
+      lifecycle: 'submitted',
+      received_at: '2026-09-25T00:00:00Z',
+      source_kind: 'text',
+      claims: [
+        {
+          id: 'claim',
+          report_id: 'remote-report',
+          report_version: 1,
+          state: 'accepted',
+        },
+      ],
+      jobs: [],
+    },
+  ]);
+  await render(<App />);
+  expect(await screen.findByText('Accepted')).toBeVisible();
+  expect(screen.getByText('Saved on device')).toBeVisible();
+  expect(screen.getByText(/Could not read some saved reports/)).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Retry device reports' }),
+  ).toBeEnabled();
+  expect(screen.queryByText('No reports saved or submitted yet.')).toBeNull();
+});
+
 it('shows active background delivery as a distinct Uploading chip', async () => {
   const uploading: OutboxRecord = {
     captureId: '10000000-0000-4000-8000-000000000001',
@@ -282,7 +317,7 @@ it('re-enables Sync now when a pass finishes after the tab loses focus', async (
   expect(await screen.findByRole('button', { name: 'Sync now' })).toBeEnabled();
 });
 
-it('labels unqueried server attachments as unavailable instead of zero files', async () => {
+it('shows the server evidence type without inventing an attachment count', async () => {
   jest
     .mocked(getVoiceDraftStore)
     .mockResolvedValue({ list: async () => [] } as never);
@@ -301,7 +336,7 @@ it('labels unqueried server attachments as unavailable instead of zero files', a
     },
   ]);
   await render(<App />);
-  expect(await screen.findByText(/Attachment count unavailable/)).toBeVisible();
+  expect(await screen.findByText('Voice')).toBeVisible();
   expect(screen.queryByText(/0 files/)).toBeNull();
 });
 

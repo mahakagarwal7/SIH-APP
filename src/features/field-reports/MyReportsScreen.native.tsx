@@ -12,6 +12,7 @@ import {
   LocalizedPressable as Pressable,
 } from '@/features/localization/LocalizedText';
 import { ShellPage, shellStyles } from '@/features/navigation/shellUi';
+import { warnInDevelopment } from '@/lib/devLog';
 
 import {
   getReportsClient,
@@ -70,12 +71,24 @@ function AccountReports({ userId }: { userId: string }) {
     queryKey: ['my-reports', userId, 'local'],
     networkMode: 'always',
     queryFn: async () => {
-      const [voice, reports, outbox] = await Promise.all([
-        (await getVoiceDraftStore()).list(userId),
-        (await getReportDraftStore()).list(userId),
-        (await getNativeOutbox()).list(userId),
+      const [voice, reports, outbox] = await Promise.allSettled([
+        getVoiceDraftStore().then((store) => store.list(userId)),
+        getReportDraftStore().then((store) => store.list(userId)),
+        getNativeOutbox().then((store) => store.list(userId)),
       ]);
-      return { voice, reports, outbox };
+      const failures = [voice, reports, outbox].filter(
+        (result) => result.status === 'rejected',
+      );
+      failures.forEach((result) => {
+        if (result.status === 'rejected')
+          warnInDevelopment('Device report read failed', result.reason);
+      });
+      return {
+        voice: voice.status === 'fulfilled' ? voice.value : [],
+        reports: reports.status === 'fulfilled' ? reports.value : [],
+        outbox: outbox.status === 'fulfilled' ? outbox.value : [],
+        incomplete: failures.length > 0,
+      };
     },
   });
   const remote = useQuery({
@@ -140,6 +153,7 @@ function AccountReports({ userId }: { userId: string }) {
       const remoteResult = await remoteRefetch();
       const needsAttention =
         !!localResult.error ||
+        !!localResult.data?.incomplete ||
         !!remoteResult.error ||
         results.some((record) => ['failed', 'paused'].includes(record.state));
       if (mounted.current) {
@@ -221,16 +235,28 @@ function AccountReports({ userId }: { userId: string }) {
           />
         </View>
       )}
-      {local.isPending ? (
+      {(local.error || local.data?.incomplete) && (
+        <View style={styles.errorGroup}>
+          <Text accessibilityRole="alert" style={styles.error}>
+            Could not read some saved reports from this device. Available
+            reports are shown below; saved files have not been removed.
+          </Text>
+          <Action
+            label="Retry device reports"
+            disabled={local.isFetching}
+            onPress={() => void localRefetch()}
+          />
+        </View>
+      )}
+      {local.isPending && items.length === 0 ? (
         <View style={styles.loading}>
           <ActivityIndicator color="#266b8c" />
           <Text style={shellStyles.body}>Loading saved reports…</Text>
         </View>
-      ) : local.error ? (
-        <Text accessibilityRole="alert" style={styles.error}>
-          Could not read saved reports from this device.
-        </Text>
-      ) : items.length === 0 && (auth.offline || remote.isSuccess) ? (
+      ) : items.length === 0 &&
+        !local.error &&
+        !local.data?.incomplete &&
+        (auth.offline || remote.isSuccess) ? (
         <Text style={styles.empty}>No reports saved or submitted yet.</Text>
       ) : (
         items.map((item) => (
@@ -239,7 +265,7 @@ function AccountReports({ userId }: { userId: string }) {
               accessibilityLabel={
                 item.status === 'Uploading'
                   ? 'Upload status: Uploading'
-                  : undefined
+                  : item.status
               }
               style={[
                 styles.status,
@@ -257,10 +283,9 @@ function AccountReports({ userId }: { userId: string }) {
               </Text>
             )}
             <Text style={styles.detail}>
-              {item.evidenceLabel} ·{' '}
-              {item.mediaCount === null
-                ? 'Attachment count unavailable'
-                : `${item.mediaCount} ${item.mediaCount === 1 ? 'file' : 'files'}`}
+              {item.evidenceLabel}
+              {!!item.mediaCount &&
+                ` · ${item.mediaCount} ${item.mediaCount === 1 ? 'file' : 'files'}`}
             </Text>
             <Text style={styles.detail}>{formatDateTime(item.createdAt)}</Text>
             <Text style={styles.detail}>{item.detail}</Text>
@@ -312,6 +337,7 @@ const styles = StyleSheet.create({
     marginVertical: 16,
   },
   action: {
+    borderRadius: 12,
     minHeight: 48,
     justifyContent: 'center',
     paddingHorizontal: 16,

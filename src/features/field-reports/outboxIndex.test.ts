@@ -114,6 +114,30 @@ it('persists the frozen manifest, upload progress and owner partition', async ()
       (await createOutboxIndex(db)).list('alice'),
     ).resolves.toHaveLength(1);
     const persisted = (await index.get('alice', row.captureId))!;
+    const historical = {
+      ...persisted,
+      captureId: '60000000-0000-4000-8000-000000000006',
+      manifest: {
+        ...persisted.manifest,
+        captureId: '60000000-0000-4000-8000-000000000006',
+      },
+      submissionState: 'submitted' as const,
+      submittedAt: '2026-09-24T12:51:35.211Z',
+      confirmedPayload: {
+        text: 'Historical receipt',
+        workDate: '2099-08-12',
+        activityId: null,
+      },
+    };
+    await index.put(historical);
+    const reopened = await createOutboxIndex(db);
+    await expect(reopened.list('alice')).resolves.toEqual(
+      expect.arrayContaining([historical, persisted]),
+    );
+    await expect(reopened.get('alice', historical.captureId)).resolves.toEqual(
+      historical,
+    );
+    await index.remove('alice', historical.captureId);
     await index.put({
       ...persisted,
       state: 'failed',

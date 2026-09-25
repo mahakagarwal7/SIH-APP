@@ -13,6 +13,53 @@ export const languageNames: Record<AppLocale, string> = {
 // English source copy is the key so untranslated additions remain readable.
 // The coverage test keeps every visible static phrase represented here.
 export const hiTranslations: Readonly<Record<string, string>> = {
+  'Local development build': 'स्थानीय विकास बिल्ड',
+  'Both workspaces use the same project. Your role determines the actions available to you.':
+    'दोनों कार्यक्षेत्र एक ही परियोजना का उपयोग करते हैं। आपकी भूमिका के अनुसार विकल्प उपलब्ध होते हैं।',
+  'Before accepting this claim:': 'इस दावे को स्वीकार करने से पहले:',
+  'Add a decision reason. A reason is also required to reject a claim.':
+    'निर्णय का कारण लिखें। दावा अस्वीकार करने के लिए भी कारण आवश्यक है।',
+  'Select a matching activity from the active schedule.':
+    'सक्रिय अनुसूची से संबंधित गतिविधि चुनें।',
+  "Resolve the selected activity's mismatch before accepting.":
+    'स्वीकार करने से पहले चुनी गई गतिविधि का बेमेल विवरण ठीक करें।',
+  "Complete this claim's outstanding follow-up before accepting it.":
+    'इस दावे को स्वीकार करने से पहले लंबित अनुवर्ती कार्य पूरा करें।',
+  'Resolve the validation flags shown above through clarification or review.':
+    'स्पष्टीकरण या समीक्षा के माध्यम से ऊपर दिखाई गई जाँच संबंधी समस्याएँ हल करें।',
+  'Choose the work date supported by the evidence.':
+    'साक्ष्य के अनुसार कार्य की तारीख चुनें।',
+  'Close activity search': 'गतिविधि खोज बंद करें',
+  'Choose activity': 'गतिविधि चुनें',
+  'Search activities': 'गतिविधियाँ खोजें',
+  'Search by name, code or location': 'नाम, कोड या स्थान से खोजें',
+  'No matching activities.': 'कोई संबंधित गतिविधि नहीं मिली।',
+  'Showing up to eight matches. Refine your search to find an activity.':
+    'अधिकतम आठ परिणाम दिखाए गए हैं। गतिविधि ढूँढने के लिए खोज को और स्पष्ट करें।',
+  'Retry device reports': 'डिवाइस की रिपोर्ट फिर लोड करें',
+  'Could not read some saved reports from this device. Available reports are shown below; saved files have not been removed.':
+    'इस डिवाइस की कुछ सहेजी गई रिपोर्ट नहीं पढ़ी जा सकीं। उपलब्ध रिपोर्ट नीचे हैं; सहेजी गई फ़ाइलें नहीं हटाई गई हैं।',
+  'Open My reports to check your saved draft and send it for review.':
+    'सहेजा गया ड्राफ़्ट जाँचने और समीक्षा के लिए भेजने हेतु मेरी रिपोर्ट खोलें।',
+  'Open My reports': 'मेरी रिपोर्ट खोलें',
+  'Retry upload': 'अपलोड फिर करें',
+  'This is your personal task list. Open Manager Schedule to see all project activities.':
+    'यह आपकी व्यक्तिगत कार्य सूची है। परियोजना की सभी गतिविधियाँ देखने के लिए प्रबंधक की अनुसूची खोलें।',
+  'View project schedule': 'परियोजना की अनुसूची देखें',
+  'Could not prepare this recording for upload. The device copy is still saved.':
+    'यह रिकॉर्डिंग अपलोड के लिए तैयार नहीं हो सकी। डिवाइस पर प्रति सुरक्षित है।',
+  'Could not read upload status. The device copy is still saved.':
+    'अपलोड की स्थिति नहीं पढ़ी जा सकी। डिवाइस पर प्रति सुरक्षित है।',
+  'Could not upload this recording. Your Send request is saved; retry when connected.':
+    'यह रिकॉर्डिंग अपलोड नहीं हो सकी। भेजने का अनुरोध सुरक्षित है; कनेक्ट होने पर फिर प्रयास करें।',
+  'Upload needs attention. Retry when connected.':
+    'अपलोड में समस्या है। कनेक्ट होने पर फिर प्रयास करें।',
+  'Transcript unavailable until upload resumes.':
+    'अपलोड दोबारा शुरू होने तक प्रतिलेख उपलब्ध नहीं है।',
+  'Waiting for a connection.': 'कनेक्शन की प्रतीक्षा है।',
+  'Waiting for upload.': 'अपलोड की प्रतीक्षा है।',
+  'Project report': 'परियोजना की रिपोर्ट',
+  'Imported report': 'आयात की गई रिपोर्ट',
   'ACCEPTED PROGRESS': 'स्वीकृत प्रगति',
   'Review before acceptance': 'स्वीकृति से पहले समीक्षा करें',
   'Confirm acceptance': 'स्वीकृति की पुष्टि करें',
@@ -1135,4 +1182,12 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   'Reference navigation preview. Alerts selected.':
     'संदर्भ नेविगेशन पूर्वावलोकन। अलर्ट चुना गया है।',
   'VIEW DETAILS': 'विवरण देखें',
+  'Tasks show accepted completions against the plan. Bars show mean accepted progress. Metrics without confirmed data show Not recorded.':
+    'कार्य योजना के अनुसार स्वीकृत पूर्णताएँ दिखाते हैं। बार औसत स्वीकृत प्रगति दिखाते हैं। पुष्टि किए गए डेटा के बिना आँकड़े दर्ज नहीं के रूप में दिखते हैं।',
+  'Waiting for server transcription…':
+    'सर्वर से प्रतिलेख मिलने की प्रतीक्षा है…',
+  'The recording has uploaded. You can leave this screen; progress appears in My reports.':
+    'रिकॉर्डिंग अपलोड हो गई है। आप इस स्क्रीन से जा सकते हैं; स्थिति मेरी रिपोर्ट में दिखेगी।',
+  'Uploaded. Waiting for the server to finish transcription or photo validation.':
+    'अपलोड हो गया। सर्वर पर प्रतिलेख या फ़ोटो की जाँच पूरी होने की प्रतीक्षा है।',
 };

@@ -26,6 +26,16 @@ const event = {
   effective: true,
 } as ExecutionHistoryEntry;
 
+it('does not invent zero progress when the active schedule has no recorded percentages', () => {
+  const unknown = { ...activity, acceptedPercent: null };
+  expect(overviewSummary([unknown], 0).completionPercent).toBeNull();
+  expect(disciplineProgress([unknown])[0]?.percent).toBeNull();
+  expect(overviewSummary([unknown, activity], 0).completionPercent).toBeNull();
+  expect(
+    overviewSummary([{ ...unknown, acceptedPercent: 0 }], 0).completionPercent,
+  ).toBe(0);
+});
+
 it('aggregates accepted activity percentages without inferring from quantities', () => {
   const activities: ScheduleActivity[] = [
     activity,

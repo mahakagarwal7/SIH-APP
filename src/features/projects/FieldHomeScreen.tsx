@@ -35,10 +35,10 @@ function ActionTile({
       <Pressable
         accessibilityLabel={label}
         accessibilityRole="button"
-        style={[
+        style={StyleSheet.flatten([
           styles.actionTile,
           { backgroundColor, borderColor: accentColor },
-        ]}
+        ])}
       >
         <View style={[styles.actionIcon, { backgroundColor: accentColor }]}>
           <Feather color="#ffffff" name={icon} size={24} />

@@ -70,9 +70,7 @@ function ManagerHeader({
       {projectName && (
         <View style={styles.projectRow}>
           <View style={styles.projectCopy}>
-            <Text numberOfLines={2} style={styles.projectName}>
-              {projectName}
-            </Text>
+            <Text style={styles.projectName}>{projectName}</Text>
             {scheduleLabel && (
               <Text style={styles.revisionLabel}>{scheduleLabel}</Text>
             )}
@@ -242,10 +240,9 @@ export function ManagerOverviewScreen() {
               />
             </View>
             <Text style={styles.basis}>
-              Tasks count accepted-finished activities over planned activities.
-              Bars show mean accepted progress. Worker, delay, health and
-              variance definitions are not available in the current production
-              contract.
+              Tasks show accepted completions against the plan. Bars show mean
+              accepted progress. Metrics without confirmed data show Not
+              recorded.
             </Text>
 
             {summary.unresolvedProgress > 0 && (
@@ -284,16 +281,26 @@ export function ManagerOverviewScreen() {
                           {row.discipline}
                         </Text>
                         <Text style={[styles.progressPercent, { color }]}>
-                          {row.percent}%
+                          {row.percent === null
+                            ? 'Not recorded'
+                            : `${row.percent}%`}
                         </Text>
                       </View>
                       <View
-                        accessibilityLabel={`${row.discipline}: ${row.percent}% mean accepted progress across ${row.planned} ${row.planned === 1 ? 'activity' : 'activities'}`}
+                        accessibilityLabel={
+                          row.percent === null
+                            ? `${row.discipline}: Progress not recorded`
+                            : `${row.discipline}: ${row.percent}% mean accepted progress across ${row.planned} ${row.planned === 1 ? 'activity' : 'activities'}`
+                        }
                         accessibilityRole="progressbar"
                         accessibilityValue={{
                           min: 0,
                           max: 100,
-                          now: row.percent,
+                          now: row.percent ?? undefined,
+                          text:
+                            row.percent === null
+                              ? 'Not recorded'
+                              : `${row.percent}%`,
                         }}
                         style={styles.track}
                       >
@@ -302,7 +309,7 @@ export function ManagerOverviewScreen() {
                             styles.fill,
                             {
                               backgroundColor: color,
-                              width: `${row.percent}%`,
+                              width: `${row.percent ?? 0}%`,
                             },
                           ]}
                         />
@@ -427,9 +434,9 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   settings: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#ffffff',
@@ -438,15 +445,16 @@ const styles = StyleSheet.create({
   },
   projectRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 12,
     paddingBottom: 10,
   },
-  projectCopy: { flex: 1, minWidth: 0 },
+  projectCopy: { flexGrow: 1, flexBasis: '100%', minWidth: 0 },
   projectName: {
     color: '#17283a',
-    fontSize: 25,
-    lineHeight: 31,
+    fontSize: 22,
+    lineHeight: 28,
     fontWeight: '900',
   },
   revisionLabel: {

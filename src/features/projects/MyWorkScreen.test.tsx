@@ -41,7 +41,7 @@ jest.mock('./myWorkService', () => ({
 }));
 jest.mock('expo-router', () => ({
   useFocusEffect: jest.fn(),
-  Link: ({ children }: { children: React.ReactNode }) => children,
+  Link: jest.requireActual('expo-router/build/ui/Slot').Slot,
 }));
 
 const member = {
@@ -171,7 +171,12 @@ it('matches the task-list shell without treating quantity as completion', async 
   expect(screen.getByRole('button', { name: 'Previous day' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Next day' })).toBeVisible();
   expect(screen.getByText('START')).toBeVisible();
-  expect(screen.getByText('0%')).toBeVisible();
+  expect(screen.getByText('—')).toBeVisible();
+  expect(
+    screen.getByRole('button', {
+      name: /Line erection.*Progress not recorded/,
+    }),
+  ).toBeVisible();
   expect(screen.queryByText('DONE')).toBeNull();
   expect(screen.getByText('Site project')).toBeVisible();
   expect(

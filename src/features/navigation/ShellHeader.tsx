@@ -19,11 +19,13 @@ export function ShellHeader() {
   return (
     <View style={styles.header}>
       <View style={styles.row}>
-        <View>
+        <View style={styles.identity}>
           <Text style={[shellStyles.heading, styles.brand]}>Nirmaan.</Text>
           <Text style={styles.workspace}>{workspace}</Text>
         </View>
-        {pathname !== '/account' && <NavLink href="/account" label="Account" />}
+        {pathname !== '/account' && (
+          <NavLink href="/account" label="Account" compact />
+        )}
       </View>
       <View style={[styles.row, styles.project]}>
         <Text style={styles.projectText}>
@@ -37,8 +39,12 @@ export function ShellHeader() {
                 : 'No active project access'))}
         </Text>
         <View style={styles.switches}>
-          <NavLink href="/workspaces" label="Switch workspace" />
-          <NavLink href="/projects" label="Change project" />
+          {pathname !== '/workspaces' && (
+            <NavLink href="/workspaces" label="Switch workspace" compact />
+          )}
+          {pathname !== '/projects' && (
+            <NavLink href="/projects" label="Change project" compact />
+          )}
         </View>
       </View>
       {offline && (
@@ -61,11 +67,17 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 4,
+    gap: 4,
   },
-  brand: { marginBottom: 0, fontSize: 30 },
+  identity: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 10,
+  },
+  brand: { marginBottom: 0, fontSize: 24, lineHeight: 34 },
   workspace: {
     color: '#627786',
     fontSize: 11,
@@ -75,9 +87,10 @@ const styles = StyleSheet.create({
   project: { borderTopWidth: 1, borderTopColor: '#d7e0e5', paddingVertical: 0 },
   projectText: {
     color: '#627786',
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: 13,
+    lineHeight: 20,
     flexShrink: 1,
+    paddingTop: 6,
   },
   switches: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   offline: {

@@ -24,6 +24,10 @@ const reportSchema = z.object({
   lifecycle: z.enum(['draft', 'submitted', 'withdrawn']),
   received_at: z.string(),
   source_kind: z.enum(['text', 'voice', 'spreadsheet']),
+  projects: z.object({ name: z.string() }).nullable().optional(),
+  report_versions: z
+    .array(z.object({ version: z.number().int(), source_text: z.string() }))
+    .optional(),
 });
 const claimSchema = z.object({
   id: z.string().uuid(),
@@ -83,7 +87,7 @@ export class ReportsReadError extends Error {
   }
 }
 
-function outboxStatus(record: OutboxRecord) {
+export function outboxStatus(record: OutboxRecord) {
   if (record.cancelRequested)
     return [
       'Canceling report',
@@ -100,7 +104,11 @@ function outboxStatus(record: OutboxRecord) {
       'Check report',
       record.lastError || 'Check the report before confirming again.',
     ] as const;
-  if (record.sendRequested)
+  if (
+    record.sendRequested &&
+    record.state !== 'failed' &&
+    record.state !== 'paused'
+  )
     return [
       'Sending for review',
       'The report will submit after its verified transcript is ready.',
@@ -126,7 +134,7 @@ function outboxStatus(record: OutboxRecord) {
     case 'processing':
       return [
         'Processing evidence',
-        'Voice transcription or photo validation is in progress.',
+        'Uploaded. Waiting for the server to finish transcription or photo validation.',
       ] as const;
     case 'needs_confirmation':
       return [
@@ -203,7 +211,7 @@ export async function loadRemoteReports(
   let reportsQuery = client
     .from('reports')
     .select(
-      'id,project_id,author_id,capture_id,current_version,lifecycle,received_at,source_kind',
+      'id,project_id,author_id,capture_id,current_version,lifecycle,received_at,source_kind,projects(name),report_versions(version,source_text)',
     )
     .eq('author_id', userId)
     .order('received_at', { ascending: false })
@@ -292,6 +300,8 @@ export function mergeMyReports(
 ): MyReportItem[] {
   const remoteByCapture = new Map(remote.map((row) => [row.capture_id, row]));
   const outboxByCapture = new Map(outbox.map((row) => [row.captureId, row]));
+  const voiceIds = new Set(voice.map((row) => row.id));
+  const reportByCapture = new Map(reports.map((row) => [row.id, row]));
   const items: MyReportItem[] = [];
   for (const row of outbox) {
     const server = remoteByCapture.get(row.captureId);
@@ -342,6 +352,7 @@ export function mergeMyReports(
   }
   for (const row of voice) {
     if (outboxByCapture.has(row.id)) continue;
+    const companion = reportByCapture.get(row.id);
     items.push({
       captureId: row.id,
       reportId: null,
@@ -349,9 +360,13 @@ export function mergeMyReports(
       projectName: row.projectName,
       createdAt: row.createdAt,
       kind: 'voice',
-      evidenceLabel: 'Voice',
-      summary: '',
-      mediaCount: 1,
+      evidenceLabel: reportEvidenceLabel({
+        hasVoice: true,
+        hasText: !!companion?.text.trim(),
+        hasPhoto: !!companion?.photos.length,
+      }),
+      summary: companion?.text.trim() ?? '',
+      mediaCount: 1 + (companion?.photos.length ?? 0),
       status: row.available ? 'Saved on device' : 'Local draft incomplete',
       detail: row.available
         ? 'Waiting to sync.'
@@ -363,7 +378,7 @@ export function mergeMyReports(
     });
   }
   for (const row of reports) {
-    if (outboxByCapture.has(row.id)) continue;
+    if (outboxByCapture.has(row.id) || voiceIds.has(row.id)) continue;
     items.push({
       captureId: row.id,
       reportId: null,
@@ -388,17 +403,41 @@ export function mergeMyReports(
       canOpen: false,
     });
   }
+  // Local stores can be read independently of the outbox. Coalesce their
+  // evidence with the server receipt even if the outbox is unavailable.
+  for (const item of items) {
+    const server = remoteByCapture.get(item.captureId);
+    if (!server) continue;
+    item.reportId = server.id;
+    if (server.lifecycle !== 'draft') {
+      const delivery = reportDeliveryStatus(server);
+      item.status = delivery.status;
+      item.detail = delivery.detail;
+      item.canSync = false;
+      item.canConfirm = false;
+      item.canOpen = server.lifecycle === 'submitted';
+    }
+    remoteByCapture.delete(item.captureId);
+  }
   for (const row of remoteByCapture.values()) {
     const delivery = reportDeliveryStatus(row);
     items.push({
       captureId: row.capture_id,
       reportId: row.id,
       projectId: row.project_id,
-      projectName: 'Production project',
+      projectName: row.projects?.name ?? 'Project report',
       createdAt: row.received_at,
       kind: 'remote',
-      evidenceLabel: 'Production evidence',
-      summary: '',
+      evidenceLabel:
+        row.source_kind === 'voice'
+          ? 'Voice'
+          : row.source_kind === 'text'
+            ? 'Text'
+            : 'Imported report',
+      summary:
+        row.report_versions
+          ?.find((version) => version.version === row.current_version)
+          ?.source_text.trim() ?? '',
       mediaCount: null,
       status: delivery.status,
       detail: delivery.detail,
