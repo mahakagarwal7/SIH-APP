@@ -18,6 +18,7 @@ export default function AppLayout() {
         <Stack.Screen name="field-verifications" />
         <Stack.Screen name="field-verifications/[requestId]" />
         <Stack.Screen name="task-hierarchy" />
+        <Stack.Screen name="alerts-preview" />
         <Stack.Screen name="manager" />
         <Stack.Screen name="account" />
         <Stack.Screen name="projects" />
