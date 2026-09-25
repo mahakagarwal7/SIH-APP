@@ -13,6 +13,18 @@ export const languageNames: Record<AppLocale, string> = {
 // English source copy is the key so untranslated additions remain readable.
 // The coverage test keeps every visible static phrase represented here.
 export const hiTranslations: Readonly<Record<string, string>> = {
+  'ACCEPTED PROGRESS': 'स्वीकृत प्रगति',
+  'Review before acceptance': 'स्वीकृति से पहले समीक्षा करें',
+  'Confirm acceptance': 'स्वीकृति की पुष्टि करें',
+  'Cancellation queued for retry.':
+    'रद्द करने का अनुरोध फिर प्रयास के लिए कतार में है।',
+  'Could not check whether drafts are queued. Discard is unavailable until this check succeeds.':
+    'ड्राफ़्ट की कतार स्थिति नहीं जाँची जा सकी। जाँच सफल होने तक हटाने का विकल्प उपलब्ध नहीं है।',
+  'Retry draft status': 'ड्राफ़्ट स्थिति फिर जाँचें',
+  'Sync pass finished, but some reports or server status need attention.':
+    'सिंक जाँच पूरी हुई, लेकिन कुछ रिपोर्ट या सर्वर स्थिति पर ध्यान देना आवश्यक है।',
+  'Some reports need attention.': 'कुछ रिपोर्ट पर ध्यान देना आवश्यक है।',
+  'Sync check complete.': 'सिंक जाँच पूरी हुई।',
   'Retry server status': 'सर्वर स्थिति फिर जाँचें',
   'Total is the mean accepted progress across':
     'कुल मान इन सभी गतिविधियों की औसत स्वीकृत प्रगति है:',

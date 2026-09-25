@@ -231,7 +231,11 @@ export function VoiceReviewPanel({
           ? 'Cancellation queued. Server cleanup will retry after reconnecting.'
           : 'Voice report canceled.',
       );
-      showToast('Report discarded.');
+      showToast(
+        result?.lastError
+          ? 'Cancellation queued for retry.'
+          : 'Report discarded.',
+      );
     } catch (reason) {
       if (mounted.current) {
         setError(
@@ -292,7 +296,13 @@ export function VoiceReviewPanel({
           if (value) setError('');
         }}
         required
-        value={workDate}
+        value={
+          sendQueued || submitted
+            ? (record?.requestedWorkDate ??
+              record?.confirmedPayload?.workDate ??
+              workDate)
+            : workDate
+        }
       />
       {auth.offline && (
         <Text style={styles.help}>

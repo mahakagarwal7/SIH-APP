@@ -135,14 +135,26 @@ function AccountReports({ userId }: { userId: string }) {
     setSyncing(true);
     setMessage('Syncing saved reports…');
     try {
-      await syncNativeOutbox(userId, { includePaused: true });
-      await localRefetch();
-      await remoteRefetch();
-      if (mounted.current)
+      const results = await syncNativeOutbox(userId, { includePaused: true });
+      const localResult = await localRefetch();
+      const remoteResult = await remoteRefetch();
+      const needsAttention =
+        !!localResult.error ||
+        !!remoteResult.error ||
+        results.some((record) => ['failed', 'paused'].includes(record.state));
+      if (mounted.current) {
         setMessage(
-          'Sync pass finished. Delivery status will update while the app remains open.',
+          needsAttention
+            ? 'Sync pass finished, but some reports or server status need attention.'
+            : 'Sync pass finished. Delivery status will update while the app remains open.',
         );
-      showToast('Reports synced.');
+        showToast(
+          needsAttention
+            ? 'Some reports need attention.'
+            : 'Sync check complete.',
+          needsAttention ? 'error' : 'success',
+        );
+      }
     } catch {
       if (mounted.current) {
         setMessage('Sync could not start. Saved device copies are unchanged.');

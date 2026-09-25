@@ -860,6 +860,19 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
       {playing && loadingPlayback && (
         <Text style={styles.detail}>Loading recording…</Text>
       )}
+      {outbox.error && (
+        <View>
+          <Text accessibilityRole="alert" style={styles.error}>
+            Could not check whether drafts are queued. Discard is unavailable
+            until this check succeeds.
+          </Text>
+          <Action
+            label="Retry draft status"
+            disabled={outbox.isFetching}
+            onPress={() => void outbox.refetch()}
+          />
+        </View>
+      )}
       {drafts.isPending ? (
         <Text style={shellStyles.body}>Loading drafts from this device…</Text>
       ) : drafts.error ? (
@@ -903,7 +916,13 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
                   label={
                     discarding === draft.id ? 'Discarding…' : 'Discard draft'
                   }
-                  disabled={busy || !!discarding || !!discardBlocker}
+                  disabled={
+                    busy ||
+                    !!discarding ||
+                    !!discardBlocker ||
+                    !outbox.isSuccess ||
+                    outbox.isFetching
+                  }
                   onPress={() =>
                     Alert.alert(
                       'Discard voice draft?',

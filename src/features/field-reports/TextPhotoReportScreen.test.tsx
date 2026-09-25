@@ -15,6 +15,7 @@ import { Alert } from 'react-native';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useCaptureProject } from '@/features/projects/useCaptureProject';
 
+import { getNativeOutbox } from './nativeOutbox';
 import {
   choosePhoto,
   preparePickedPhoto,
@@ -417,6 +418,44 @@ it('keeps a failed discard visible and allows the user to retry it', async () =>
   await fireEvent.press(screen.getByRole('button', { name: 'Discard draft' }));
   await screen.findByText('No text or photo drafts saved yet.');
   expect(discard).toHaveBeenCalledTimes(2);
+});
+
+it('keeps discard disabled until queued-draft status is known', async () => {
+  let resolveOutbox!: (rows: unknown[]) => void;
+  list.mockResolvedValue([savedDraft]);
+  jest.mocked(getNativeOutbox).mockResolvedValueOnce({
+    list: () =>
+      new Promise((resolve) => {
+        resolveOutbox = resolve;
+      }),
+  } as never);
+  await render(<App />);
+  await screen.findByText(savedDraft.text);
+  expect(screen.getByRole('button', { name: 'Discard draft' })).toBeDisabled();
+  await act(() => resolveOutbox([]));
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Discard draft' })).toBeEnabled(),
+  );
+});
+
+it('explains and retries a failed queued-draft status read', async () => {
+  list.mockResolvedValue([savedDraft]);
+  jest.mocked(getNativeOutbox).mockResolvedValueOnce({
+    list: async () => {
+      throw new Error('Storage unavailable');
+    },
+  } as never);
+  await render(<App />);
+  expect(
+    await screen.findByText(/Could not check whether drafts are queued/),
+  ).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Discard draft' })).toBeDisabled();
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Retry draft status' }),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Discard draft' })).toBeEnabled(),
+  );
 });
 
 it('prevents retry and repeated discard while incomplete-save deletion is pending', async () => {

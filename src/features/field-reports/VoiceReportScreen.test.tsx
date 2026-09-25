@@ -664,3 +664,27 @@ it('disables discard with an explanation while a draft is queued', async () => {
   ).toBeVisible();
   expect(screen.getByRole('button', { name: 'Discard draft' })).toBeDisabled();
 });
+
+it('keeps voice draft discard disabled while queued status is loading', async () => {
+  list.mockResolvedValue([
+    {
+      id: 'saved-draft',
+      projectName: 'Site project',
+      createdAt: '2026-09-24T00:00:00Z',
+      duration: 2,
+      state: 'saved',
+      available: true,
+    },
+  ]);
+  let resolveOutbox!: (rows: unknown[]) => void;
+  jest.mocked(getNativeOutbox).mockResolvedValueOnce({
+    list: () =>
+      new Promise((resolve) => {
+        resolveOutbox = resolve;
+      }),
+  } as never);
+  await render(<App />);
+  expect(await screen.findByText(/2\.0 seconds/)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Discard draft' })).toBeDisabled();
+  await act(() => resolveOutbox([]));
+});

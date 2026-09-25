@@ -72,7 +72,7 @@ it('matches the field home summary and action layout', async () => {
   expect(screen.getByText('Nirmaan')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Open settings' })).toBeVisible();
   expect(screen.getByText('0%')).toBeVisible();
-  expect(screen.getByText('ACTIVITIES DONE')).toBeVisible();
+  expect(screen.getByText('ACCEPTED PROGRESS')).toBeVisible();
   expect(screen.getByText('Site project')).toBeVisible();
   expect(screen.getByText('Unit 2')).toBeVisible();
   expect(screen.getByText('Line erection')).toBeVisible();

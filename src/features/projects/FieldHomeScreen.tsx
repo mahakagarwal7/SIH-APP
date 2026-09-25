@@ -175,7 +175,7 @@ export function FieldHomeScreen() {
               <Text style={styles.percent}>
                 {summary.percent === null ? '—' : `${summary.percent}%`}
               </Text>
-              <Text style={styles.doneLabel}>ACTIVITIES DONE</Text>
+              <Text style={styles.doneLabel}>ACCEPTED PROGRESS</Text>
             </View>
             <View style={styles.summaryCopy}>
               <Text numberOfLines={1} style={styles.projectLabel}>

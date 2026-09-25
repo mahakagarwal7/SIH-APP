@@ -231,17 +231,18 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
     }
   };
   const accept = async () => {
+    if (!currentPreview) {
+      await runPreview();
+      return;
+    }
     const client = getSupabase();
-    const command = currentPreview?.command ?? makeBaseDecision('accept');
-    if (!canWrite || !command || !client) return;
+    if (!canWrite || !client) return;
     setBusy(true);
     setMessage('');
     try {
-      const acceptedPreview =
-        currentPreview?.data ?? (await previewDecision(client, command));
       await submitDecision(client, {
-        ...command,
-        previewHash: acceptedPreview.previewHash,
+        ...currentPreview.command,
+        previewHash: currentPreview.data.previewHash,
       });
       showToast('Claim accepted.');
       leave(true);
@@ -560,7 +561,11 @@ export function DecisionScreen({ claimId }: { claimId: string }) {
                 (busy || !canPreview || !dateValid) && styles.disabled,
               ]}
             >
-              <Text style={styles.primaryText}>Accept verified event</Text>
+              <Text style={styles.primaryText}>
+                {currentPreview
+                  ? 'Confirm acceptance'
+                  : 'Review before acceptance'}
+              </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"

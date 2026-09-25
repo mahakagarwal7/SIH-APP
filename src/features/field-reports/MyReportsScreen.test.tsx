@@ -25,6 +25,10 @@ import type { RemoteReport } from './myReportsService';
 import type { OutboxRecord } from './outbox';
 import type { AuthViewState } from '@/features/auth/AuthProvider';
 
+const mockShowToast = jest.fn();
+jest.mock('@/components/ToastProvider', () => ({
+  useToast: () => ({ showToast: mockShowToast }),
+}));
 jest.mock('@/features/auth/AuthProvider', () => ({ useAuth: jest.fn() }));
 jest.mock('./nativeDraftStore', () => ({ getVoiceDraftStore: jest.fn() }));
 jest.mock('./nativeReportDraftStore', () => ({
@@ -66,6 +70,7 @@ function App() {
 }
 
 beforeEach(() => {
+  mockShowToast.mockReset();
   AppState.currentState = 'active';
   jest.mocked(useAuth).mockReturnValue({
     status: 'signedIn',
@@ -231,6 +236,24 @@ it('manually retries paused work and reports completion without claiming submiss
     ),
   ).toBeVisible();
   expect(screen.queryByText('Sent for review')).toBeNull();
+  expect(mockShowToast).toHaveBeenCalledWith('Sync check complete.', 'success');
+});
+
+it('does not claim sync success when an outbox item is still failed', async () => {
+  jest
+    .mocked(syncNativeOutbox)
+    .mockResolvedValueOnce([{ state: 'failed' }] as OutboxRecord[]);
+  await render(<App />);
+  await fireEvent.press(
+    await screen.findByRole('button', { name: 'Sync now' }),
+  );
+  expect(
+    await screen.findByText(/some reports or server status need attention/),
+  ).toBeVisible();
+  expect(mockShowToast).toHaveBeenCalledWith(
+    'Some reports need attention.',
+    'error',
+  );
 });
 
 it('re-enables Sync now when a pass finishes after the tab loses focus', async () => {
