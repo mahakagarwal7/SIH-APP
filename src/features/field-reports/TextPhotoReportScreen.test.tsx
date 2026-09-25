@@ -35,6 +35,9 @@ jest.mock('./nativeReportDraftStore', () => ({
 }));
 jest.mock('./nativeOutbox', () => ({
   assertLocalDraftCanBeDiscarded: jest.fn(async () => {}),
+  getNativeOutbox: jest.fn(async () => ({ list: async () => [] })),
+  localDraftDiscardBlocker: (record: unknown) =>
+    record ? 'Device copy required while queued.' : null,
 }));
 jest.mock('./nativePhotoPicker', () => ({
   takePhoto: jest.fn(),

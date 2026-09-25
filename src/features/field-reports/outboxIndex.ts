@@ -87,6 +87,7 @@ export async function createOutboxIndex(
       uploadedFiles TEXT NOT NULL,
       originalTranscript TEXT,
       sendRequested INTEGER NOT NULL DEFAULT 0 CHECK(sendRequested IN (0,1)),
+      requestedWorkDate TEXT,
       cancelRequested INTEGER NOT NULL DEFAULT 0 CHECK(cancelRequested IN (0,1)),
       confirmedPayload TEXT,
       confirmedActivityLabel TEXT,
@@ -120,6 +121,10 @@ export async function createOutboxIndex(
   if (!columns.has('sendRequested'))
     await db.execAsync(
       'ALTER TABLE local_field_outbox ADD COLUMN sendRequested INTEGER NOT NULL DEFAULT 0 CHECK(sendRequested IN (0,1))',
+    );
+  if (!columns.has('requestedWorkDate'))
+    await db.execAsync(
+      'ALTER TABLE local_field_outbox ADD COLUMN requestedWorkDate TEXT',
     );
   if (!columns.has('cancelRequested'))
     await db.execAsync(
@@ -168,12 +173,12 @@ export async function createOutboxIndex(
     async put(record) {
       const result = await db.runAsync(
         `INSERT INTO local_field_outbox
-          (captureId,userId,projectId,projectName,kind,createdAt,text,manifest,reportId,uploadedFiles,originalTranscript,sendRequested,cancelRequested,confirmedPayload,submissionState,submittedAt,evidenceReleased,state,attemptCount,lastErrorKind,lastError,updatedAt,retryable,submissionRejected,confirmedActivityLabel)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+          (captureId,userId,projectId,projectName,kind,createdAt,text,manifest,reportId,uploadedFiles,originalTranscript,sendRequested,requestedWorkDate,cancelRequested,confirmedPayload,submissionState,submittedAt,evidenceReleased,state,attemptCount,lastErrorKind,lastError,updatedAt,retryable,submissionRejected,confirmedActivityLabel)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(captureId) DO UPDATE SET
           userId=excluded.userId,projectId=excluded.projectId,projectName=excluded.projectName,kind=excluded.kind,
           createdAt=excluded.createdAt,text=excluded.text,manifest=excluded.manifest,reportId=excluded.reportId,
-          uploadedFiles=excluded.uploadedFiles,originalTranscript=excluded.originalTranscript,sendRequested=excluded.sendRequested,cancelRequested=excluded.cancelRequested,
+          uploadedFiles=excluded.uploadedFiles,originalTranscript=excluded.originalTranscript,sendRequested=excluded.sendRequested,requestedWorkDate=excluded.requestedWorkDate,cancelRequested=excluded.cancelRequested,
           confirmedPayload=excluded.confirmedPayload,submissionState=excluded.submissionState,
           submittedAt=excluded.submittedAt,evidenceReleased=excluded.evidenceReleased,
           state=excluded.state,attemptCount=excluded.attemptCount,
@@ -190,6 +195,7 @@ export async function createOutboxIndex(
            AND (local_field_outbox.originalTranscript IS NULL OR local_field_outbox.originalTranscript=excluded.originalTranscript)
            AND (local_field_outbox.sendRequested<=excluded.sendRequested
              OR (excluded.cancelRequested=1 AND excluded.sendRequested=0))
+           AND (local_field_outbox.requestedWorkDate IS NULL OR local_field_outbox.requestedWorkDate=excluded.requestedWorkDate)
            AND local_field_outbox.cancelRequested<=excluded.cancelRequested
            AND (local_field_outbox.confirmedPayload IS NULL OR local_field_outbox.confirmedPayload=excluded.confirmedPayload
              OR (local_field_outbox.submissionRejected=1 AND excluded.submissionRejected=0
@@ -212,6 +218,7 @@ export async function createOutboxIndex(
         JSON.stringify(record.uploadedFiles),
         record.originalTranscript,
         record.sendRequested ? 1 : 0,
+        record.requestedWorkDate ?? null,
         record.cancelRequested ? 1 : 0,
         record.confirmedPayload
           ? JSON.stringify(record.confirmedPayload)

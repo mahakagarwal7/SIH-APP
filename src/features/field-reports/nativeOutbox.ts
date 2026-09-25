@@ -261,4 +261,7 @@ export async function cancelNativeOutboxCapture(
     await reportStore.discardAfterCancellation(userId, captureId);
 }
 
-export { assertLocalDraftCanBeDiscarded } from './nativeOutboxIndex';
+export {
+  assertLocalDraftCanBeDiscarded,
+  localDraftDiscardBlocker,
+} from './nativeOutboxIndex';

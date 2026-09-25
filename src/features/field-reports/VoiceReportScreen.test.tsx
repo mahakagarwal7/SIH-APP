@@ -14,7 +14,10 @@ import { useCaptureProject } from '@/features/projects/useCaptureProject';
 import { androidMicrophone } from './androidMicrophone';
 import { saveCombinedVoiceDraft } from './combinedDraftStore';
 import { getVoiceDraftStore } from './nativeDraftStore';
-import { assertLocalDraftCanBeDiscarded } from './nativeOutbox';
+import {
+  assertLocalDraftCanBeDiscarded,
+  getNativeOutbox,
+} from './nativeOutbox';
 import { choosePhoto, preparePickedPhoto } from './nativePhotoPicker';
 import { VoiceReportScreen } from './VoiceReportScreen.android';
 
@@ -50,6 +53,9 @@ jest.mock('./nativePhotoPicker', () => ({
 }));
 jest.mock('./nativeOutbox', () => ({
   assertLocalDraftCanBeDiscarded: jest.fn(async () => {}),
+  getNativeOutbox: jest.fn(async () => ({ list: async () => [] })),
+  localDraftDiscardBlocker: (record: unknown) =>
+    record ? 'Device copy required while queued.' : null,
 }));
 jest.mock('./ReportMethodLinks', () => ({ ReportMethodLinks: () => null }));
 jest.mock('./VoiceReviewPanel.native', () => {
@@ -636,4 +642,25 @@ it('retains local evidence after the draft enters the outbox', async () => {
   expect(discard).not.toHaveBeenCalled();
   expect(await screen.findByText('Keep this device copy.')).toBeVisible();
   alert.mockRestore();
+});
+
+it('disables discard with an explanation while a draft is queued', async () => {
+  list.mockResolvedValue([
+    {
+      id: 'queued-draft',
+      projectName: 'Site project',
+      createdAt: '2026-09-24T00:00:00Z',
+      duration: 2,
+      state: 'saved',
+      available: true,
+    },
+  ]);
+  jest.mocked(getNativeOutbox).mockResolvedValue({
+    list: async () => [{ captureId: 'queued-draft' }],
+  } as never);
+  await render(<App />);
+  expect(
+    await screen.findByText('Device copy required while queued.'),
+  ).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Discard draft' })).toBeDisabled();
 });

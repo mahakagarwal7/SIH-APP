@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 
+import { useToast } from '@/components/ToastProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useLocalization } from '@/features/localization/LocalizationProvider';
 import {
@@ -30,7 +31,11 @@ import { useCaptureProject } from '@/features/projects/useCaptureProject';
 import { androidMicrophone } from './androidMicrophone';
 import { saveCombinedVoiceDraft } from './combinedDraftStore';
 import { getVoiceDraftStore } from './nativeDraftStore';
-import { assertLocalDraftCanBeDiscarded } from './nativeOutbox';
+import {
+  assertLocalDraftCanBeDiscarded,
+  getNativeOutbox,
+  localDraftDiscardBlocker,
+} from './nativeOutbox';
 import {
   choosePhoto,
   preparePickedPhoto,
@@ -489,6 +494,7 @@ function CapturePanel({
 
 function AccountVoiceScreen({ userId }: { userId: string }) {
   const auth = useAuth();
+  const { showToast } = useToast();
   const router = useRouter();
   const project = useCaptureProject();
   const client = useQueryClient();
@@ -509,6 +515,11 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
     queryKey: ['voice-drafts', userId],
     networkMode: 'always',
     queryFn: async () => (await getVoiceDraftStore()).list(userId),
+  });
+  const outbox = useQuery({
+    queryKey: ['field-outbox', userId],
+    networkMode: 'always',
+    queryFn: async () => (await getNativeOutbox()).list(userId),
   });
   const context =
     !project.error && project.data?.member.user_id === userId
@@ -611,6 +622,7 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
   useFocusEffect(
     useCallback(() => {
       void client.invalidateQueries({ queryKey: ['voice-drafts', userId] });
+      void client.invalidateQueries({ queryKey: ['field-outbox', userId] });
       return stopPlayback;
     }, [client, userId, stopPlayback]),
   );
@@ -675,12 +687,14 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
     try {
       await assertLocalDraftCanBeDiscarded(userId, id);
       await (await getVoiceDraftStore()).discard(userId, id);
+      showToast('Report discarded.');
     } catch (failure) {
       setError(
         failure instanceof Error
           ? failure.message
           : 'Could not finish discarding. Retry the discard action.',
       );
+      showToast('Report could not be discarded.', 'error');
     } finally {
       setDiscarding(null);
       void client.invalidateQueries({ queryKey: ['voice-drafts', userId] });
@@ -855,52 +869,60 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
       ) : drafts.data?.length === 0 ? (
         <Text style={styles.empty}>No voice drafts saved yet.</Text>
       ) : (
-        drafts.data?.map((draft) => (
-          <View key={draft.id} style={shellStyles.card}>
-            <Text style={styles.mode}>
-              {draft.available
-                ? 'Saved on device'
-                : draft.state === 'deleting'
-                  ? 'Discard incomplete'
-                  : 'Recording incomplete or missing'}
-            </Text>
-            <Text style={shellStyles.cardTitle}>{draft.projectName}</Text>
-            <Text style={shellStyles.body}>
-              {draft.duration.toFixed(1)} seconds ·{' '}
-              {formatDateTime(draft.createdAt)}
-            </Text>
-            <Text style={styles.detail}>Not sent for review</Text>
-            <View style={styles.actions}>
-              <Action
-                label={playing === draft.id ? 'Stop playback' : 'Listen'}
-                disabled={!draft.available || busy || !!discarding}
-                onPress={() =>
-                  playing === draft.id ? stopPlayback() : void play(draft.id)
-                }
-              />
-              <Action
-                label={
-                  discarding === draft.id ? 'Discarding…' : 'Discard draft'
-                }
-                disabled={busy || !!discarding}
-                onPress={() =>
-                  Alert.alert(
-                    'Discard voice draft?',
-                    'The recording will be permanently removed from this device.',
-                    [
-                      { text: 'Keep draft', style: 'cancel' },
-                      {
-                        text: 'Discard',
-                        style: 'destructive',
-                        onPress: () => void discard(draft.id),
-                      },
-                    ],
-                  )
-                }
-              />
+        drafts.data?.map((draft) => {
+          const discardBlocker = localDraftDiscardBlocker(
+            outbox.data?.find((row) => row.captureId === draft.id) ?? null,
+          );
+          return (
+            <View key={draft.id} style={shellStyles.card}>
+              <Text style={styles.mode}>
+                {draft.available
+                  ? 'Saved on device'
+                  : draft.state === 'deleting'
+                    ? 'Discard incomplete'
+                    : 'Recording incomplete or missing'}
+              </Text>
+              <Text style={shellStyles.cardTitle}>{draft.projectName}</Text>
+              <Text style={shellStyles.body}>
+                {draft.duration.toFixed(1)} seconds ·{' '}
+                {formatDateTime(draft.createdAt)}
+              </Text>
+              <Text style={styles.detail}>Not sent for review</Text>
+              {!!discardBlocker && (
+                <Text style={styles.detail}>{discardBlocker}</Text>
+              )}
+              <View style={styles.actions}>
+                <Action
+                  label={playing === draft.id ? 'Stop playback' : 'Listen'}
+                  disabled={!draft.available || busy || !!discarding}
+                  onPress={() =>
+                    playing === draft.id ? stopPlayback() : void play(draft.id)
+                  }
+                />
+                <Action
+                  label={
+                    discarding === draft.id ? 'Discarding…' : 'Discard draft'
+                  }
+                  disabled={busy || !!discarding || !!discardBlocker}
+                  onPress={() =>
+                    Alert.alert(
+                      'Discard voice draft?',
+                      'The recording will be permanently removed from this device.',
+                      [
+                        { text: 'Keep draft', style: 'cancel' },
+                        {
+                          text: 'Discard',
+                          style: 'destructive',
+                          onPress: () => void discard(draft.id),
+                        },
+                      ],
+                    )
+                  }
+                />
+              </View>
             </View>
-          </View>
-        ))
+          );
+        })
       )}
     </ShellPage>
   );

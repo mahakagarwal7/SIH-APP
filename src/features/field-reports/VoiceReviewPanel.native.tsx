@@ -3,6 +3,8 @@ import { createAudioPlayer } from 'expo-audio';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { useToast } from '@/components/ToastProvider';
+import { WorkDatePicker } from '@/components/WorkDatePicker';
 import { useAuth } from '@/features/auth/AuthProvider';
 import {
   LocalizedText as Text,
@@ -68,10 +70,12 @@ export function VoiceReviewPanel({
   onCanceled: (message: string) => void;
 }) {
   const auth = useAuth();
+  const { showToast } = useToast();
   const client = useQueryClient();
   const mounted = useRef(true);
   const playerRelease = useRef<(() => void) | null>(null);
   const [editedText, setEditedText] = useState<string>();
+  const [workDate, setWorkDate] = useState<string | null>(null);
   const [localSendRequested, setLocalSendRequested] = useState(false);
   const [busy, setBusy] = useState<'send' | 'cancel' | 'play' | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -162,6 +166,12 @@ export function VoiceReviewPanel({
   async function send() {
     const current = review.data;
     if (busy || current?.submissionState === 'submitted') return;
+    if (!workDate) {
+      const detail = 'Choose today or an earlier work date.';
+      setError(detail);
+      showToast(detail, 'error');
+      return;
+    }
     setLocalSendRequested(true);
     setBusy('send');
     setError('');
@@ -182,15 +192,14 @@ export function VoiceReviewPanel({
         : undefined;
       const next = await (
         await getNativeOutbox()
-      ).requestSend(
-        userId,
-        captureId,
-        readyText
-          ? { text: readyText, workDate: null, activityId: null }
-          : undefined,
-      );
+      ).requestSend(userId, captureId, {
+        text: readyText ?? '',
+        workDate,
+        activityId: null,
+      });
       if (!mounted.current) return;
       client.setQueryData(['voice-review', userId, captureId], next);
+      showToast('Report queued for review.');
       if (!auth.offline)
         void syncNativeOutbox(userId).finally(() => {
           if (mounted.current)
@@ -202,6 +211,7 @@ export function VoiceReviewPanel({
       if (mounted.current) {
         setLocalSendRequested(false);
         setError(reason instanceof Error ? reason.message : 'Send failed.');
+        showToast('Report could not be queued. Try again.', 'error');
       }
     } finally {
       if (mounted.current) setBusy(null);
@@ -221,11 +231,14 @@ export function VoiceReviewPanel({
           ? 'Cancellation queued. Server cleanup will retry after reconnecting.'
           : 'Voice report canceled.',
       );
+      showToast('Report discarded.');
     } catch (reason) {
-      if (mounted.current)
+      if (mounted.current) {
         setError(
           reason instanceof Error ? reason.message : 'Cancellation failed.',
         );
+        showToast('Report could not be discarded. Try again.', 'error');
+      }
     } finally {
       if (mounted.current) setBusy(null);
     }
@@ -271,6 +284,16 @@ export function VoiceReviewPanel({
           Transcribing…
         </Text>
       )}
+      <WorkDatePicker
+        disabled={sendQueued || submitted || busy !== null}
+        label="Work date"
+        onChange={(value) => {
+          setWorkDate(value);
+          if (value) setError('');
+        }}
+        required
+        value={workDate}
+      />
       {auth.offline && (
         <Text style={styles.help}>
           Offline · Upload resumes after reconnecting.
