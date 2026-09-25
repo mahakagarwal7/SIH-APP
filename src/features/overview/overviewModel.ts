@@ -16,6 +16,12 @@ export type AcceptedEventWeek = {
   count: number;
 };
 
+export type AcceptedEventDay = {
+  date: string;
+  day: string;
+  count: number;
+};
+
 const DAY_MS = 86_400_000;
 
 function utcDate(value: string) {
@@ -40,9 +46,14 @@ export function overviewSummary(
   activities: ScheduleActivity[],
   actionableClaims: number,
 ) {
+  const planned = activities.length;
+  const completed = activities.filter(
+    (activity) => activity.actualFinish,
+  ).length;
   return {
-    planned: activities.length,
-    completed: activities.filter((activity) => activity.actualFinish).length,
+    planned,
+    completed,
+    completionPercent: planned ? Math.round((completed / planned) * 100) : null,
     inProgress: activities.filter(
       (activity) => activity.actualStart && !activity.actualFinish,
     ).length,
@@ -51,6 +62,24 @@ export function overviewSummary(
     ).length,
     actionableClaims,
   };
+}
+
+export function acceptedEventDays(
+  entries: ExecutionHistoryEntry[],
+  today: string,
+) {
+  const firstDay = monday(today);
+  const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  return labels.map((day, index): AcceptedEventDay => {
+    const date = dateOnly(addDays(firstDay, index));
+    return {
+      date,
+      day,
+      count: entries.filter(
+        (entry) => entry.effective && entry.eventDate === date,
+      ).length,
+    };
+  });
 }
 
 export function disciplineProgress(activities: ScheduleActivity[]) {

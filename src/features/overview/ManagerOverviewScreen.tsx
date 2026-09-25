@@ -1,20 +1,27 @@
-import { useFocusEffect } from 'expo-router';
+import Feather from '@expo/vector-icons/Feather';
+import { Link, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 
 import {
   getActiveLocaleTag,
   useLocalization,
 } from '@/features/localization/LocalizationProvider';
 import {
-  LocalizedText as Text,
   LocalizedPressable as Pressable,
+  LocalizedText as Text,
 } from '@/features/localization/LocalizedText';
-import { NavLink, ShellPage, shellStyles } from '@/features/navigation/shellUi';
+import { shellStyles } from '@/features/navigation/shellUi';
 import { siteToday } from '@/features/projects/myWork';
 
 import {
-  acceptedEventWeeks,
+  acceptedEventDays,
   attentionReason,
   disciplineProgress,
   overviewSummary,
@@ -23,6 +30,9 @@ import {
 import { useManagerOverview } from './useManagerOverview';
 
 import type { Href } from 'expo-router';
+
+const chartColors = ['#26bf69', '#f5a623', '#4485e3', '#7655d9', '#ef6262'];
+const DONUT_SEGMENTS = 36;
 
 function dateLabel(value: string) {
   return new Intl.DateTimeFormat(getActiveLocaleTag(), {
@@ -55,6 +65,76 @@ function eventLabel(kind: string) {
           : 'Quantity evidence accepted';
 }
 
+function OverviewHeader({ displayName }: { displayName: string }) {
+  const initial = displayName.trim().charAt(0).toLocaleUpperCase() || 'N';
+  return (
+    <View style={styles.header}>
+      <View style={styles.headerTitle}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{initial}</Text>
+        </View>
+        <Text accessibilityRole="header" style={styles.title}>
+          Progress Overview
+        </Text>
+      </View>
+      <Link href="/account" asChild>
+        <Pressable
+          accessibilityLabel="Open settings"
+          accessibilityRole="button"
+          style={styles.settings}
+        >
+          <Feather color="#17354c" name="settings" size={20} />
+        </Pressable>
+      </Link>
+    </View>
+  );
+}
+
+function ActivityDonut({ percent }: { percent: number | null }) {
+  const activeSegments =
+    percent === null ? 0 : Math.round((percent / 100) * DONUT_SEGMENTS);
+  return (
+    <View
+      accessibilityLabel={
+        percent === null
+          ? 'Total activity completion not recorded'
+          : `${percent}% total activity-count completion`
+      }
+      accessibilityRole="progressbar"
+      accessibilityValue={
+        percent === null
+          ? { text: 'Not recorded' }
+          : { min: 0, max: 100, now: percent }
+      }
+      style={styles.donut}
+    >
+      {Array.from({ length: DONUT_SEGMENTS }, (_, index) => {
+        const angle = (index / DONUT_SEGMENTS) * Math.PI * 2 - Math.PI / 2;
+        return (
+          <View
+            key={index}
+            style={[
+              styles.donutSegment,
+              {
+                backgroundColor: index < activeSegments ? '#26bf69' : '#dce7df',
+                left: 54 + 43 * Math.cos(angle) - 2,
+                top: 54 + 43 * Math.sin(angle) - 6,
+                transform: [{ rotate: `${(index * 360) / DONUT_SEGMENTS}deg` }],
+              },
+            ]}
+          />
+        );
+      })}
+      <View style={styles.donutCenter}>
+        <Text style={styles.donutValue}>
+          {percent === null ? '—' : `${percent}%`}
+        </Text>
+        <Text style={styles.donutLabel}>TOTAL</Text>
+      </View>
+    </View>
+  );
+}
+
 export function ManagerOverviewScreen() {
   useLocalization();
   const { project, overview, refresh, authorized } = useManagerOverview();
@@ -66,9 +146,9 @@ export function ManagerOverviewScreen() {
     ? overviewSummary(data.snapshot.activities, data.actionableCount)
     : null;
   const disciplines = data ? disciplineProgress(data.snapshot.activities) : [];
-  const weeks = data ? acceptedEventWeeks(data.history, today) : [];
+  const days = data ? acceptedEventDays(data.history, today) : [];
   const recent = data ? recentAcceptedEvents(data.history) : [];
-  const largestWeek = Math.max(1, ...weeks.map((week) => week.count));
+  const largestDay = Math.max(1, ...days.map((day) => day.count));
 
   useFocusEffect(
     useCallback(() => {
@@ -78,409 +158,603 @@ export function ManagerOverviewScreen() {
   );
 
   return (
-    <ShellPage title="Execution overview" eyebrow="MANAGER · ACCEPTED RECORD">
-      <Text style={shellStyles.body}>
-        Start with decisions waiting for you, then inspect accepted execution.
-      </Text>
-      <View style={styles.toolbar}>
-        <Text style={styles.detail}>
-          {project.data?.project.name || 'No project selected'}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: project.offline || busy }}
-          disabled={project.offline || busy}
-          onPress={() => void refresh()}
-          style={[styles.refresh, (project.offline || busy) && styles.disabled]}
-        >
-          <Text style={shellStyles.linkText}>
-            {busy ? 'Refreshing…' : 'Refresh'}
+    <ScrollView
+      contentContainerStyle={shellStyles.scroll}
+      refreshControl={
+        <RefreshControl
+          colors={['#7655d9']}
+          enabled={!project.offline}
+          onRefresh={() => void refresh()}
+          refreshing={busy}
+          tintColor="#7655d9"
+        />
+      }
+      style={shellStyles.screen}
+      testID="progress-overview-scroll"
+    >
+      <View style={[shellStyles.content, styles.content]}>
+        <OverviewHeader
+          displayName={project.data?.member.display_name ?? 'Nirmaan'}
+        />
+        {project.offline && (
+          <Text accessibilityRole="alert" style={styles.notice}>
+            {data && !error
+              ? 'Offline · Showing the last loaded overview. Counts may have changed.'
+              : 'Offline · Connect to load the execution overview.'}
           </Text>
-        </Pressable>
-      </View>
-      {project.offline && (
-        <Text accessibilityRole="alert" style={styles.notice}>
-          {data && !error
-            ? 'Offline · Showing the last loaded overview. Counts may have changed.'
-            : 'Offline · Connect to load the execution overview.'}
-        </Text>
-      )}
-      {error ? (
-        <View style={styles.state}>
-          <Text accessibilityRole="alert" style={shellStyles.cardTitle}>
-            Overview unavailable
-          </Text>
-          <Text style={shellStyles.body}>{error.message}</Text>
-        </View>
-      ) : project.isPending ? (
-        <View style={styles.state}>
-          {!project.offline && <ActivityIndicator color="#266b8c" />}
-          <Text style={shellStyles.body}>
-            {project.offline
-              ? 'Project access has not been loaded.'
-              : 'Loading your project access…'}
-          </Text>
-        </View>
-      ) : !project.data ? (
-        <View style={styles.state}>
-          <Text style={shellStyles.cardTitle}>No active project access</Text>
-          <Text style={shellStyles.body}>
-            Select an active project or ask an administrator to check your
-            membership.
-          </Text>
-        </View>
-      ) : !authorized ? (
-        <View style={styles.state}>
-          <Text style={shellStyles.cardTitle}>Manager access required</Text>
-          <Text style={shellStyles.body}>
-            Overview aggregates are available to active planners and managers.
-          </Text>
-        </View>
-      ) : !data || !summary ? (
-        <View style={styles.state}>
-          {!project.offline && <ActivityIndicator color="#266b8c" />}
-          <Text style={shellStyles.body}>
-            {project.offline
-              ? 'No overview has been loaded for this project.'
-              : 'Loading the accepted schedule and review context…'}
-          </Text>
-        </View>
-      ) : (
-        <>
-          <View style={styles.revision}>
-            <Text style={styles.revisionTitle}>
-              {data.snapshot.revisionLabel ?? 'No active schedule'}
+        )}
+        {error ? (
+          <View style={styles.state}>
+            <Text accessibilityRole="alert" style={styles.stateTitle}>
+              Overview unavailable
             </Text>
-            <Text style={styles.detail}>
-              Schedule v{data.snapshot.scheduleVersion} · Activity-count basis
-            </Text>
-          </View>
-          {data.snapshot.revisionId === null && (
-            <Text style={styles.notice}>
-              No active reporting schedule. Review and accepted evidence remain
-              visible, while activity counts stay at zero.
-            </Text>
-          )}
-
-          <View style={styles.stats} accessibilityLabel="Execution counts">
-            {[
-              [summary.planned, 'Planned activities'],
-              [summary.completed, 'Completed activities'],
-              [summary.inProgress, 'In progress'],
-              [summary.actionableClaims, 'Claims needing action'],
-            ].map(([value, label]) => (
-              <View key={label} style={styles.stat}>
-                <Text style={styles.statValue}>{value}</Text>
-                <Text style={styles.statLabel}>{label}</Text>
-              </View>
-            ))}
-          </View>
-          {summary.unresolvedProgress > 0 && (
-            <Text style={styles.warning}>
-              {summary.unresolvedProgress}{' '}
-              {summary.unresolvedProgress === 1
-                ? 'activity has'
-                : 'activities have'}{' '}
-              reported progress without an accepted start date.
-            </Text>
-          )}
-          <Text style={styles.basis}>
-            Completion means an accepted actual finish. Counts do not weight
-            quantities, duration or cost.
-          </Text>
-
-          <View style={styles.sectionHeading}>
-            <Text
-              accessibilityRole="header"
-              style={[styles.sectionTitle, styles.inlineSectionTitle]}
+            <Text style={shellStyles.body}>{error.message}</Text>
+            <Pressable
+              accessibilityRole="button"
+              disabled={project.offline || busy}
+              onPress={() => void refresh()}
+              style={[
+                styles.retry,
+                (project.offline || busy) && styles.disabled,
+              ]}
             >
-              Needs your attention
-            </Text>
-            <NavLink
-              href={'/manager/review' as Href}
-              label="Open review queue"
-            />
+              <Text style={styles.retryText}>Refresh</Text>
+            </Pressable>
           </View>
-          {data.attention.length ? (
-            data.attention.map((claim) => (
-              <View key={claim.id} style={shellStyles.card}>
-                <Text style={styles.attentionTag}>
-                  {attentionReason(claim)}
-                </Text>
-                <Text accessibilityRole="header" style={shellStyles.cardTitle}>
-                  {claim.facts.activityHint ?? claim.facts.evidenceQuote}
-                </Text>
-                <Text style={styles.detail}>
-                  {claim.facts.kind.replaceAll('_', ' ')} ·{' '}
-                  {claim.facts.eventDate
-                    ? dateLabel(claim.facts.eventDate)
-                    : 'Work date not recorded'}
-                </Text>
-                <Text style={styles.quote}>“{claim.facts.evidenceQuote}”</Text>
-                <NavLink
-                  href={`/manager/review/${claim.id}` as Href}
-                  label="Review claim"
-                />
-              </View>
-            ))
-          ) : (
-            <Text style={styles.empty}>
-              No field claims currently need a planner decision or follow-up.
+        ) : project.isPending ? (
+          <View style={styles.state}>
+            {!project.offline && <ActivityIndicator color="#7655d9" />}
+            <Text style={shellStyles.body}>
+              {project.offline
+                ? 'Project access has not been loaded.'
+                : 'Loading your project access…'}
             </Text>
-          )}
-          {data.actionableCount > data.attention.length && (
-            <Text style={styles.basis}>
-              Showing {data.attention.length} of {data.actionableCount} current
-              claims. Open the queue for the complete paged list.
+          </View>
+        ) : !project.data ? (
+          <View style={styles.state}>
+            <Text style={styles.stateTitle}>No active project access</Text>
+            <Text style={shellStyles.body}>
+              Select an active project or ask an administrator to check your
+              membership.
             </Text>
-          )}
+          </View>
+        ) : !authorized ? (
+          <View style={styles.state}>
+            <Text style={styles.stateTitle}>Manager access required</Text>
+            <Text style={shellStyles.body}>
+              Overview aggregates are available to active planners and managers.
+            </Text>
+          </View>
+        ) : !data || !summary ? (
+          <View style={styles.state}>
+            {!project.offline && <ActivityIndicator color="#7655d9" />}
+            <Text style={shellStyles.body}>
+              {project.offline
+                ? 'No overview has been loaded for this project.'
+                : 'Loading the accepted schedule and review context…'}
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.projectMeta}>
+              <Text numberOfLines={1} style={styles.projectName}>
+                {project.data.project.name}
+              </Text>
+              <Text style={styles.revisionLabel}>
+                {data.snapshot.revisionLabel ?? 'No active schedule'} · Schedule
+                v{data.snapshot.scheduleVersion}
+              </Text>
+            </View>
 
-          <Text accessibilityRole="header" style={styles.sectionTitle}>
-            Activity completion by discipline
-          </Text>
-          {disciplines.length ? (
-            disciplines.map((row) => (
-              <View key={row.discipline} style={styles.progressRow}>
-                <View style={styles.progressHeading}>
-                  <Text style={styles.progressTitle}>{row.discipline}</Text>
+            {data.snapshot.revisionId === null && (
+              <Text style={styles.notice}>
+                No active reporting schedule. Review and accepted evidence
+                remain visible, while activity counts stay at zero.
+              </Text>
+            )}
+
+            <View style={styles.overviewCard}>
+              <ActivityDonut percent={summary.completionPercent} />
+              <View style={styles.legend}>
+                {disciplines.length ? (
+                  disciplines.map((row, index) => (
+                    <View key={row.discipline} style={styles.legendRow}>
+                      <View
+                        style={[
+                          styles.legendDot,
+                          {
+                            backgroundColor:
+                              chartColors[index % chartColors.length],
+                          },
+                        ]}
+                      />
+                      <Text numberOfLines={1} style={styles.legendText}>
+                        <Text style={styles.legendPercent}>{row.percent}%</Text>{' '}
+                        {row.discipline}
+                      </Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.emptyInline}>
+                    No active disciplines recorded
+                  </Text>
+                )}
+              </View>
+            </View>
+            <Text style={styles.basis}>
+              Total is {summary.completed} accepted-finished of{' '}
+              {summary.planned} planned activities. It does not weight quantity,
+              duration or cost.
+            </Text>
+            {summary.unresolvedProgress > 0 && (
+              <Text style={styles.warning}>
+                {summary.unresolvedProgress}{' '}
+                {summary.unresolvedProgress === 1
+                  ? 'activity has'
+                  : 'activities have'}{' '}
+                reported progress without an accepted start date.
+              </Text>
+            )}
+
+            <Text accessibilityRole="header" style={styles.sectionTitle}>
+              WORK AREA COMPLETE
+            </Text>
+            <View style={styles.chartCard}>
+              {disciplines.length ? (
+                disciplines.map((row, index) => {
+                  const color = chartColors[index % chartColors.length]!;
+                  return (
+                    <View key={row.discipline} style={styles.progressRow}>
+                      <View style={styles.progressHeading}>
+                        <Text style={styles.progressTitle}>
+                          {row.discipline}
+                        </Text>
+                        <Text style={[styles.progressPercent, { color }]}>
+                          {row.percent}%
+                        </Text>
+                      </View>
+                      <View
+                        accessibilityLabel={`${row.discipline}: ${row.completed} of ${row.planned} activities complete`}
+                        style={styles.track}
+                      >
+                        <View
+                          style={[
+                            styles.fill,
+                            {
+                              backgroundColor: color,
+                              width: `${row.percent}%`,
+                            },
+                          ]}
+                        />
+                      </View>
+                      <Text style={styles.progressFacts}>
+                        {row.completed} of {row.planned} accepted-finished ·{' '}
+                        {row.inProgress} in progress
+                      </Text>
+                    </View>
+                  );
+                })
+              ) : (
+                <Text style={styles.emptyInline}>
+                  No active schedule activities are available by discipline.
+                </Text>
+              )}
+            </View>
+
+            <Text accessibilityRole="header" style={styles.sectionTitle}>
+              WEEKLY PROGRESS TREND
+            </Text>
+            <Text style={styles.basis}>
+              Accepted field events by work date · evidence volume, not
+              productivity.
+            </Text>
+            <View style={styles.trendCard}>
+              {days.map((day) => {
+                const height = day.count
+                  ? 18 + (day.count / largestDay) * 54
+                  : 8;
+                return (
+                  <View
+                    accessibilityLabel={`${dateLabel(day.date)}: ${day.count} accepted ${day.count === 1 ? 'event' : 'events'}`}
+                    key={day.date}
+                    style={styles.dayColumn}
+                  >
+                    <Text style={styles.dayCount}>
+                      {day.count ? day.count : ''}
+                    </Text>
+                    <View
+                      style={[
+                        styles.dayBar,
+                        {
+                          backgroundColor: day.count ? '#26bf69' : '#c8d0d5',
+                          height,
+                        },
+                      ]}
+                    />
+                    <Text style={styles.dayLabel}>{day.day}</Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            <View style={styles.sectionHeading}>
+              <View>
+                <Text accessibilityRole="header" style={styles.sectionTitle}>
+                  NEEDS YOUR ATTENTION
+                </Text>
+                <Text style={styles.sectionSubtitle}>
+                  {summary.actionableClaims}{' '}
+                  {summary.actionableClaims === 1 ? 'claim' : 'claims'} awaiting
+                  action
+                </Text>
+              </View>
+              <Link href={'/manager/review' as Href} asChild>
+                <Pressable accessibilityRole="button" style={styles.linkButton}>
+                  <Text style={styles.linkText}>Open review</Text>
+                </Pressable>
+              </Link>
+            </View>
+            {data.attention.length ? (
+              data.attention.map((claim) => (
+                <View key={claim.id} style={styles.attentionCard}>
+                  <Text style={styles.attentionTag}>
+                    {attentionReason(claim)}
+                  </Text>
+                  <Text accessibilityRole="header" style={styles.cardTitle}>
+                    {claim.facts.activityHint ?? claim.facts.evidenceQuote}
+                  </Text>
                   <Text style={styles.detail}>
-                    {row.completed} of {row.planned} complete · {row.inProgress}{' '}
-                    in progress
+                    {claim.facts.kind.replaceAll('_', ' ')} ·{' '}
+                    {claim.facts.eventDate
+                      ? dateLabel(claim.facts.eventDate)
+                      : 'Work date not recorded'}
+                  </Text>
+                  <Text style={styles.quote}>
+                    “{claim.facts.evidenceQuote}”
+                  </Text>
+                  <Link href={`/manager/review/${claim.id}` as Href} asChild>
+                    <Pressable
+                      accessibilityLabel={`Review ${claim.facts.activityHint ?? 'claim'}`}
+                      accessibilityRole="button"
+                      style={styles.inlineLink}
+                    >
+                      <Text style={styles.linkText}>Review claim</Text>
+                      <Feather color="#7655d9" name="arrow-right" size={15} />
+                    </Pressable>
+                  </Link>
+                </View>
+              ))
+            ) : (
+              <Text style={styles.empty}>
+                No field claims currently need a planner decision or follow-up.
+              </Text>
+            )}
+            {data.actionableCount > data.attention.length && (
+              <Text style={styles.basis}>
+                Showing {data.attention.length} of {data.actionableCount}{' '}
+                current claims. Open Review for the complete paged list.
+              </Text>
+            )}
+
+            <View style={styles.sectionHeading}>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>
+                RECENT ACCEPTED RECORDS
+              </Text>
+              <Link href={'/manager/history' as Href} asChild>
+                <Pressable accessibilityRole="button" style={styles.linkButton}>
+                  <Text style={styles.linkText}>Open history</Text>
+                </Pressable>
+              </Link>
+            </View>
+            {recent.length ? (
+              recent.map((entry) => (
+                <View key={entry.eventId} style={styles.acceptedCard}>
+                  <Text style={styles.acceptedTag}>{entry.discipline}</Text>
+                  <Text style={styles.acceptedTitle}>
+                    {entry.externalId} · {entry.activityName}
+                  </Text>
+                  <Text style={styles.detail}>
+                    {eventLabel(entry.eventKind)}
+                  </Text>
+                  <Text style={styles.quote}>“{entry.quote}”</Text>
+                  <Text style={styles.detail}>
+                    Accepted {acceptedLabel(entry.acceptedAt)} by{' '}
+                    {entry.reviewer ?? 'Project planner'}
                   </Text>
                 </View>
-                <View
-                  accessibilityLabel={`${row.discipline}: ${row.completed} of ${row.planned} activities complete`}
-                  style={styles.track}
-                >
-                  <View style={[styles.fill, { width: `${row.percent}%` }]} />
-                </View>
-              </View>
-            ))
-          ) : (
-            <Text style={styles.empty}>
-              No active schedule activities are available by discipline.
-            </Text>
-          )}
-
-          <Text accessibilityRole="header" style={styles.sectionTitle}>
-            Weekly accepted field events
-          </Text>
-          <Text style={styles.basis}>
-            Effective accepted events by recorded work date, Monday to Sunday.
-            This is evidence volume, not productivity.
-          </Text>
-          {weeks.map((week) => (
-            <View key={week.start} style={styles.weekRow}>
-              <Text style={styles.weekLabel}>
-                {dateLabel(week.start)} – {dateLabel(week.end)}
+              ))
+            ) : (
+              <Text style={styles.empty}>
+                No current accepted field records are available yet.
               </Text>
-              <View style={styles.weekTrack}>
-                <View
-                  style={[
-                    styles.weekFill,
-                    { width: `${(week.count / largestWeek) * 100}%` },
-                  ]}
-                />
-              </View>
-              <Text style={styles.weekCount}>{week.count}</Text>
-            </View>
-          ))}
-
-          <View style={styles.sectionHeading}>
-            <Text
-              accessibilityRole="header"
-              style={[styles.sectionTitle, styles.inlineSectionTitle]}
-            >
-              Recent accepted records
+            )}
+            <Text style={styles.footer}>
+              Accepted evidence retains its source report and review decision in
+              History. Pending claims do not change accepted schedule counts.
             </Text>
-            <NavLink href={'/manager/history' as Href} label="Open history" />
-          </View>
-          {recent.length ? (
-            recent.map((entry) => (
-              <View key={entry.eventId} style={styles.acceptedCard}>
-                <Text style={styles.acceptedTag}>{entry.discipline}</Text>
-                <Text style={styles.acceptedTitle}>
-                  {entry.externalId} · {entry.activityName}
-                </Text>
-                <Text style={styles.detail}>{eventLabel(entry.eventKind)}</Text>
-                <Text style={styles.quote}>“{entry.quote}”</Text>
-                <Text style={styles.detail}>
-                  Accepted {acceptedLabel(entry.acceptedAt)} by{' '}
-                  {entry.reviewer ?? 'Project planner'}
-                </Text>
-              </View>
-            ))
-          ) : (
-            <Text style={styles.empty}>
-              No current accepted field records are available yet.
-            </Text>
-          )}
-          <Text style={styles.footer}>
-            Accepted evidence retains its source report and review decision in
-            History. Pending claims do not change accepted schedule counts.
-          </Text>
-        </>
-      )}
-    </ShellPage>
+          </>
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  toolbar: {
+  content: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 28 },
+  header: {
+    minHeight: 50,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
-    marginVertical: 12,
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  refresh: {
-    minHeight: 48,
-    minWidth: 88,
+  headerTitle: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#e9eef2',
+  },
+  avatarText: { color: '#17354c', fontSize: 16, fontWeight: '800' },
+  title: { color: '#17283a', fontSize: 19, lineHeight: 26, fontWeight: '800' },
+  settings: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
-    paddingHorizontal: 12,
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#d7e0e5',
-    backgroundColor: '#fff',
+    borderColor: '#e1e7eb',
   },
-  disabled: { opacity: 0.55 },
-  detail: { color: '#627786', fontSize: 14, lineHeight: 22 },
-  notice: {
-    backgroundColor: '#e8eff3',
-    color: '#17354c',
-    padding: 14,
-    marginVertical: 12,
-    fontSize: 14,
-    lineHeight: 22,
-  },
-  warning: {
-    backgroundColor: '#fff2d9',
-    color: '#76541d',
-    padding: 14,
-    marginTop: 12,
-    fontSize: 14,
-    lineHeight: 22,
-  },
-  state: { marginTop: 24, gap: 12, alignItems: 'flex-start' },
-  revision: {
-    borderTopColor: '#d7e0e5',
-    borderTopWidth: 1,
-    paddingTop: 16,
-    marginTop: 8,
-    gap: 3,
-  },
-  revisionTitle: { color: '#17354c', fontSize: 17, fontWeight: '600' },
-  stats: {
+  projectMeta: { marginBottom: 12 },
+  projectName: { color: '#344653', fontSize: 13, fontWeight: '800' },
+  revisionLabel: { color: '#84919a', fontSize: 11, lineHeight: 17 },
+  overviewCard: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 20,
-  },
-  stat: {
-    minWidth: '46%',
-    flexGrow: 1,
-    backgroundColor: '#fff',
-    borderColor: '#d7e0e5',
-    borderWidth: 1,
+    alignItems: 'center',
+    gap: 18,
     padding: 16,
-    gap: 4,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e5eaed',
+    shadowColor: '#17354c',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  statValue: {
-    color: '#17354c',
-    fontFamily: 'serif',
-    fontSize: 30,
-    lineHeight: 38,
+  donut: { width: 108, height: 108, position: 'relative' },
+  donutSegment: {
+    position: 'absolute',
+    width: 4,
+    height: 12,
+    borderRadius: 2,
   },
-  statLabel: { color: '#627786', fontSize: 13, lineHeight: 20 },
-  basis: { color: '#627786', fontSize: 13, lineHeight: 21, marginTop: 10 },
-  sectionHeading: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+  donutCenter: {
+    position: 'absolute',
+    left: 18,
+    top: 18,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     alignItems: 'center',
-    gap: 8,
-    marginTop: 28,
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+  donutValue: {
+    color: '#293c49',
+    fontSize: 24,
+    lineHeight: 29,
+    fontWeight: '900',
+  },
+  donutLabel: {
+    color: '#26aa61',
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '900',
+  },
+  legend: { flex: 1, minWidth: 0, gap: 7 },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { flex: 1, color: '#5f6f7a', fontSize: 11, lineHeight: 16 },
+  legendPercent: { color: '#314552', fontWeight: '900' },
+  basis: { color: '#72818b', fontSize: 11, lineHeight: 17, marginTop: 8 },
+  warning: {
+    color: '#835d17',
+    backgroundColor: '#fff3d6',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 10,
+    fontSize: 12,
+    lineHeight: 18,
   },
   sectionTitle: {
-    color: '#17354c',
-    fontSize: 20,
-    lineHeight: 30,
-    fontWeight: '600',
-    marginTop: 28,
+    color: '#455660',
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '900',
+    letterSpacing: 0.55,
+    marginTop: 20,
   },
-  inlineSectionTitle: { marginTop: 0 },
-  attentionTag: {
-    color: '#76541d',
-    backgroundColor: '#fff2d9',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  quote: { color: '#17354c', fontSize: 14, lineHeight: 23 },
-  empty: {
-    color: '#627786',
-    backgroundColor: '#fff',
-    borderColor: '#d7e0e5',
+  chartCard: {
+    marginTop: 8,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    padding: 16,
-    marginTop: 10,
-    fontSize: 15,
-    lineHeight: 24,
+    borderColor: '#e5eaed',
+    gap: 13,
   },
-  progressRow: {
-    backgroundColor: '#fff',
-    borderBottomColor: '#d7e0e5',
-    borderBottomWidth: 1,
-    paddingVertical: 15,
-    paddingHorizontal: 16,
-    gap: 9,
-  },
-  progressHeading: { gap: 2 },
-  progressTitle: { color: '#17354c', fontSize: 16, fontWeight: '600' },
-  track: { height: 8, backgroundColor: '#e8eff3', overflow: 'hidden' },
-  fill: { height: 8, backgroundColor: '#266b8c' },
-  weekRow: {
+  progressRow: { gap: 5 },
+  progressHeading: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 10,
+    justifyContent: 'space-between',
   },
-  weekLabel: { color: '#627786', fontSize: 11, lineHeight: 18, width: 112 },
-  weekTrack: {
-    flex: 1,
-    height: 10,
-    backgroundColor: '#e8eff3',
+  progressTitle: {
+    color: '#43545f',
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700',
+  },
+  progressPercent: { fontSize: 11, lineHeight: 16, fontWeight: '900' },
+  track: {
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#e7ecef',
     overflow: 'hidden',
   },
-  weekFill: { height: 10, backgroundColor: '#3d7a66' },
-  weekCount: {
-    color: '#17354c',
-    width: 24,
-    textAlign: 'right',
-    fontWeight: '600',
+  fill: { height: 7, borderRadius: 4 },
+  progressFacts: { color: '#8a969e', fontSize: 9, lineHeight: 13 },
+  trendCard: {
+    height: 130,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-around',
+    gap: 5,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingTop: 15,
+    paddingBottom: 10,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e5eaed',
   },
-  acceptedCard: {
-    borderBottomColor: '#d7e0e5',
-    borderBottomWidth: 1,
-    paddingVertical: 16,
+  dayColumn: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
+  dayCount: {
+    minHeight: 15,
+    color: '#72818b',
+    fontSize: 9,
+    lineHeight: 13,
+  },
+  dayBar: { width: 12, minHeight: 8, borderRadius: 3 },
+  dayLabel: {
+    color: '#6f7d86',
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 5,
+    fontWeight: '700',
+  },
+  sectionHeading: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  sectionSubtitle: {
+    color: '#84919a',
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  linkButton: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#f1edff',
+  },
+  linkText: { color: '#7655d9', fontSize: 11, fontWeight: '800' },
+  attentionCard: {
+    marginTop: 9,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e5eaed',
+    gap: 4,
+  },
+  attentionTag: {
+    alignSelf: 'flex-start',
+    color: '#936414',
+    backgroundColor: '#fff2d4',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '800',
+  },
+  cardTitle: {
+    color: '#314552',
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '800',
+  },
+  detail: { color: '#73818b', fontSize: 11, lineHeight: 17 },
+  quote: { color: '#465a67', fontSize: 12, lineHeight: 18 },
+  inlineLink: {
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: 5,
   },
+  acceptedCard: {
+    marginTop: 9,
+    paddingVertical: 13,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8eb',
+    gap: 3,
+  },
   acceptedTag: {
-    color: '#3d6c83',
-    backgroundColor: '#dfedf4',
     alignSelf: 'flex-start',
+    color: '#397795',
+    backgroundColor: '#e7f2f7',
+    borderRadius: 999,
     paddingHorizontal: 7,
     paddingVertical: 3,
-    fontSize: 12,
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '800',
   },
   acceptedTitle: {
-    color: '#17354c',
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: '600',
+    color: '#314552',
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '800',
   },
-  footer: { color: '#627786', fontSize: 13, lineHeight: 22, marginTop: 24 },
+  notice: {
+    color: '#315a70',
+    backgroundColor: '#e8f1f5',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  state: { marginTop: 22, gap: 12, alignItems: 'flex-start' },
+  stateTitle: {
+    color: '#17354c',
+    fontSize: 18,
+    lineHeight: 25,
+    fontWeight: '800',
+  },
+  retry: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#7655d9',
+  },
+  retryText: { color: '#ffffff', fontSize: 13, fontWeight: '800' },
+  disabled: { opacity: 0.5 },
+  empty: {
+    color: '#73818b',
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e5eaed',
+    padding: 14,
+    marginTop: 9,
+    fontSize: 12,
+    lineHeight: 19,
+  },
+  emptyInline: { color: '#84919a', fontSize: 11, lineHeight: 17 },
+  footer: { color: '#73818b', fontSize: 11, lineHeight: 18, marginTop: 20 },
 });
