@@ -117,6 +117,18 @@ export function hierarchyChildren(nodes: HierarchyNode[], parentId: string) {
   return nodes.filter((node) => node.parentId === parentId).sort(sortNodes);
 }
 
+export function hierarchyNodeProgress(
+  node: HierarchyNode,
+  activities: ScheduleActivity[],
+): number | null {
+  const activity = activities.find(
+    (candidate) => candidate.externalId === node.externalId,
+  );
+  if (!activity) return null;
+  if (activity.actualFinish) return 100;
+  return activity.acceptedPercent;
+}
+
 export function assignmentContext(activity: ScheduleActivity, userId: string) {
   return activity.assignedReporterId === null
     ? 'No reporter assigned'

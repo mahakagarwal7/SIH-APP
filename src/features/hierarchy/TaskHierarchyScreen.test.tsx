@@ -3,8 +3,11 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
 } from '@testing-library/react-native';
+import { Share } from 'react-native';
 
+import { hierarchyNodeProgress } from './hierarchyModel';
 import { HierarchyReadError } from './hierarchyService';
 import { TaskHierarchyScreen } from './TaskHierarchyScreen';
 import { useTaskHierarchy } from './useTaskHierarchy';
@@ -14,6 +17,7 @@ import type { ScheduleActivity } from '@/features/schedule/scheduleContracts';
 
 jest.mock('./useTaskHierarchy', () => ({ useTaskHierarchy: jest.fn() }));
 jest.mock('expo-router', () => ({
+  Link: ({ children }: { children: React.ReactNode }) => children,
   useFocusEffect: jest.fn((callback: () => void) => callback()),
   useRouter: () => ({
     canGoBack: () => true,
@@ -21,6 +25,9 @@ jest.mock('expo-router', () => ({
     replace: jest.fn(),
   }),
 }));
+jest.mock('@expo/vector-icons/Feather', () => () => null);
+
+let share: jest.SpiedFunction<typeof Share.share>;
 
 const userId = '10000000-0000-4000-8000-000000000001';
 const activityId = '10000000-0000-4000-8000-000000000004';
@@ -188,23 +195,66 @@ function state(
   } as unknown as ReturnType<typeof useTaskHierarchy>;
 }
 
-beforeEach(() => jest.mocked(useTaskHierarchy).mockReturnValue(state()));
-afterEach(cleanup);
+beforeEach(() => {
+  jest.mocked(useTaskHierarchy).mockReturnValue(state());
+  share = jest
+    .spyOn(Share, 'share')
+    .mockResolvedValue({ action: Share.sharedAction });
+});
+afterEach(() => {
+  cleanup();
+  share.mockRestore();
+});
 
-it('shows the exact source path and accepted activity facts', async () => {
+it('uses only exact accepted activity progress for hierarchy percentages', () => {
+  expect(hierarchyNodeProgress(graph.nodes[0]!, [activity])).toBeNull();
+  expect(hierarchyNodeProgress(graph.nodes[3]!, [activity])).toBe(50);
+  expect(
+    hierarchyNodeProgress(graph.nodes[3]!, [
+      { ...activity, acceptedPercent: 12, actualFinish: '2026-09-24' },
+    ]),
+  ).toBe(100);
+});
+
+it('shows the reference header, current task, real source chain, and report actions', async () => {
   await render(<TaskHierarchyScreen activityId={activityId} />);
+  expect(screen.getByRole('header', { name: 'Task Hierarchy' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Back' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Open settings' })).toBeVisible();
+  expect(screen.getByText('CURRENT TASK')).toBeVisible();
   expect(screen.getByText('Imported baseline 01')).toBeVisible();
   expect(screen.getByText('Schedule v7 · Source relationships')).toBeVisible();
-  expect(screen.getAllByText('Refinery upgrade')).toHaveLength(2);
+  expect(screen.getByText('Refinery upgrade')).toBeVisible();
   expect(screen.getByText('Area A')).toBeVisible();
   expect(screen.getByText('Piping installation')).toBeVisible();
   expect(screen.getAllByText('Line erection')).toHaveLength(2);
-  expect(screen.getByText('Assigned to you')).toBeVisible();
+  expect(screen.getByText(/Assigned to you/)).toBeVisible();
   expect(screen.getByText('2 of 4 spools accepted')).toBeVisible();
-  expect(screen.getByText('Accepted progress: 50% · physical')).toBeVisible();
+  expect(screen.getByText('50%')).toBeVisible();
+  expect(screen.getAllByText('—')).toHaveLength(3);
+  expect(screen.getByText(/A dash means the source snapshot/)).toBeVisible();
   expect(
-    screen.getByText(/Parent nodes do not receive calculated progress/),
+    screen.getByRole('button', { name: 'Speak progress for this task' }),
   ).toBeVisible();
+  expect(
+    screen.getByRole('button', {
+      name: 'Update status with a field report',
+    }),
+  ).toBeVisible();
+});
+
+it('opens the native share sheet with the current task and accepted progress', async () => {
+  await render(<TaskHierarchyScreen activityId={activityId} />);
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Share task hierarchy' }),
+  );
+  await waitFor(() =>
+    expect(share).toHaveBeenCalledWith({
+      message:
+        'Refinery upgrade\nLine erection (PIP-1201)\nAccepted progress: 50%',
+      title: 'Task hierarchy',
+    }),
+  );
 });
 
 it('drills from an ancestor into its real children and represents a leaf explicitly', async () => {
@@ -278,5 +328,8 @@ it('renders loading, access, error and offline states explicitly', async () => {
   jest.mocked(useTaskHierarchy).mockReturnValue(state({ offline: true }));
   await view.rerender(<TaskHierarchyScreen activityId={activityId} />);
   expect(screen.getByText(/Showing the last loaded hierarchy/)).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
+  expect(
+    screen.getByTestId('task-hierarchy-scroll').props.refreshControl.props
+      .enabled,
+  ).toBe(false);
 });
