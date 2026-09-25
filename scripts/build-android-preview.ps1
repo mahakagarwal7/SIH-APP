@@ -52,6 +52,19 @@ function Get-PreviewArtifactName {
   return 'nirmaan-field-preview-arm64-setup-unavailable.apk'
 }
 
+function Get-PreviewFileSha256 {
+  param([string]$Path)
+
+  $stream = [System.IO.File]::OpenRead($Path)
+  $sha256 = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    return [System.BitConverter]::ToString($sha256.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
+  } finally {
+    $sha256.Dispose()
+    $stream.Dispose()
+  }
+}
+
 function Remove-StalePreviewArtifacts {
   param([string]$OutputDirectory)
 
@@ -263,7 +276,7 @@ try {
   $outputApk = Join-Path $outputDirectory $artifactName
   Copy-Item -LiteralPath $builtApk -Destination $outputApk -Force
 
-  $hash = (Get-FileHash -LiteralPath $outputApk -Algorithm SHA256).Hash.ToLowerInvariant()
+  $hash = Get-PreviewFileSha256 -Path $outputApk
   $size = (Get-Item -LiteralPath $outputApk).Length
   Write-Output "APK: $outputApk"
   Write-Output 'Package: com.mahakagarwal.nirmaan'
