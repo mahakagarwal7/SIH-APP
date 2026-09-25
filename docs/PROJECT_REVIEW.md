@@ -1,5 +1,12 @@
 # Mobile project discovery
 
+**Current build update, 25 September 2026:** PRs #35, #38 and #37 are merged.
+The [current ARM64 preview APK](FIELD_PREVIEW.md#current-apk-build-evidence--25-september-2026)
+was built from main commit `3e77ae5` and its downloaded checksum matches.
+The PR counts and missing-key observation below describe this earlier review,
+not the current repository state. Physical-device and live-account acceptance
+remain unverified.
+
 Reviewed 23 September and updated 24 September 2026. PRs 1–7 are merged. PR #8 adds explicit confirmation/submission and is under review; stacked PR #9 adds submitted-status polling, and PR #10 adds a reproducible standalone ARM64 APK with bundled JavaScript, the approved package ID and approved local debug certificate. An earlier development/debug x86_64 APK required Metro and does not validate the confirmation flow. The local publishable key is still empty and no physical phone is connected, so production login, live upload/worker processing and physical-phone behavior remain unverified. See [Field preview evidence](FIELD_PREVIEW.md), [voice evidence](VOICE_CAPTURE.md), [the outbox contract](OUTBOX_SYNC.md), [the status contract](REPORT_STATUS.md), [the approved delivery plan](DELIVERY_PLAN.md) and the individual PR drafts.
 
 Roadmap 1.1 adds read-only My work and the default authorized project context after owner approval of the existing authenticated Supabase reads/RPCs for this slice. See [the My work draft](pr-drafts/1.1-my-work.md) for its separate validation and limitations; the full project switcher remains 2.1.

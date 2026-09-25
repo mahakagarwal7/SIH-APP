@@ -46,24 +46,35 @@ GitHub Release. Do not use a version tag for a build-only verification run.
 
 ## Current APK build evidence — 25 September 2026
 
-The [build-only run](https://github.com/mahakagarwal7/SIH-APP/actions/runs/36115406349)
-built commit `866de57ca530865c37c43beed4573cf90e5be3fe` with the public
-production Supabase configuration supplied by repository Actions secrets. The
-artifact contains `nirmaan-field-preview-arm64.apk` and `SHA256SUMS.txt`; the
+The [build-only run](https://github.com/mahakagarwal7/SIH-APP/actions/runs/36124563966)
+built main commit `3e77ae571c84eee93dd27903edabe754885b8981`, including
+PRs #35, #38 and #37, with the public production Supabase configuration
+supplied by repository Actions secrets. The artifact contains
+`nirmaan-field-preview-arm64.apk` and `SHA256SUMS.txt`; the
 publish step was skipped, so no GitHub Release was created. The workflow passed
 typecheck, lint, tests, native build and upload, and its wrapper checked the
 package ID, ARM64-only ABI, bundled JavaScript and APK signature.
 
 - Package: `com.mahakagarwal.nirmaan`; ABI: `arm64-v8a`.
-- Size: 58,859,491 bytes.
-- SHA-256: `61796626c494d7196eeb7febfd0981b8de610ae6148dae7a9068fccd15111730`.
+- Size: 58,876,771 bytes.
+- SHA-256: `fb8ac00e40af5dfc71a1944e889f8aea33fcb4a2d41fc24243bc9cffa1ad5191`.
 - APK Signature Scheme v2 verified with the approved Android debug certificate,
   SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`.
+- The artifact was downloaded locally; `sha256sum -c SHA256SUMS.txt` and ZIP
+  integrity inspection both passed.
 
 This is build evidence, not physical-device acceptance. Install this exact APK
 and complete the checks below before distributing it to field users. A later
 documentation-only commit does not alter the built app or workflow; use the
 recorded source commit and checksum to identify the tested binary.
+
+## Earlier configured artifact evidence — superseded
+
+The [earlier build-only run](https://github.com/mahakagarwal7/SIH-APP/actions/runs/36115406349)
+built commit `866de57ca530865c37c43beed4573cf90e5be3fe` before PRs #35,
+#38 and #37. Its 58,859,491-byte APK has SHA-256
+`61796626c494d7196eeb7febfd0981b8de610ae6148dae7a9068fccd15111730`.
+Do not use it for current-head acceptance.
 
 ## Earlier structural artifact evidence — superseded
 
@@ -82,7 +93,9 @@ The earlier build was verified on 24 September 2026 with these details:
 
 The build-helper tests added during that earlier review passed under PowerShell 7.4.7 in a Linux container. They did not provide device acceptance evidence.
 
-No physical device was connected during either build check. Login, restart, real media capture, offline recovery, web arrival and accepted-status evidence remain pending for the current configured APK.
+No physical device was connected during these build checks. Login, restart,
+real media capture, offline recovery, web arrival and accepted-status evidence
+remain pending for the current configured APK.
 
 ## Physical-device acceptance record
 

@@ -1,5 +1,12 @@
 # Remaining mobile delivery proposal
 
+**Current build update, 25 September 2026:** The standalone ARM64 APK from
+main commit `3e77ae5` has completed and was downloaded with a matching SHA-256.
+See [the current artifact evidence](FIELD_PREVIEW.md#current-apk-build-evidence--25-september-2026).
+The x86_64, Metro-dependent APK described below was the historical starting
+point for this dated plan; it is no longer the latest build. Physical-device
+and live-account acceptance remain open.
+
 24 September 2026. **Approved by the owner.** This researched delivery order and its listed integration decisions were approved before roadmap 1.3 implementation began.
 
 **Plan: 15 further mobile PRs, with a usable Field reporting milestone after the first five.** Roadmap 1.3 became draft PR #6; this 1.5 branch is the second planned slice, leaving 13 after it. This includes English/Hindi support from `FEATURES.md`. The English core alone is 14 PRs. These are planned review units, not a guarantee that no additional repair or backend work will be discovered.
