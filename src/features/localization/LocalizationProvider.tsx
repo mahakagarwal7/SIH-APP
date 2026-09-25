@@ -27,6 +27,17 @@ function translate(source: string, locale: AppLocale) {
 
   const patterns: [RegExp, (...matches: string[]) => string][] = [
     [
+      /^(\d+) (minute|minutes|hour|hours|day|days) ago$/,
+      (_all, count, unit) => {
+        const label = unit.startsWith('minute')
+          ? 'मिनट'
+          : unit.startsWith('hour')
+            ? 'घंटे'
+            : 'दिन';
+        return `${count} ${label} पहले`;
+      },
+    ],
+    [
       /^Timeline\. Planned (.+) to (.+)\.(?: Baseline (.+) to (.+)\.)?(?: Accepted (.+) to (.+)\.| Accepted start not recorded\.)?$/,
       (
         _all,

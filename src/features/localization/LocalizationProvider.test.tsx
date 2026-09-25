@@ -44,6 +44,11 @@ it('localizes interpolated accessibility copy without changing identifiers', () 
   expect(translateText('Selected photo 2', 'hi')).toBe('चयनित फ़ोटो 2');
 });
 
+it('localizes relative manager-update timestamps', () => {
+  expect(translateText('1 hour ago', 'hi')).toBe('1 घंटे पहले');
+  expect(translateText('3 days ago', 'hi')).toBe('3 दिन पहले');
+});
+
 it('restores Hindi and localizes visible and accessibility copy', async () => {
   storage.getItem.mockResolvedValue('hi');
   await render(

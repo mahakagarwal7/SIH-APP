@@ -1,9 +1,8 @@
 # Manager overview aggregate boundary
 
-Roadmap 6.1 replaces the Manager Overview placeholder with a read-only summary
-of decisions waiting for action and accepted execution. It follows the Nirmaan
-design-book execution overview and uses the mobile Progress Overview only as an
-interaction reference.
+Roadmap 6.1 supplies the read-only manager data boundary. UI step 8.8 presents
+that data as the Manager Panel in the approved Manager Overview tab, following
+the eighth mobile reference without inventing unsupported project measures.
 
 ## Production sources
 
@@ -15,7 +14,7 @@ selected project:
 - `execution_history(p_project)` supplies accepted evidence and correction
   status;
 - actionable `claims` in `pending`, `clarification`, `verification` or
-  `disputed` state supply an exact count and a five-item attention preview.
+  `disputed` state supply an exact pending-review count.
 
 Only active planners and managers may start these reads. The client validates
 each payload, rejects cross-project or incomplete attention pages, and rechecks
@@ -27,6 +26,8 @@ load. Project switching clears the overview cache.
 - **Planned activities** is the number of reportable activities in the active
   schedule snapshot.
 - **Completed activities** have an accepted `actualFinish`.
+- **Tasks** shows accepted-finished activity count over planned activity count.
+  It does not weight quantity, duration, cost or criticality.
 - **Total activity progress** is the arithmetic mean of each activity's
   backend-provided `acceptedPercent`; an accepted finish contributes 100. It
   does not infer a percentage from quantity, duration, cost or criticality.
@@ -36,18 +37,19 @@ load. Project switching clears the overview cache.
   as started or complete.
 - **Claims needing action** is the exact count returned by the actionable
   claims query. It counts claims, not distinct reports.
-- **Discipline progress** is the same mean accepted percentage within that
+- **Discipline progress** is the mean accepted percentage within that
   discipline. Accepted-finished and planned counts remain visible beside the
   bar as separate context.
-- **Weekly accepted field events** counts current effective history events by
-  their recorded work date in Monday-to-Sunday site weeks. Replaced evidence is
-  excluded. This is evidence volume, not productivity.
-- **Recent accepted records** are the five newest effective events by acceptance
-  time and retain their activity, evidence quote and reviewer context.
+- **Recent verified field updates** are the five newest effective events by
+  acceptance time. They show the recorded reporter label from accepted
+  provenance, the matched activity and a relative acceptance time. Missing
+  reporter provenance is labeled rather than inferred.
 
-The screen deliberately has no weighted schedule completion, health score,
-schedule variance claim, productivity rate, cost forecast or inferred status.
-Those measures require an agreed weighting or a new backend contract.
+Project health, worker count, delays and variance are displayed as **Not
+recorded**. The screen deliberately has no weighted schedule completion,
+health score, schedule variance claim, productivity rate, cost forecast or
+inferred status. Those measures require an agreed definition or a new backend
+contract.
 
 ## Consistency and state
 
@@ -56,9 +58,9 @@ the activity counts. Pending claims never change those counts. Accepted history
 may retain evidence from earlier revisions, as the audit record requires.
 
 Loading, no project, wrong role, no active schedule, empty discipline, empty
-attention, empty accepted history, revoked access, changed data, history limit,
-backend failure and cached offline states are explicit. Cached results are
-labeled potentially stale and cannot be refreshed offline.
+accepted history, revoked access, changed data, history limit, backend failure
+and cached offline states are explicit. Cached results are labeled potentially
+stale and cannot be refreshed offline.
 
 Automated tests use synthetic records and mocked Supabase transport. They do
 not prove production RLS, cross-client parity or physical-device layout; those

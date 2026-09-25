@@ -9,49 +9,26 @@ import {
   View,
 } from 'react-native';
 
-import {
-  getActiveLocaleTag,
-  useLocalization,
-} from '@/features/localization/LocalizationProvider';
+import { useLocalization } from '@/features/localization/LocalizationProvider';
 import {
   LocalizedPressable as Pressable,
   LocalizedText as Text,
 } from '@/features/localization/LocalizedText';
 import { shellStyles } from '@/features/navigation/shellUi';
-import { siteToday } from '@/features/projects/myWork';
 
 import {
-  acceptedEventDays,
-  attentionReason,
   disciplineProgress,
   overviewSummary,
   recentAcceptedEvents,
+  relativeAcceptedTime,
+  verifiedReporterLabel,
 } from './overviewModel';
 import { useManagerOverview } from './useManagerOverview';
 
 import type { Href } from 'expo-router';
+import type { ComponentProps } from 'react';
 
 const chartColors = ['#26bf69', '#f5a623', '#4485e3', '#7655d9', '#ef6262'];
-const DONUT_SEGMENTS = 36;
-
-function dateLabel(value: string) {
-  return new Intl.DateTimeFormat(getActiveLocaleTag(), {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(`${value}T12:00:00Z`));
-}
-
-function acceptedLabel(value: string) {
-  return new Intl.DateTimeFormat(getActiveLocaleTag(), {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Asia/Kolkata',
-  }).format(new Date(value));
-}
 
 function eventLabel(kind: string) {
   return kind === 'START'
@@ -65,72 +42,75 @@ function eventLabel(kind: string) {
           : 'Quantity evidence accepted';
 }
 
-function OverviewHeader({ displayName }: { displayName: string }) {
-  const initial = displayName.trim().charAt(0).toLocaleUpperCase() || 'N';
+function ManagerHeader({
+  projectName,
+  scheduleLabel,
+  showHealth,
+}: {
+  projectName?: string;
+  scheduleLabel?: string;
+  showHealth: boolean;
+}) {
   return (
     <View style={styles.header}>
-      <View style={styles.headerTitle}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initial}</Text>
-        </View>
-        <Text accessibilityRole="header" style={styles.title}>
-          Progress Overview
+      <View style={styles.eyebrowRow}>
+        <Text accessibilityRole="header" style={styles.eyebrow}>
+          Manager Panel
         </Text>
+        <Link href="/account" asChild>
+          <Pressable
+            accessibilityLabel="Open settings"
+            accessibilityRole="button"
+            style={styles.settings}
+          >
+            <Feather color="#17354c" name="settings" size={20} />
+          </Pressable>
+        </Link>
       </View>
-      <Link href="/account" asChild>
-        <Pressable
-          accessibilityLabel="Open settings"
-          accessibilityRole="button"
-          style={styles.settings}
-        >
-          <Feather color="#17354c" name="settings" size={20} />
-        </Pressable>
-      </Link>
+      {projectName && (
+        <View style={styles.projectRow}>
+          <View style={styles.projectCopy}>
+            <Text numberOfLines={2} style={styles.projectName}>
+              {projectName}
+            </Text>
+            {scheduleLabel && (
+              <Text style={styles.revisionLabel}>{scheduleLabel}</Text>
+            )}
+          </View>
+          {showHealth && (
+            <View
+              accessibilityLabel="Project health: Not recorded"
+              style={styles.healthPill}
+            >
+              <View style={styles.healthDot} />
+              <Text style={styles.healthValue}>Not recorded</Text>
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 }
 
-function ActivityDonut({ percent }: { percent: number | null }) {
-  const activeSegments =
-    percent === null ? 0 : Math.round((percent / 100) * DONUT_SEGMENTS);
+function Metric({
+  icon,
+  label,
+  value,
+}: {
+  icon: ComponentProps<typeof Feather>['name'];
+  label: string;
+  value: string;
+}) {
   return (
-    <View
-      accessibilityLabel={
-        percent === null
-          ? 'Total activity completion not recorded'
-          : `${percent}% mean accepted activity progress`
-      }
-      accessibilityRole="progressbar"
-      accessibilityValue={
-        percent === null
-          ? { text: 'Not recorded' }
-          : { min: 0, max: 100, now: percent }
-      }
-      style={styles.donut}
-    >
-      {Array.from({ length: DONUT_SEGMENTS }, (_, index) => {
-        const angle = (index / DONUT_SEGMENTS) * Math.PI * 2 - Math.PI / 2;
-        return (
-          <View
-            key={index}
-            style={[
-              styles.donutSegment,
-              {
-                backgroundColor: index < activeSegments ? '#26bf69' : '#dce7df',
-                left: 54 + 43 * Math.cos(angle) - 2,
-                top: 54 + 43 * Math.sin(angle) - 6,
-                transform: [{ rotate: `${(index * 360) / DONUT_SEGMENTS}deg` }],
-              },
-            ]}
-          />
-        );
-      })}
-      <View style={styles.donutCenter}>
-        <Text style={styles.donutValue}>
-          {percent === null ? '—' : `${percent}%`}
-        </Text>
-        <Text style={styles.donutLabel}>TOTAL</Text>
-      </View>
+    <View style={styles.metric}>
+      <Feather color="#7655d9" name={icon} size={18} />
+      <Text
+        numberOfLines={2}
+        style={[styles.metricValue, value === 'Not recorded' && styles.unknown]}
+      >
+        {value}
+      </Text>
+      <Text style={styles.metricLabel}>{label}</Text>
     </View>
   );
 }
@@ -138,7 +118,6 @@ function ActivityDonut({ percent }: { percent: number | null }) {
 export function ManagerOverviewScreen() {
   useLocalization();
   const { project, overview, refresh, authorized } = useManagerOverview();
-  const [today, setToday] = useState(siteToday);
   const data = overview.data;
   const busy = project.isFetching || overview.isFetching;
   const error = project.error || overview.error;
@@ -146,13 +125,12 @@ export function ManagerOverviewScreen() {
     ? overviewSummary(data.snapshot.activities, data.actionableCount)
     : null;
   const disciplines = data ? disciplineProgress(data.snapshot.activities) : [];
-  const days = data ? acceptedEventDays(data.history, today) : [];
   const recent = data ? recentAcceptedEvents(data.history) : [];
-  const largestDay = Math.max(1, ...days.map((day) => day.count));
+  const [renderedAt, setRenderedAt] = useState(Date.now);
 
   useFocusEffect(
     useCallback(() => {
-      setToday(siteToday());
+      setRenderedAt(Date.now());
       void refresh();
     }, [refresh]),
   );
@@ -170,11 +148,17 @@ export function ManagerOverviewScreen() {
         />
       }
       style={shellStyles.screen}
-      testID="progress-overview-scroll"
+      testID="manager-panel-scroll"
     >
       <View style={[shellStyles.content, styles.content]}>
-        <OverviewHeader
-          displayName={project.data?.member.display_name ?? 'Nirmaan'}
+        <ManagerHeader
+          projectName={project.data?.project.name}
+          scheduleLabel={
+            data
+              ? `${data.snapshot.revisionLabel ?? 'No active schedule'} · Schedule v${data.snapshot.scheduleVersion}`
+              : undefined
+          }
+          showHealth={Boolean(project.data && data && authorized)}
         />
         {project.offline && (
           <Text accessibilityRole="alert" style={styles.notice}>
@@ -236,16 +220,6 @@ export function ManagerOverviewScreen() {
           </View>
         ) : (
           <>
-            <View style={styles.projectMeta}>
-              <Text numberOfLines={1} style={styles.projectName}>
-                {project.data.project.name}
-              </Text>
-              <Text style={styles.revisionLabel}>
-                {data.snapshot.revisionLabel ?? 'No active schedule'} · Schedule
-                v{data.snapshot.scheduleVersion}
-              </Text>
-            </View>
-
             {data.snapshot.revisionId === null && (
               <Text style={styles.notice}>
                 No active reporting schedule. Review and accepted evidence
@@ -253,40 +227,27 @@ export function ManagerOverviewScreen() {
               </Text>
             )}
 
-            <View style={styles.overviewCard}>
-              <ActivityDonut percent={summary.completionPercent} />
-              <View style={styles.legend}>
-                {disciplines.length ? (
-                  disciplines.map((row, index) => (
-                    <View key={row.discipline} style={styles.legendRow}>
-                      <View
-                        style={[
-                          styles.legendDot,
-                          {
-                            backgroundColor:
-                              chartColors[index % chartColors.length],
-                          },
-                        ]}
-                      />
-                      <Text numberOfLines={1} style={styles.legendText}>
-                        <Text style={styles.legendPercent}>{row.percent}%</Text>{' '}
-                        {row.discipline}
-                      </Text>
-                    </View>
-                  ))
-                ) : (
-                  <Text style={styles.emptyInline}>
-                    No active disciplines recorded
-                  </Text>
-                )}
-              </View>
+            <View style={styles.metricsRow}>
+              <Metric
+                icon="clipboard"
+                label="Tasks"
+                value={`${summary.completed}/${summary.planned}`}
+              />
+              <Metric icon="users" label="Workers" value="Not recorded" />
+              <Metric icon="alert-circle" label="Delays" value="Not recorded" />
+              <Metric
+                icon="trending-up"
+                label="Variance"
+                value="Not recorded"
+              />
             </View>
             <Text style={styles.basis}>
-              Total is the mean accepted progress across {summary.planned}{' '}
-              planned activities. Accepted-finished activities:{' '}
-              {summary.completed}. It does not infer progress from quantity,
-              duration or cost.
+              Tasks count accepted-finished activities over planned activities.
+              Bars show mean accepted progress. Worker, delay, health and
+              variance definitions are not available in the current production
+              contract.
             </Text>
+
             {summary.unresolvedProgress > 0 && (
               <Text style={styles.warning}>
                 {summary.unresolvedProgress}{' '}
@@ -297,9 +258,21 @@ export function ManagerOverviewScreen() {
               </Text>
             )}
 
-            <Text accessibilityRole="header" style={styles.sectionTitle}>
-              WORK AREA COMPLETE
-            </Text>
+            <View style={styles.sectionHeading}>
+              <View style={styles.sectionCopy}>
+                <Text accessibilityRole="header" style={styles.sectionTitle}>
+                  TIMELINE SCHEDULER
+                </Text>
+                <Text style={styles.sectionSubtitle}>
+                  Mean accepted activity progress by discipline
+                </Text>
+              </View>
+              <Link href={'/manager/schedule' as Href} asChild>
+                <Pressable accessibilityRole="button" style={styles.linkButton}>
+                  <Text style={styles.linkText}>Open schedule</Text>
+                </Pressable>
+              </Link>
+            </View>
             <View style={styles.chartCard}>
               {disciplines.length ? (
                 disciplines.map((row, index) => {
@@ -315,7 +288,13 @@ export function ManagerOverviewScreen() {
                         </Text>
                       </View>
                       <View
-                        accessibilityLabel={`${row.discipline}: ${row.percent}% mean accepted progress across ${row.planned} activities`}
+                        accessibilityLabel={`${row.discipline}: ${row.percent}% mean accepted progress across ${row.planned} ${row.planned === 1 ? 'activity' : 'activities'}`}
+                        accessibilityRole="progressbar"
+                        accessibilityValue={{
+                          min: 0,
+                          max: 100,
+                          now: row.percent,
+                        }}
                         style={styles.track}
                       >
                         <View
@@ -342,133 +321,81 @@ export function ManagerOverviewScreen() {
               )}
             </View>
 
-            <Text accessibilityRole="header" style={styles.sectionTitle}>
-              WEEKLY PROGRESS TREND
-            </Text>
-            <Text style={styles.basis}>
-              Accepted field events by work date · evidence volume, not
-              productivity.
-            </Text>
-            <View style={styles.trendCard}>
-              {days.map((day) => {
-                const height = day.count
-                  ? 18 + (day.count / largestDay) * 54
-                  : 8;
-                return (
-                  <View
-                    accessibilityLabel={`${dateLabel(day.date)}: ${day.count} accepted ${day.count === 1 ? 'event' : 'events'}`}
-                    key={day.date}
-                    style={styles.dayColumn}
-                  >
-                    <Text style={styles.dayCount}>
-                      {day.count ? day.count : ''}
-                    </Text>
-                    <View
-                      style={[
-                        styles.dayBar,
-                        {
-                          backgroundColor: day.count ? '#26bf69' : '#c8d0d5',
-                          height,
-                        },
-                      ]}
-                    />
-                    <Text style={styles.dayLabel}>{day.day}</Text>
-                  </View>
-                );
-              })}
-            </View>
-
             <View style={styles.sectionHeading}>
-              <View>
+              <View style={styles.sectionCopy}>
                 <Text accessibilityRole="header" style={styles.sectionTitle}>
-                  NEEDS YOUR ATTENTION
+                  RECENT VERIFIED FIELD UPDATES
                 </Text>
                 <Text style={styles.sectionSubtitle}>
-                  {summary.actionableClaims}{' '}
-                  {summary.actionableClaims === 1 ? 'claim' : 'claims'} awaiting
-                  action
+                  Current accepted evidence only
                 </Text>
               </View>
-              <Link href={'/manager/review' as Href} asChild>
-                <Pressable accessibilityRole="button" style={styles.linkButton}>
-                  <Text style={styles.linkText}>Open review</Text>
-                </Pressable>
-              </Link>
-            </View>
-            {data.attention.length ? (
-              data.attention.map((claim) => (
-                <View key={claim.id} style={styles.attentionCard}>
-                  <Text style={styles.attentionTag}>
-                    {attentionReason(claim)}
-                  </Text>
-                  <Text accessibilityRole="header" style={styles.cardTitle}>
-                    {claim.facts.activityHint ?? claim.facts.evidenceQuote}
-                  </Text>
-                  <Text style={styles.detail}>
-                    {claim.facts.kind.replaceAll('_', ' ')} ·{' '}
-                    {claim.facts.eventDate
-                      ? dateLabel(claim.facts.eventDate)
-                      : 'Work date not recorded'}
-                  </Text>
-                  <Text style={styles.quote}>
-                    “{claim.facts.evidenceQuote}”
-                  </Text>
-                  <Link href={`/manager/review/${claim.id}` as Href} asChild>
-                    <Pressable
-                      accessibilityLabel={`Review ${claim.facts.activityHint ?? 'claim'}`}
-                      accessibilityRole="button"
-                      style={styles.inlineLink}
-                    >
-                      <Text style={styles.linkText}>Review claim</Text>
-                      <Feather color="#7655d9" name="arrow-right" size={15} />
-                    </Pressable>
-                  </Link>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.empty}>
-                No field claims currently need a planner decision or follow-up.
-              </Text>
-            )}
-            {data.actionableCount > data.attention.length && (
-              <Text style={styles.basis}>
-                Showing {data.attention.length} of {data.actionableCount}{' '}
-                current claims. Open Review for the complete paged list.
-              </Text>
-            )}
-
-            <View style={styles.sectionHeading}>
-              <Text accessibilityRole="header" style={styles.sectionTitle}>
-                RECENT ACCEPTED RECORDS
-              </Text>
               <Link href={'/manager/history' as Href} asChild>
                 <Pressable accessibilityRole="button" style={styles.linkButton}>
                   <Text style={styles.linkText}>Open history</Text>
                 </Pressable>
               </Link>
             </View>
-            {recent.length ? (
-              recent.map((entry) => (
-                <View key={entry.eventId} style={styles.acceptedCard}>
-                  <Text style={styles.acceptedTag}>{entry.discipline}</Text>
-                  <Text style={styles.acceptedTitle}>
-                    {entry.externalId} · {entry.activityName}
-                  </Text>
-                  <Text style={styles.detail}>
-                    {eventLabel(entry.eventKind)}
-                  </Text>
-                  <Text style={styles.quote}>“{entry.quote}”</Text>
-                  <Text style={styles.detail}>
-                    Accepted {acceptedLabel(entry.acceptedAt)} by{' '}
-                    {entry.reviewer ?? 'Project planner'}
+            <View style={styles.updatesCard}>
+              {recent.length ? (
+                recent.map((entry, index) => {
+                  const reporter = verifiedReporterLabel(entry);
+                  return (
+                    <View
+                      key={entry.eventId}
+                      style={[
+                        styles.updateRow,
+                        index < recent.length - 1 && styles.updateDivider,
+                      ]}
+                    >
+                      <View style={styles.updateAvatar}>
+                        <Text style={styles.updateAvatarText}>
+                          {reporter.charAt(0).toLocaleUpperCase() || '?'}
+                        </Text>
+                      </View>
+                      <View style={styles.updateCopy}>
+                        <View style={styles.updateTopline}>
+                          <Text numberOfLines={1} style={styles.reporterName}>
+                            {reporter}
+                          </Text>
+                          <Text style={styles.relativeTime}>
+                            {relativeAcceptedTime(entry.acceptedAt, renderedAt)}
+                          </Text>
+                        </View>
+                        <Text numberOfLines={2} style={styles.taskName}>
+                          {entry.externalId} · {entry.activityName}
+                        </Text>
+                        <Text style={styles.eventText}>
+                          {eventLabel(entry.eventKind)} · {entry.discipline}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })
+              ) : (
+                <Text style={styles.emptyInline}>
+                  No verified field updates are available yet.
+                </Text>
+              )}
+            </View>
+
+            <Link href={'/manager/review' as Href} asChild>
+              <Pressable accessibilityRole="button" style={styles.reviewCard}>
+                <View style={styles.reviewIcon}>
+                  <Feather color="#936414" name="check-square" size={18} />
+                </View>
+                <View style={styles.reviewCopy}>
+                  <Text style={styles.reviewTitle}>Pending reviews</Text>
+                  <Text style={styles.reviewDetail}>
+                    {summary.actionableClaims}{' '}
+                    {summary.actionableClaims === 1 ? 'claim' : 'claims'}{' '}
+                    awaiting action
                   </Text>
                 </View>
-              ))
-            ) : (
-              <Text style={styles.empty}>
-                No current accepted field records are available yet.
-              </Text>
-            )}
+                <Feather color="#7655d9" name="arrow-right" size={18} />
+              </Pressable>
+            </Link>
+
             <Text style={styles.footer}>
               Accepted evidence retains its source report and review decision in
               History. Pending claims do not change accepted schedule counts.
@@ -483,86 +410,106 @@ export function ManagerOverviewScreen() {
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 28 },
   header: {
-    minHeight: 50,
+    marginBottom: 4,
+  },
+  eyebrowRow: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
   },
-  headerTitle: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#e9eef2',
+  eyebrow: {
+    color: '#7655d9',
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '900',
+    letterSpacing: 0.55,
+    textTransform: 'uppercase',
   },
-  avatarText: { color: '#17354c', fontSize: 16, fontWeight: '800' },
-  title: { color: '#17283a', fontSize: 19, lineHeight: 26, fontWeight: '800' },
   settings: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e1e7eb',
   },
-  projectMeta: { marginBottom: 12 },
-  projectName: { color: '#344653', fontSize: 13, fontWeight: '800' },
-  revisionLabel: { color: '#84919a', fontSize: 11, lineHeight: 17 },
-  overviewCard: {
+  projectRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 18,
-    padding: 16,
-    borderRadius: 16,
+    gap: 12,
+    paddingBottom: 10,
+  },
+  projectCopy: { flex: 1, minWidth: 0 },
+  projectName: {
+    color: '#17283a',
+    fontSize: 25,
+    lineHeight: 31,
+    fontWeight: '900',
+  },
+  revisionLabel: {
+    color: '#84919a',
+    fontSize: 10,
+    lineHeight: 16,
+    marginTop: 3,
+  },
+  healthPill: {
+    maxWidth: 112,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: '#e9eef2',
+  },
+  healthDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#8a969e',
+  },
+  healthValue: {
+    color: '#425865',
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '900',
+  },
+  metricsRow: { flexDirection: 'row', gap: 7, marginTop: 12 },
+  metric: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 98,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 10,
+    borderRadius: 12,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e5eaed',
-    shadowColor: '#17354c',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 10,
-    elevation: 2,
   },
-  donut: { width: 108, height: 108, position: 'relative' },
-  donutSegment: {
-    position: 'absolute',
-    width: 4,
-    height: 12,
-    borderRadius: 2,
+  metricLabel: {
+    color: '#6f7d86',
+    fontSize: 10,
+    lineHeight: 14,
+    fontWeight: '600',
   },
-  donutCenter: {
-    position: 'absolute',
-    left: 18,
-    top: 18,
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ffffff',
-  },
-  donutValue: {
-    color: '#293c49',
-    fontSize: 24,
-    lineHeight: 29,
+  metricValue: {
+    color: '#314552',
+    fontSize: 17,
+    lineHeight: 22,
     fontWeight: '900',
   },
-  donutLabel: {
-    color: '#26aa61',
+  unknown: {
+    color: '#7b8891',
     fontSize: 9,
     lineHeight: 12,
-    fontWeight: '900',
+    textAlign: 'center',
   },
-  legend: { flex: 1, minWidth: 0, gap: 7 },
-  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { flex: 1, color: '#5f6f7a', fontSize: 11, lineHeight: 16 },
-  legendPercent: { color: '#314552', fontWeight: '900' },
   basis: { color: '#72818b', fontSize: 11, lineHeight: 17, marginTop: 8 },
   warning: {
     color: '#835d17',
@@ -573,79 +520,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
+  sectionHeading: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 20,
+  },
+  sectionCopy: { flex: 1, minWidth: 0 },
   sectionTitle: {
     color: '#455660',
     fontSize: 11,
     lineHeight: 16,
     fontWeight: '900',
     letterSpacing: 0.55,
-    marginTop: 20,
-  },
-  chartCard: {
-    marginTop: 8,
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e5eaed',
-    gap: 13,
-  },
-  progressRow: { gap: 5 },
-  progressHeading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  progressTitle: {
-    color: '#43545f',
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '700',
-  },
-  progressPercent: { fontSize: 11, lineHeight: 16, fontWeight: '900' },
-  track: {
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#e7ecef',
-    overflow: 'hidden',
-  },
-  fill: { height: 7, borderRadius: 4 },
-  progressFacts: { color: '#8a969e', fontSize: 9, lineHeight: 13 },
-  trendCard: {
-    height: 130,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-around',
-    gap: 5,
-    marginTop: 8,
-    paddingHorizontal: 12,
-    paddingTop: 15,
-    paddingBottom: 10,
-    borderRadius: 14,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e5eaed',
-  },
-  dayColumn: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
-  dayCount: {
-    minHeight: 15,
-    color: '#72818b',
-    fontSize: 9,
-    lineHeight: 13,
-  },
-  dayBar: { width: 12, minHeight: 8, borderRadius: 3 },
-  dayLabel: {
-    color: '#6f7d86',
-    fontSize: 10,
-    lineHeight: 15,
-    marginTop: 5,
-    fontWeight: '700',
-  },
-  sectionHeading: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    gap: 10,
   },
   sectionSubtitle: {
     color: '#84919a',
@@ -661,71 +549,101 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1edff',
   },
   linkText: { color: '#7655d9', fontSize: 11, fontWeight: '800' },
-  attentionCard: {
-    marginTop: 9,
+  chartCard: {
+    marginTop: 8,
     padding: 14,
     borderRadius: 14,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e5eaed',
-    gap: 4,
+    gap: 15,
   },
-  attentionTag: {
-    alignSelf: 'flex-start',
-    color: '#936414',
-    backgroundColor: '#fff2d4',
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    fontSize: 10,
-    lineHeight: 14,
-    fontWeight: '800',
-  },
-  cardTitle: {
-    color: '#314552',
-    fontSize: 15,
-    lineHeight: 21,
-    fontWeight: '800',
-  },
-  detail: { color: '#73818b', fontSize: 11, lineHeight: 17 },
-  quote: { color: '#465a67', fontSize: 12, lineHeight: 18 },
-  inlineLink: {
-    minHeight: 38,
+  progressRow: { gap: 5 },
+  progressHeading: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 5,
+    justifyContent: 'space-between',
   },
-  acceptedCard: {
-    marginTop: 9,
+  progressTitle: {
+    color: '#43545f',
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700',
+  },
+  progressPercent: { fontSize: 11, lineHeight: 16, fontWeight: '900' },
+  track: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#e7ecef',
+    overflow: 'hidden',
+  },
+  fill: { height: 8, borderRadius: 4 },
+  progressFacts: { color: '#8a969e', fontSize: 9, lineHeight: 13 },
+  updatesCard: {
+    marginTop: 8,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e5eaed',
+  },
+  updateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
     paddingVertical: 13,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8eb',
-    gap: 3,
   },
-  acceptedTag: {
-    alignSelf: 'flex-start',
-    color: '#397795',
+  updateDivider: { borderBottomWidth: 1, borderBottomColor: '#edf0f2' },
+  updateAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#e7f2f7',
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    fontSize: 10,
-    lineHeight: 14,
+  },
+  updateAvatarText: { color: '#397795', fontSize: 13, fontWeight: '900' },
+  updateCopy: { flex: 1, minWidth: 0 },
+  updateTopline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  reporterName: { flex: 1, color: '#314552', fontSize: 12, fontWeight: '800' },
+  relativeTime: { color: '#8a969e', fontSize: 9, lineHeight: 13 },
+  taskName: { color: '#4c606d', fontSize: 11, lineHeight: 16, marginTop: 2 },
+  eventText: { color: '#73818b', fontSize: 9, lineHeight: 14, marginTop: 1 },
+  reviewCard: {
+    minHeight: 70,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    marginTop: 16,
+    padding: 13,
+    borderRadius: 14,
+    backgroundColor: '#fff8e8',
+    borderWidth: 1,
+    borderColor: '#f2dfb3',
+  },
+  reviewIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff0c9',
+  },
+  reviewCopy: { flex: 1, minWidth: 0 },
+  reviewTitle: {
+    color: '#5f4a22',
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: '800',
   },
-  acceptedTitle: {
-    color: '#314552',
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '800',
-  },
+  reviewDetail: { color: '#806b44', fontSize: 10, lineHeight: 15 },
   notice: {
     color: '#315a70',
     backgroundColor: '#e8f1f5',
     borderRadius: 12,
     padding: 12,
-    marginBottom: 12,
+    marginTop: 10,
+    marginBottom: 2,
     fontSize: 12,
     lineHeight: 18,
   },
@@ -745,17 +663,11 @@ const styles = StyleSheet.create({
   },
   retryText: { color: '#ffffff', fontSize: 13, fontWeight: '800' },
   disabled: { opacity: 0.5 },
-  empty: {
-    color: '#73818b',
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#e5eaed',
-    padding: 14,
-    marginTop: 9,
-    fontSize: 12,
-    lineHeight: 19,
+  emptyInline: {
+    color: '#84919a',
+    fontSize: 11,
+    lineHeight: 17,
+    paddingVertical: 13,
   },
-  emptyInline: { color: '#84919a', fontSize: 11, lineHeight: 17 },
-  footer: { color: '#73818b', fontSize: 11, lineHeight: 18, marginTop: 20 },
+  footer: { color: '#73818b', fontSize: 11, lineHeight: 18, marginTop: 18 },
 });

@@ -5,6 +5,8 @@ import {
   disciplineProgress,
   overviewSummary,
   recentAcceptedEvents,
+  relativeAcceptedTime,
+  verifiedReporterLabel,
 } from './overviewModel';
 
 import type { ExecutionHistoryEntry } from '@/features/history/historyContracts';
@@ -139,6 +141,39 @@ it('returns newest current evidence and excludes records replaced by corrections
     },
   ] as ExecutionHistoryEntry[]);
   expect(result.map((item) => item.eventId)).toEqual(['event-2', 'event-1']);
+});
+
+it('labels verified updates with recorded reporters and stable relative time', () => {
+  expect(
+    verifiedReporterLabel({
+      ...event,
+      provenance: { reportedByLabel: 'Site supervisor' },
+    } as ExecutionHistoryEntry),
+  ).toBe('Site supervisor');
+  expect(
+    verifiedReporterLabel({
+      ...event,
+      provenance: { reportedByLabel: null },
+    } as ExecutionHistoryEntry),
+  ).toBe('Reporter not recorded');
+  expect(
+    relativeAcceptedTime(
+      '2026-09-25T09:29:20.000Z',
+      Date.parse('2026-09-25T09:30:00.000Z'),
+    ),
+  ).toBe('Just now');
+  expect(
+    relativeAcceptedTime(
+      '2026-09-25T08:00:00.000Z',
+      Date.parse('2026-09-25T09:30:00.000Z'),
+    ),
+  ).toBe('1 hour ago');
+  expect(
+    relativeAcceptedTime(
+      '2026-09-22T09:30:00.000Z',
+      Date.parse('2026-09-25T09:30:00.000Z'),
+    ),
+  ).toBe('3 days ago');
 });
 
 it('uses the existing review state and flags as the attention reason', () => {

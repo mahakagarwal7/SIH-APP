@@ -1101,6 +1101,30 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   'WEEKLY PROGRESS TREND': 'साप्ताहिक प्रगति रुझान',
   'WORK AREA COMPLETE': 'कार्य-क्षेत्र पूर्णता',
   '· Schedule v': '· अनुसूची संस्करण',
+  'Manager Panel': 'प्रबंधक पैनल',
+  'Project health: Not recorded': 'परियोजना स्वास्थ्य: दर्ज नहीं किया गया',
+  TASKS: 'कार्य',
+  WORKERS: 'कर्मचारी',
+  DELAYS: 'देरी',
+  VARIANCE: 'अंतर',
+  Tasks: 'कार्य',
+  Workers: 'कर्मचारी',
+  Delays: 'देरी',
+  Variance: 'अंतर',
+  'PROJECT HEALTH': 'परियोजना स्वास्थ्य',
+  'Tasks count accepted-finished activities over planned activities. Bars show mean accepted progress. Worker, delay, health and variance definitions are not available in the current production contract.':
+    'कार्य नियोजित गतिविधियों की तुलना में स्वीकृत-पूर्ण गतिविधियों को गिनते हैं। बार औसत स्वीकृत प्रगति दिखाते हैं। वर्तमान उत्पादन अनुबंध में कर्मचारी, देरी, स्वास्थ्य और अंतर की परिभाषाएँ उपलब्ध नहीं हैं।',
+  'TIMELINE SCHEDULER': 'समयरेखा अनुसूचक',
+  'Mean accepted activity progress by discipline':
+    'विभाग के अनुसार औसत स्वीकृत गतिविधि प्रगति',
+  'Open schedule': 'अनुसूची खोलें',
+  'RECENT VERIFIED FIELD UPDATES': 'हाल के सत्यापित स्थल अपडेट',
+  'Current accepted evidence only': 'केवल वर्तमान स्वीकृत साक्ष्य',
+  'No verified field updates are available yet.':
+    'अभी कोई सत्यापित स्थल अपडेट उपलब्ध नहीं है।',
+  'Pending reviews': 'लंबित समीक्षाएँ',
+  'Reporter not recorded': 'रिपोर्टर दर्ज नहीं है',
+  'Just now': 'अभी',
   'Alerts & Approvals': 'अलर्ट और अनुमोदन',
   Alerts: 'अलर्ट',
   Critical: 'गंभीर',
@@ -1110,6 +1134,5 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   Profile: 'प्रोफ़ाइल',
   'Reference navigation preview. Alerts selected.':
     'संदर्भ नेविगेशन पूर्वावलोकन। अलर्ट चुना गया है।',
-  Tasks: 'कार्य',
   'VIEW DETAILS': 'विवरण देखें',
 };
