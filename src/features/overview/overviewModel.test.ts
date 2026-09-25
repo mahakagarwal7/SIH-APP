@@ -14,6 +14,7 @@ const activity = {
   discipline: 'Piping',
   actualStart: '2026-09-20',
   actualFinish: null,
+  acceptedPercent: 40,
 } as ScheduleActivity;
 
 const event = {
@@ -23,22 +24,23 @@ const event = {
   effective: true,
 } as ExecutionHistoryEntry;
 
-it('counts exact accepted activity states and labels the activity-count ratio', () => {
+it('aggregates accepted activity percentages without inferring from quantities', () => {
   const activities: ScheduleActivity[] = [
     activity,
     { ...activity, actualFinish: '2026-09-23' },
-    { ...activity, discipline: 'Civil', actualStart: null },
+    { ...activity, discipline: 'Civil', actualStart: null, acceptedPercent: 0 },
     {
       ...activity,
       discipline: 'Civil',
       actualStart: null,
+      acceptedPercent: 20,
       reportedProgress: true,
     },
   ];
   expect(overviewSummary(activities, 7)).toEqual({
     planned: 4,
     completed: 1,
-    completionPercent: 25,
+    completionPercent: 40,
     inProgress: 1,
     unresolvedProgress: 1,
     actionableClaims: 7,
@@ -50,14 +52,14 @@ it('counts exact accepted activity states and labels the activity-count ratio', 
       planned: 2,
       completed: 0,
       inProgress: 0,
-      percent: 0,
+      percent: 10,
     },
     {
       discipline: 'Piping',
       planned: 2,
       completed: 1,
       inProgress: 1,
-      percent: 50,
+      percent: 70,
     },
   ]);
 });

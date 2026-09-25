@@ -86,6 +86,37 @@ it('matches the field home summary and action layout', async () => {
     expect(screen.getByRole('button', { name: label })).toBeVisible();
 });
 
+it('computes the ring only from activities assigned to the signed-in reporter', async () => {
+  jest.mocked(useMyWork).mockReturnValue({
+    project: { data: context, error: null, isPending: false },
+    work: {
+      data: {
+        ...work,
+        snapshot: {
+          ...work.snapshot,
+          activities: [
+            ...work.snapshot.activities,
+            {
+              ...work.snapshot.activities[0],
+              id: 'other-task',
+              assignedReporterId: 'another-reporter',
+              actualStart: '2026-09-20',
+              actualFinish: '2026-09-21',
+              acceptedPercent: 100,
+            },
+          ],
+        },
+      },
+      error: null,
+    },
+    refresh: jest.fn(),
+    offline: false,
+  } as unknown as ReturnType<typeof useMyWork>);
+  await render(<FieldHomeScreen />);
+  expect(screen.getByText('0%')).toBeVisible();
+  expect(screen.queryByText('50%')).toBeNull();
+});
+
 it('marks the project delayed only from a supported planned finish', async () => {
   jest.mocked(useMyWork).mockReturnValue({
     project: { data: context, error: null, isPending: false },

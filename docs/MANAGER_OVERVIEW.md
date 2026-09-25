@@ -27,18 +27,18 @@ load. Project switching clears the overview cache.
 - **Planned activities** is the number of reportable activities in the active
   schedule snapshot.
 - **Completed activities** have an accepted `actualFinish`.
-- **Total activity completion** is accepted-finished activity count divided by
-  planned activity count. It is labeled as an activity-count ratio and does not
-  weight quantity, duration, cost or criticality.
+- **Total activity progress** is the arithmetic mean of each activity's
+  backend-provided `acceptedPercent`; an accepted finish contributes 100. It
+  does not infer a percentage from quantity, duration, cost or criticality.
 - **In progress** activities have an accepted `actualStart` and no accepted
   finish.
 - **Reported progress without a start** is shown separately and never counted
   as started or complete.
 - **Claims needing action** is the exact count returned by the actionable
   claims query. It counts claims, not distinct reports.
-- **Discipline completion** is completed activity count divided by planned
-  activity count within that discipline. The numerator and denominator remain
-  visible beside the bar.
+- **Discipline progress** is the same mean accepted percentage within that
+  discipline. Accepted-finished and planned counts remain visible beside the
+  bar as separate context.
 - **Weekly accepted field events** counts current effective history events by
   their recorded work date in Monday-to-Sunday site weeks. Replaced evidence is
   excluded. This is evidence volume, not productivity.

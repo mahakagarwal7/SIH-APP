@@ -1,8 +1,9 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, StyleSheet, View } from 'react-native';
 
+import { useToast } from '@/components/ToastProvider';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useLocalization } from '@/features/localization/LocalizationProvider';
 import {
@@ -20,6 +21,7 @@ import {
 import { getVoiceDraftStore } from './nativeDraftStore';
 import { getNativeOutbox, syncNativeOutbox } from './nativeOutbox';
 import { getReportDraftStore } from './nativeReportDraftStore';
+import { subscribeOutboxChanges } from './outboxEvents';
 import { needsReportPolling } from './reportStatus';
 import { useReportStatusPolling } from './useReportStatusPolling';
 
@@ -50,6 +52,8 @@ function Action({
 function AccountReports({ userId }: { userId: string }) {
   useLocalization();
   const auth = useAuth();
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
   const router = useRouter();
   const mounted = useRef(true);
   const syncingRef = useRef(false);
@@ -82,6 +86,16 @@ function AccountReports({ userId }: { userId: string }) {
   });
   const localRefetch = local.refetch;
   const remoteRefetch = remote.refetch;
+  useEffect(
+    () =>
+      subscribeOutboxChanges((owner) => {
+        if (owner !== userId) return;
+        void queryClient.invalidateQueries({
+          queryKey: ['my-reports', userId],
+        });
+      }),
+    [queryClient, userId],
+  );
   const pollingRequired = needsReportPolling(remote.data ?? []);
   useReportStatusPolling({
     enabled: !auth.offline && pollingRequired,
@@ -128,9 +142,12 @@ function AccountReports({ userId }: { userId: string }) {
         setMessage(
           'Sync pass finished. Delivery status will update while the app remains open.',
         );
+      showToast('Reports synced.');
     } catch {
-      if (mounted.current)
+      if (mounted.current) {
         setMessage('Sync could not start. Saved device copies are unchanged.');
+        showToast('Report sync failed. Try again.', 'error');
+      }
     } finally {
       syncingRef.current = false;
       if (mounted.current) setSyncing(false);
@@ -180,10 +197,17 @@ function AccountReports({ userId }: { userId: string }) {
         </Text>
       )}
       {remote.error && (
-        <Text accessibilityRole="alert" style={styles.error}>
-          Could not refresh production status. Saved device copies are
-          unchanged.
-        </Text>
+        <View style={styles.errorGroup}>
+          <Text accessibilityRole="alert" style={styles.error}>
+            Could not refresh production status. Saved device copies are
+            unchanged.
+          </Text>
+          <Action
+            label="Retry server status"
+            disabled={remote.isFetching || auth.offline}
+            onPress={() => void remoteRefetch()}
+          />
+        </View>
       )}
       {local.isPending ? (
         <View style={styles.loading}>
@@ -194,7 +218,7 @@ function AccountReports({ userId }: { userId: string }) {
         <Text accessibilityRole="alert" style={styles.error}>
           Could not read saved reports from this device.
         </Text>
-      ) : items.length === 0 ? (
+      ) : items.length === 0 && (auth.offline || remote.isSuccess) ? (
         <Text style={styles.empty}>No reports saved or submitted yet.</Text>
       ) : (
         items.map((item) => (
@@ -294,6 +318,7 @@ const styles = StyleSheet.create({
   },
   message: { color: '#17354c', fontSize: 14, lineHeight: 22, marginBottom: 12 },
   error: { color: '#9d3434', fontSize: 15, lineHeight: 23, marginBottom: 12 },
+  errorGroup: { alignItems: 'flex-start', marginBottom: 12 },
   loading: { marginTop: 24, gap: 12, alignItems: 'flex-start' },
   empty: { color: '#586c7a', paddingVertical: 28, fontSize: 16 },
   status: { color: '#266b8c', fontWeight: '700', fontSize: 13, lineHeight: 21 },

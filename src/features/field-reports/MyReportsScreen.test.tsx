@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react-native';
 import { useFocusEffect } from 'expo-router';
 import { AppState } from 'react-native';
 
@@ -187,6 +193,28 @@ it('keeps sync disabled offline while local reports remain visible', async () =>
   expect(await screen.findByText('Saved on device')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Sync now' })).toBeDisabled();
   expect(loadRemoteReports).not.toHaveBeenCalled();
+});
+
+it('shows a retryable server error without mislabeling it as an empty report list', async () => {
+  jest
+    .mocked(getVoiceDraftStore)
+    .mockResolvedValue({ list: async () => [] } as never);
+  jest
+    .mocked(getReportDraftStore)
+    .mockResolvedValue({ list: async () => [] } as never);
+  jest
+    .mocked(getNativeOutbox)
+    .mockResolvedValue({ list: async () => [] } as never);
+  jest.mocked(loadRemoteReports).mockRejectedValue(new Error('RLS denied'));
+  await render(<App />);
+  expect(
+    await screen.findByText(/Could not refresh production status/),
+  ).toBeVisible();
+  expect(screen.queryByText('No reports saved or submitted yet.')).toBeNull();
+  await fireEvent.press(
+    screen.getByRole('button', { name: 'Retry server status' }),
+  );
+  await waitFor(() => expect(loadRemoteReports).toHaveBeenCalledTimes(2));
 });
 
 it('manually retries paused work and reports completion without claiming submission', async () => {

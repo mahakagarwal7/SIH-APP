@@ -91,7 +91,16 @@ export function fieldHomeSummary(
     completed,
     total: activities.length,
     percent: activities.length
-      ? Math.round((completed / activities.length) * 100)
+      ? Math.round(
+          activities.reduce(
+            (sum, activity) =>
+              sum +
+              (activity.actualFinish
+                ? 100
+                : Math.max(0, Math.min(100, activity.acceptedPercent ?? 0))),
+            0,
+          ) / activities.length,
+        )
       : null,
     timing,
   };
@@ -112,16 +121,21 @@ export function groupMyWork(
   const groups: WorkGroup[] = ['Today', 'Up next', 'Earlier assignments'].map(
     (title) => ({ title, items: [] }),
   );
-  for (const activity of activities) {
-    if (activity.assignedReporterId !== userId) continue;
-    const assignment = latest.get(activity.id);
-    if (
-      !assignment ||
-      assignment.project_id !== activity.projectId ||
-      assignment.reporter_id !== userId
-    ) {
+  if (
+    activities.some(
+      (activity) =>
+        activity.assignedReporterId === userId && !latest.has(activity.id),
+    )
+  )
+    throw new Error('Assignment details changed. Refresh My work.');
+  const activitiesById = new Map(
+    activities.map((activity) => [activity.id, activity]),
+  );
+  for (const assignment of latest.values()) {
+    if (assignment.reporter_id !== userId) continue;
+    const activity = activitiesById.get(assignment.activity_id);
+    if (!activity || assignment.project_id !== activity.projectId)
       throw new Error('Assignment details changed. Refresh My work.');
-    }
     const index =
       assignment.effective_from > today
         ? 1

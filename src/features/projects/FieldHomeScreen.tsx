@@ -104,10 +104,12 @@ export function FieldHomeScreen() {
         )
       : null;
   const current = groups?.find((group) => group.title === 'Today')?.items ?? [];
-  const summary = fieldHomeSummary(activities, today);
+  const assignedActivities =
+    groups?.flatMap((group) => group.items.map((item) => item.activity)) ?? [];
+  const summary = fieldHomeSummary(assignedActivities, today);
   const primary = current[0]?.activity;
   const location =
-    primary?.location ?? activities[0]?.location ?? 'Site not recorded';
+    primary?.location ?? assignedActivities[0]?.location ?? 'Site not recorded';
   const assignment = primary
     ? current.length === 1
       ? primary.name
