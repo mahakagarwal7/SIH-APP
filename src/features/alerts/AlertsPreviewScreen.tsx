@@ -253,7 +253,7 @@ export function AlertsPreviewScreen() {
           />
         </View>
 
-        {previewMessage && (
+        {!!previewMessage && (
           <Text accessibilityRole="alert" style={styles.previewMessage}>
             {previewMessage}
           </Text>
