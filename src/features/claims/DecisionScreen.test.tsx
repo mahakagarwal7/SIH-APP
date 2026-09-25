@@ -262,6 +262,24 @@ it('requires deliberate activity selection and exact preview before acceptance',
   expect(mockBack).toHaveBeenCalled();
 });
 
+it('previews and submits when a planner types a reason and taps Accept directly', async () => {
+  await render(<DecisionScreen claimId={claimId} />);
+  await selectCandidateAndReason();
+  const accept = screen.getByRole('button', {
+    name: 'Accept verified event',
+  });
+  expect(accept).toBeEnabled();
+  await fireEvent.press(accept);
+  await waitFor(() => expect(previewDecision).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(submitDecision).toHaveBeenCalledTimes(1));
+  expect(jest.mocked(submitDecision).mock.calls[0]?.[1]).toMatchObject({
+    action: 'accept',
+    previewHash: preview.previewHash,
+    reason: 'Evidence confirms this activity.',
+  });
+  expect(finish).toHaveBeenCalledWith(true);
+});
+
 it('records rejection with a reason without inventing an activity selection', async () => {
   await render(<DecisionScreen claimId={claimId} />);
   await fireEvent.changeText(
@@ -393,7 +411,7 @@ it('clears a stale preview and refreshes current versions', async () => {
   expect(refresh).toHaveBeenCalled();
   expect(
     screen.getByRole('button', { name: 'Accept verified event' }),
-  ).toBeDisabled();
+  ).toBeEnabled();
 });
 
 it('blocks writes offline and shows role/access failures explicitly', async () => {
