@@ -242,10 +242,10 @@ export function ManagerOverviewScreen() {
               />
             </View>
             <Text style={styles.basis}>
-              Accepted-finished tasks: {summary.completed} of {summary.planned}{' '}
-              planned. Bars show mean accepted progress; worker, delay, health
-              and variance definitions are not available in the current
-              production contract.
+              Tasks count accepted-finished activities over planned activities.
+              Bars show mean accepted progress. Worker, delay, health and
+              variance definitions are not available in the current production
+              contract.
             </Text>
 
             {summary.unresolvedProgress > 0 && (

@@ -1112,10 +1112,8 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   Delays: 'देरी',
   Variance: 'अंतर',
   'PROJECT HEALTH': 'परियोजना स्वास्थ्य',
-  'Accepted-finished tasks:': 'स्वीकृत-पूर्ण कार्य:',
-  of: 'में से',
-  'planned. Bars show mean accepted progress; worker, delay, health and variance definitions are not available in the current production contract.':
-    'नियोजित कार्यों में से। बार औसत स्वीकृत प्रगति दिखाते हैं; वर्तमान उत्पादन अनुबंध में कर्मचारी, देरी, स्वास्थ्य और अंतर की परिभाषाएँ उपलब्ध नहीं हैं।',
+  'Tasks count accepted-finished activities over planned activities. Bars show mean accepted progress. Worker, delay, health and variance definitions are not available in the current production contract.':
+    'कार्य नियोजित गतिविधियों की तुलना में स्वीकृत-पूर्ण गतिविधियों को गिनते हैं। बार औसत स्वीकृत प्रगति दिखाते हैं। वर्तमान उत्पादन अनुबंध में कर्मचारी, देरी, स्वास्थ्य और अंतर की परिभाषाएँ उपलब्ध नहीं हैं।',
   'TIMELINE SCHEDULER': 'समयरेखा अनुसूचक',
   'Mean accepted activity progress by discipline':
     'विभाग के अनुसार औसत स्वीकृत गतिविधि प्रगति',
@@ -1127,4 +1125,14 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   'Pending reviews': 'लंबित समीक्षाएँ',
   'Reporter not recorded': 'रिपोर्टर दर्ज नहीं है',
   'Just now': 'अभी',
+  'Alerts & Approvals': 'अलर्ट और अनुमोदन',
+  Alerts: 'अलर्ट',
+  Critical: 'गंभीर',
+  'DESIGN PREVIEW · No live alerts or approvals are connected.':
+    'डिज़ाइन पूर्वावलोकन · कोई लाइव अलर्ट या अनुमोदन जुड़ा नहीं है।',
+  Pending: 'लंबित',
+  Profile: 'प्रोफ़ाइल',
+  'Reference navigation preview. Alerts selected.':
+    'संदर्भ नेविगेशन पूर्वावलोकन। अलर्ट चुना गया है।',
+  'VIEW DETAILS': 'विवरण देखें',
 };
