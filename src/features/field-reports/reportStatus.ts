@@ -27,6 +27,7 @@ export type ReportStatusInput = {
     report_version: number;
     status: ReportJobState | string;
     error_code: string | null;
+    claim_count?: number | null;
   }[];
 };
 
@@ -93,6 +94,16 @@ export function reportDeliveryStatus(
       status: 'Processing report',
       detail: 'The current report version is queued or still processing.',
       terminal: false,
+    };
+  if (
+    currentVersionJob?.status === 'succeeded' &&
+    currentVersionJob.claim_count === 0
+  )
+    return {
+      status: 'No construction claims identified',
+      detail:
+        'Your report is saved. No construction event was identified, and the accepted schedule is unchanged.',
+      terminal: true,
     };
 
   const claims = report.claims.filter(

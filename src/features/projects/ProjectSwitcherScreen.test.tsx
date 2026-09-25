@@ -82,3 +82,25 @@ it('uses the workspace chooser when opened without a prior route', async () => {
   );
   expect(mockRouter.back).not.toHaveBeenCalled();
 });
+
+it('explains when the selected project is the only available choice', async () => {
+  jest.mocked(useProjectSelection).mockReturnValue({
+    data: current,
+    projects: [current],
+    error: null,
+    isPending: false,
+    isFetching: false,
+    offline: false,
+    remembered: false,
+    refetch: jest.fn(),
+    select: jest.fn(),
+  } as unknown as ReturnType<typeof useProjectSelection>);
+
+  await render(<ProjectSwitcherScreen />);
+  expect(
+    screen.getByText('This is the only project available to your account.'),
+  ).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Project One, Selected' }),
+  ).toBeDisabled();
+});

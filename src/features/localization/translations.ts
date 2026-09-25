@@ -392,8 +392,16 @@ export const hiTranslations: Readonly<Record<string, string>> = {
   'No activities match this discipline in the active revision.':
     'सक्रिय पुनरीक्षण में कोई भी गतिविधि इस अनुशासन से मेल नहीं खाती।',
   'No assignment today.': 'आज कोई असाइनमेंट नहीं.',
+  'No personal field assignments':
+    'कोई व्यक्तिगत फ़ील्ड कार्य नहीं सौंपे गए हैं',
+  Planner: 'प्लानर',
+  Reporter: 'रिपोर्टर',
+  Supervisor: 'पर्यवेक्षक',
+  'This is the only project available to your account.':
+    'आपके खाते के लिए यही एकमात्र उपलब्ध प्रोजेक्ट है।',
   'No candidate activity was recorded. This claim needs manual review.':
     'किसी भी उम्मीदवार की गतिविधि दर्ज नहीं की गई. इस दावे की मैन्युअल समीक्षा की आवश्यकता है.',
+  'No construction claims identified': 'निर्माण कार्य का कोई दावा नहीं मिला',
   'No caption supplied': 'कोई कैप्शन नहीं दिया गया',
   'No child branches in this snapshot.':
     'इस स्नैपशॉट में कोई चाइल्ड ब्रांच नहीं है.',
@@ -1042,6 +1050,8 @@ export const hiTranslations: Readonly<Record<string, string>> = {
     'साक्ष्य को शेड्यूल में बदलाव किए बिना दर्ज किया गया था।',
   'The report is ready for planner review.':
     'रिपोर्ट योजनाकार समीक्षा के लिए तैयार है।',
+  'Your report is saved. No construction event was identified, and the accepted schedule is unchanged.':
+    'आपकी रिपोर्ट सहेज ली गई है। कोई निर्माण कार्य दर्ज नहीं हुआ और स्वीकृत शेड्यूल अपरिवर्तित है।',
   'The report reached production and current outcomes are loading.':
     'रिपोर्ट उत्पादन तक पहुंच गई और वर्तमान परिणाम लोड हो रहे हैं।',
   'The server will retry processing the current report version.':

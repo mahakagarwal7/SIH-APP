@@ -68,6 +68,7 @@ function report(status: 'running' | 'succeeded'): RemoteReport {
         status,
         attempts: 1,
         error_code: null,
+        claim_count: status === 'succeeded' ? 1 : null,
         created_at: '2026-09-24T01:01:00Z',
       },
     ],

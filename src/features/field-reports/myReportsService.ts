@@ -53,6 +53,7 @@ const jobSchema = z.object({
   status: z.enum(['queued', 'running', 'retry_wait', 'succeeded', 'failed']),
   attempts: z.number().int().nonnegative(),
   error_code: z.string().nullable(),
+  claim_count: z.number().int().min(0).max(100).nullable(),
   created_at: z.string(),
 });
 const PAGE_SIZE = 200;
@@ -254,7 +255,7 @@ export async function loadRemoteReports(
         let query = client
           .from('jobs')
           .select(
-            'id,report_id,report_version,status,attempts,error_code,created_at',
+            'id,report_id,report_version,status,attempts,error_code,claim_count,created_at',
             { count: 'exact' },
           )
           .in('report_id', ids)

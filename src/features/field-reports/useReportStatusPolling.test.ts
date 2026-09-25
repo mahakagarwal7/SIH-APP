@@ -25,6 +25,7 @@ const processing = {
       status: 'running',
       attempts: 1,
       error_code: null,
+      claim_count: null,
       created_at: '2026-09-24T00:00:01Z',
     },
   ],
