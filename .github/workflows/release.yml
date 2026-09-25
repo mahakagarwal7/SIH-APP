@@ -101,9 +101,14 @@ jobs:
           Write-Host "highest build-tools with aapt: $($kept[0].Name)"
 
       - run: npm ci
+      # Automatic previews run only after the caller's quality job passes.
+      # Keep these gates for standalone manual and tagged releases.
       - run: npm run typecheck
+        if: ${{ !inputs.automatic }}
       - run: npm run lint
+        if: ${{ !inputs.automatic }}
       - run: npm test -- --runInBand
+        if: ${{ !inputs.automatic }}
 
       - name: Build the ARM64 preview APK
         run: npm run android:preview

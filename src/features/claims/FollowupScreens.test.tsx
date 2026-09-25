@@ -219,6 +219,8 @@ beforeEach(() => {
   });
 });
 
+// Windows cold-start rendering can exceed Jest's default 5s limit; each
+// waitFor assertion still has its own short deadline for a broken interaction.
 it('records one explicit location answer without approving the claim', async () => {
   await render(<ReportFollowupScreen reportId={reportId} />);
   expect(screen.getByRole('button', { name: 'Send answer' })).toBeDisabled();
@@ -249,7 +251,7 @@ it('records one explicit location answer without approving the claim', async () 
     screen.getByRole('checkbox', { name: 'Unit 2 · PIP-1201' }),
   ).not.toBeChecked();
   expect(screen.getByRole('button', { name: 'Send answer' })).toBeDisabled();
-});
+}, 15_000);
 
 it('uses a required calendar control for a work-date clarification', async () => {
   jest.mocked(useReportFollowups).mockReturnValue({

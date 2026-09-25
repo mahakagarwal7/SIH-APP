@@ -12,6 +12,9 @@
 - Manual artifact-only runs and explicit `v*` tag releases remain available.
   An automatic build checks the current main commit before publishing so a
   superseded build cannot become the newest preview.
+- Automatic builds reuse the completed `main` quality job instead of rerunning
+  the same type, lint and Jest checks on a slower Windows runner. Manual and
+  tagged releases still run those checks before building.
 
 ## Verification
 
