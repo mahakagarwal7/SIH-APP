@@ -7,12 +7,15 @@ import { preparePhoto } from './photoPreparation';
 import type { PreparedPhoto, Resize } from './photoPreparation';
 import type { ImagePickerAsset, ImagePickerResult } from 'expo-image-picker';
 
-export type PreparedLocalPhoto = PreparedPhoto;
+export type PreparedLocalPhoto = PreparedPhoto & {
+  sourceByteLength: number | null;
+};
+export type PickedLocalPhoto = ImagePickerAsset;
 
 export async function preparePickedPhoto(
   asset: ImagePickerAsset,
 ): Promise<PreparedLocalPhoto> {
-  return preparePhoto(
+  const prepared = await preparePhoto(
     asset,
     (uri, resize: Resize | undefined, compress) =>
       manipulateAsync(uri, resize ? [{ resize }] : [], {
@@ -21,6 +24,10 @@ export async function preparePickedPhoto(
       }),
     async (uri) => new File(uri).bytes(),
   );
+  return {
+    ...prepared,
+    sourceByteLength: asset.fileSize ?? null,
+  };
 }
 
 const options: ImagePicker.ImagePickerOptions = {
@@ -31,7 +38,7 @@ const options: ImagePicker.ImagePickerOptions = {
 
 async function selected(result: ImagePickerResult) {
   if (result.canceled || !result.assets[0]) return null;
-  return preparePickedPhoto(result.assets[0]);
+  return result.assets[0];
 }
 
 export async function takePhoto() {

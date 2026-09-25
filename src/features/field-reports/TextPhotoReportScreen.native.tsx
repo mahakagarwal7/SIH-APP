@@ -19,13 +19,14 @@ import { useCaptureProject } from '@/features/projects/useCaptureProject';
 import { assertLocalDraftCanBeDiscarded } from './nativeOutbox';
 import {
   choosePhoto,
+  preparePickedPhoto,
   recoverPendingPhoto,
   takePhoto,
 } from './nativePhotoPicker';
 import { getReportDraftStore } from './nativeReportDraftStore';
 import { ReportMethodLinks } from './ReportMethodLinks';
 
-import type { PreparedLocalPhoto } from './nativePhotoPicker';
+import type { PickedLocalPhoto, PreparedLocalPhoto } from './nativePhotoPicker';
 import type {
   LocalReportDraft,
   PreparedDraftPhoto,
@@ -33,8 +34,25 @@ import type {
   SavedPhoto,
 } from './reportDraftStore';
 
-type LocalPhoto = PreparedLocalPhoto & { id: string; caption: string };
+type LocalPhoto = {
+  id: string;
+  caption: string;
+  previewUri: string;
+  prepared: PreparedLocalPhoto | null;
+  error: string | null;
+};
+type ReadyLocalPhoto = LocalPhoto & { prepared: PreparedLocalPhoto };
 type PendingSave = { draft: ReportDraft; prepared: PreparedDraftPhoto[] };
+
+function isReadyPhoto(photo: LocalPhoto): photo is ReadyLocalPhoto {
+  return photo.prepared !== null;
+}
+
+function byteLabel(bytes: number) {
+  return bytes >= 1024 * 1024
+    ? `${(bytes / 1024 / 1024).toFixed(1)} MB`
+    : `${Math.round(bytes / 1024)} KB`;
+}
 
 function Action({
   label,
@@ -58,15 +76,15 @@ function Action({
   );
 }
 
-function toSaved(photo: LocalPhoto): SavedPhoto {
+function toSaved(photo: ReadyLocalPhoto): SavedPhoto {
   return {
     id: photo.id,
     fileName: `${photo.id}.jpg`,
     mimeType: 'image/jpeg',
     caption: photo.caption,
-    byteLength: photo.byteLength,
-    width: photo.width,
-    height: photo.height,
+    byteLength: photo.prepared.byteLength,
+    width: photo.prepared.width,
+    height: photo.prepared.height,
   };
 }
 
@@ -104,15 +122,45 @@ function AccountTextPhotoScreen({
       : null;
   const mutationBusy = saving || picking || recovering || discarding !== null;
   const busy = mutationBusy || !!pending;
+  const hasUnreadyPhotos = photos.some((photo) => !photo.prepared);
 
-  const addPrepared = useCallback((photo: PreparedLocalPhoto | null) => {
+  const addPicked = useCallback((photo: PickedLocalPhoto | null) => {
     if (!photo) return;
-    setPhotos((current) =>
-      current.length >= 3
-        ? current
-        : [...current, { ...photo, id: randomUUID(), caption: '' }],
-    );
-    setMessage('Photo ready to save with this draft.');
+    const id = randomUUID();
+    setPhotos((current) => [
+      ...current,
+      {
+        id,
+        caption: '',
+        previewUri: photo.uri,
+        prepared: null,
+        error: null,
+      },
+    ]);
+    setMessage('Photo attached. Compression continues in the background.');
+    void preparePickedPhoto(photo)
+      .then((prepared) => {
+        if (!mounted.current) return;
+        setPhotos((current) =>
+          current.map((item) =>
+            item.id === id
+              ? { ...item, previewUri: prepared.uri, prepared, error: null }
+              : item,
+          ),
+        );
+        setMessage('Photo compressed and ready to save.');
+      })
+      .catch((error: unknown) => {
+        if (!mounted.current) return;
+        const detail =
+          error instanceof Error ? error.message : 'Could not compress photo.';
+        setPhotos((current) =>
+          current.map((item) =>
+            item.id === id ? { ...item, error: detail } : item,
+          ),
+        );
+        setMessage(detail);
+      });
   }, []);
 
   useEffect(() => {
@@ -120,7 +168,7 @@ function AccountTextPhotoScreen({
     if (!recovered.current) {
       recovered.current = true;
       void recoverPendingPhoto()
-        .then((photo) => mounted.current && addPrepared(photo))
+        .then((photo) => mounted.current && addPicked(photo))
         .catch(
           (error: unknown) =>
             mounted.current &&
@@ -138,7 +186,7 @@ function AccountTextPhotoScreen({
     return () => {
       mounted.current = false;
     };
-  }, [addPrepared]);
+  }, [addPicked]);
   useFocusEffect(
     useCallback(() => {
       void client.invalidateQueries({ queryKey: ['report-drafts', userId] });
@@ -159,7 +207,7 @@ function AccountTextPhotoScreen({
     try {
       const photo =
         source === 'camera' ? await takePhoto() : await choosePhoto();
-      if (mounted.current) addPrepared(photo);
+      if (mounted.current) addPicked(photo);
     } catch (error) {
       if (mounted.current)
         setMessage(
@@ -174,9 +222,10 @@ function AccountTextPhotoScreen({
   }
 
   function createPending(): PendingSave | null {
-    if (!context) return null;
+    if (!context || hasUnreadyPhotos) return null;
     const id = randomUUID();
-    const saved = photos.map(toSaved);
+    const ready = photos.filter(isReadyPhoto);
+    const saved = ready.map(toSaved);
     return {
       draft: {
         id,
@@ -190,7 +239,7 @@ function AccountTextPhotoScreen({
       },
       prepared: saved.map((photo, position) => ({
         photo,
-        bytes: photos[position]!.bytes,
+        bytes: ready[position]!.prepared.bytes,
       })),
     };
   }
@@ -341,13 +390,21 @@ function AccountTextPhotoScreen({
             <View key={photo.id} style={styles.photoRow}>
               <Image
                 accessibilityLabel={`Selected photo ${position + 1}`}
-                source={{ uri: photo.uri }}
+                source={{ uri: photo.previewUri }}
                 style={styles.thumbnail}
               />
               <View style={styles.photoDetail}>
                 <Text style={styles.detail}>
-                  Photo {position + 1} · {(photo.byteLength / 1024).toFixed(0)}{' '}
-                  KB
+                  Photo {position + 1} ·{' '}
+                  {photo.prepared
+                    ? photo.prepared.sourceByteLength &&
+                      photo.prepared.sourceByteLength >
+                        photo.prepared.byteLength
+                      ? `${byteLabel(photo.prepared.sourceByteLength)} → ${byteLabel(photo.prepared.byteLength)} · ${Math.round((1 - photo.prepared.byteLength / photo.prepared.sourceByteLength) * 100)}% smaller`
+                      : byteLabel(photo.prepared.byteLength)
+                    : photo.error
+                      ? 'Compression failed'
+                      : 'Compressing…'}
                 </Text>
                 <TextInput
                   accessibilityLabel={`Caption for photo ${position + 1}`}
@@ -408,10 +465,15 @@ function AccountTextPhotoScreen({
           ) : (
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ disabled: mutationBusy }}
-              disabled={mutationBusy}
+              accessibilityState={{
+                disabled: mutationBusy || hasUnreadyPhotos,
+              }}
+              disabled={mutationBusy || hasUnreadyPhotos}
               onPress={() => void save()}
-              style={[styles.primary, mutationBusy && styles.disabled]}
+              style={[
+                styles.primary,
+                (mutationBusy || hasUnreadyPhotos) && styles.disabled,
+              ]}
             >
               <Text style={styles.primaryText}>Save on device</Text>
             </Pressable>

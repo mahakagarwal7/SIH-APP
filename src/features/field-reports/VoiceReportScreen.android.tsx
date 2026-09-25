@@ -31,13 +31,17 @@ import { androidMicrophone } from './androidMicrophone';
 import { saveCombinedVoiceDraft } from './combinedDraftStore';
 import { getVoiceDraftStore } from './nativeDraftStore';
 import { assertLocalDraftCanBeDiscarded } from './nativeOutbox';
-import { choosePhoto, takePhoto } from './nativePhotoPicker';
+import {
+  choosePhoto,
+  preparePickedPhoto,
+  takePhoto,
+} from './nativePhotoPicker';
 import { ReportMethodLinks } from './ReportMethodLinks';
 import { VoiceCapture } from './voiceCapture';
 import { VoiceReviewPanel } from './VoiceReviewPanel.native';
 
 import type { VoiceDraft } from './draftStore';
-import type { PreparedLocalPhoto } from './nativePhotoPicker';
+import type { PickedLocalPhoto, PreparedLocalPhoto } from './nativePhotoPicker';
 import type {
   PreparedDraftPhoto,
   ReportDraft,
@@ -45,18 +49,29 @@ import type {
 } from './reportDraftStore';
 import type { CaptureState, RecordedVoice } from './voiceCapture';
 
-type LocalPhoto = PreparedLocalPhoto & { id: string; caption: string };
-type CombinedEvidence = { text: string; photos: LocalPhoto[] };
+type LocalPhoto = {
+  id: string;
+  caption: string;
+  previewUri: string;
+  prepared: PreparedLocalPhoto | null;
+  error: string | null;
+};
+type ReadyLocalPhoto = LocalPhoto & { prepared: PreparedLocalPhoto };
+type CombinedEvidence = { text: string; photos: ReadyLocalPhoto[] };
 
-function toSavedPhoto(photo: LocalPhoto): SavedPhoto {
+function isReadyPhoto(photo: LocalPhoto): photo is ReadyLocalPhoto {
+  return photo.prepared !== null;
+}
+
+function toSavedPhoto(photo: ReadyLocalPhoto): SavedPhoto {
   return {
     id: photo.id,
     fileName: `${photo.id}.jpg`,
     mimeType: 'image/jpeg',
     caption: photo.caption,
-    byteLength: photo.byteLength,
-    width: photo.width,
-    height: photo.height,
+    byteLength: photo.prepared.byteLength,
+    width: photo.prepared.width,
+    height: photo.prepared.height,
   };
 }
 
@@ -87,6 +102,7 @@ function CapturePanel({
   projectId,
   projectName,
   evidence,
+  evidencePending,
   onBusy,
   onSaved,
 }: {
@@ -94,6 +110,7 @@ function CapturePanel({
   projectId: string;
   projectName: string;
   evidence: CombinedEvidence;
+  evidencePending: boolean;
   onBusy: (busy: boolean) => void;
   onSaved: (captureId: string) => void;
 }) {
@@ -173,7 +190,7 @@ function CapturePanel({
                 },
                 prepared: savedPhotos.map((photo, position) => ({
                   photo,
-                  bytes: selected.photos[position]!.bytes,
+                  bytes: selected.photos[position]!.prepared.bytes,
                 })),
               }
             : undefined;
@@ -244,9 +261,16 @@ function CapturePanel({
             : 'Record voice report'
         }
         accessibilityState={{
-          disabled: (busy && state.phase !== 'recording') || state.canRetry,
+          disabled:
+            (busy && state.phase !== 'recording') ||
+            state.canRetry ||
+            evidencePending,
         }}
-        disabled={(busy && state.phase !== 'recording') || state.canRetry}
+        disabled={
+          (busy && state.phase !== 'recording') ||
+          state.canRetry ||
+          evidencePending
+        }
         onPress={() =>
           void (state.phase === 'recording'
             ? controller.current?.stop()
@@ -254,7 +278,9 @@ function CapturePanel({
         }
         style={[
           styles.record,
-          ((busy && state.phase !== 'recording') || state.canRetry) &&
+          ((busy && state.phase !== 'recording') ||
+            state.canRetry ||
+            evidencePending) &&
             styles.disabled,
         ]}
       >
@@ -329,6 +355,8 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
     !project.error && project.data?.member.user_id === userId
       ? project.data
       : null;
+  const evidencePending = photos.some((photo) => !photo.prepared);
+  const readyPhotos = photos.filter(isReadyPhoto);
   const stopPlayback = useCallback(() => {
     ++playbackAttempt.current;
     const release = releasePlayback.current;
@@ -353,18 +381,52 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
     setPhotos([]);
     setReviewCaptureId(captureId);
   }, []);
+  function addPicked(photo: PickedLocalPhoto | null) {
+    if (!photo) return;
+    const id = randomUUID();
+    setPhotos((current) => [
+      ...current,
+      {
+        id,
+        caption: '',
+        previewUri: photo.uri,
+        prepared: null,
+        error: null,
+      },
+    ]);
+    void preparePickedPhoto(photo)
+      .then((prepared) => {
+        if (!mounted.current) return;
+        setPhotos((current) =>
+          current.map((item) =>
+            item.id === id
+              ? { ...item, previewUri: prepared.uri, prepared, error: null }
+              : item,
+          ),
+        );
+      })
+      .catch((reason: unknown) => {
+        if (!mounted.current) return;
+        const detail =
+          reason instanceof Error
+            ? reason.message
+            : 'Could not compress photo.';
+        setPhotos((current) =>
+          current.map((item) =>
+            item.id === id ? { ...item, error: detail } : item,
+          ),
+        );
+        setError(detail);
+      });
+  }
   async function pick(source: 'camera' | 'library') {
     if (busy || picking || photos.length >= 3) return;
     setPicking(true);
     setError('');
     try {
-      const prepared =
+      const selected =
         source === 'camera' ? await takePhoto() : await choosePhoto();
-      if (mounted.current && prepared)
-        setPhotos((current) => [
-          ...current,
-          { ...prepared, id: randomUUID(), caption: '' },
-        ]);
+      if (mounted.current) addPicked(selected);
     } catch (reason) {
       if (mounted.current)
         setError(
@@ -509,10 +571,17 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
               <View key={photo.id} style={styles.photoRow}>
                 <Image
                   accessibilityLabel={`Selected photo ${position + 1}`}
-                  source={{ uri: photo.uri }}
+                  source={{ uri: photo.previewUri }}
                   style={styles.thumbnail}
                 />
                 <View style={styles.photoDetail}>
+                  {!photo.prepared && (
+                    <Text style={photo.error ? styles.error : styles.detail}>
+                      {photo.error
+                        ? 'Photo compression failed.'
+                        : 'Compressing photo…'}
+                    </Text>
+                  )}
                   <TextInput
                     accessibilityLabel={`Caption for photo ${position + 1}`}
                     editable={!busy && !picking}
@@ -561,7 +630,8 @@ function AccountVoiceScreen({ userId }: { userId: string }) {
             userId={userId}
             projectId={context.project.id}
             projectName={context.project.name}
-            evidence={{ text, photos }}
+            evidence={{ text, photos: readyPhotos }}
+            evidencePending={evidencePending}
             onBusy={captureBusy}
             onSaved={openReview}
           />

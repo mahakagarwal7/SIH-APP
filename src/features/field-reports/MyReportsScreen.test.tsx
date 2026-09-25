@@ -16,6 +16,7 @@ import {
 import { getReportDraftStore } from './nativeReportDraftStore';
 
 import type { RemoteReport } from './myReportsService';
+import type { OutboxRecord } from './outbox';
 import type { AuthViewState } from '@/features/auth/AuthProvider';
 
 jest.mock('@/features/auth/AuthProvider', () => ({ useAuth: jest.fn() }));
@@ -65,7 +66,7 @@ beforeEach(() => {
     session: { user: { id: 'alice' } },
     offline: false,
   } as AuthViewState);
-  jest.mocked(prepareLocalOutbox).mockResolvedValue({
+  jest.mocked(prepareLocalOutbox).mockReset().mockResolvedValue({
     enqueued: 0,
     unavailable: 0,
   });
@@ -104,6 +105,56 @@ it('shows a device-saved report without claiming it reached review', async () =>
   expect(await screen.findByText('Saved on device')).toBeVisible();
   expect(screen.getByText('Waiting to sync.')).toBeVisible();
   expect(screen.queryByText('Awaiting review')).toBeNull();
+  expect(prepareLocalOutbox).not.toHaveBeenCalled();
+});
+
+it('shows active background delivery as a distinct Uploading chip', async () => {
+  const uploading: OutboxRecord = {
+    captureId: '10000000-0000-4000-8000-000000000001',
+    userId: 'alice',
+    projectId: '30000000-0000-4000-8000-000000000003',
+    projectName: 'Site project',
+    kind: 'report',
+    createdAt: '2026-09-24T00:00:00Z',
+    text: 'Installed two supports.',
+    manifest: {
+      captureId: '10000000-0000-4000-8000-000000000001',
+      language: 'auto',
+      files: [],
+    },
+    reportId: null,
+    uploadedFiles: [],
+    originalTranscript: null,
+    sendRequested: false,
+    cancelRequested: false,
+    confirmedPayload: null,
+    confirmedActivityLabel: null,
+    submissionRejected: false,
+    submissionState: 'unconfirmed',
+    submittedAt: null,
+    evidenceReleased: false,
+    state: 'uploading',
+    attemptCount: 1,
+    lastErrorKind: null,
+    lastError: null,
+    retryable: true,
+    updatedAt: '2026-09-24T00:00:01Z',
+  };
+  jest
+    .mocked(getVoiceDraftStore)
+    .mockResolvedValue({ list: async () => [] } as never);
+  jest
+    .mocked(getNativeOutbox)
+    .mockResolvedValue({ list: async () => [uploading] } as never);
+  await render(<App />);
+  expect(
+    await screen.findByLabelText('Upload status: Uploading'),
+  ).toBeVisible();
+  expect(
+    screen.getByText(
+      'Saved on device. Upload continues in the background and resumes after reconnecting.',
+    ),
+  ).toBeVisible();
 });
 
 it('keeps sync disabled offline while local reports remain visible', async () => {

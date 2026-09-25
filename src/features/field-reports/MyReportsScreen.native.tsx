@@ -18,11 +18,7 @@ import {
   mergeMyReports,
 } from './myReportsService';
 import { getVoiceDraftStore } from './nativeDraftStore';
-import {
-  getNativeOutbox,
-  prepareLocalOutbox,
-  syncNativeOutbox,
-} from './nativeOutbox';
+import { getNativeOutbox, syncNativeOutbox } from './nativeOutbox';
 import { getReportDraftStore } from './nativeReportDraftStore';
 import { needsReportPolling } from './reportStatus';
 import { useReportStatusPolling } from './useReportStatusPolling';
@@ -70,13 +66,12 @@ function AccountReports({ userId }: { userId: string }) {
     queryKey: ['my-reports', userId, 'local'],
     networkMode: 'always',
     queryFn: async () => {
-      const preparation = await prepareLocalOutbox(userId);
       const [voice, reports, outbox] = await Promise.all([
         (await getVoiceDraftStore()).list(userId),
         (await getReportDraftStore()).list(userId),
         (await getNativeOutbox()).list(userId),
       ]);
-      return { voice, reports, outbox, preparation };
+      return { voice, reports, outbox };
     },
   });
   const remote = useQuery({
@@ -184,12 +179,6 @@ function AccountReports({ userId }: { userId: string }) {
           {pollingRequired ? ' · Automatic checks active' : ''}
         </Text>
       )}
-      {local.data?.preparation.unavailable ? (
-        <Text accessibilityRole="alert" style={styles.error}>
-          {local.data.preparation.unavailable} local draft could not be prepared
-          for sync because its saved evidence is incomplete.
-        </Text>
-      ) : null}
       {remote.error && (
         <Text accessibilityRole="alert" style={styles.error}>
           Could not refresh production status. Saved device copies are
@@ -210,7 +199,19 @@ function AccountReports({ userId }: { userId: string }) {
       ) : (
         items.map((item) => (
           <View key={item.captureId} style={shellStyles.card}>
-            <Text style={styles.status}>{item.status}</Text>
+            <Text
+              accessibilityLabel={
+                item.status === 'Uploading'
+                  ? 'Upload status: Uploading'
+                  : undefined
+              }
+              style={[
+                styles.status,
+                item.status === 'Uploading' && styles.uploadingChip,
+              ]}
+            >
+              {item.status}
+            </Text>
             <Text accessibilityRole="header" style={shellStyles.cardTitle}>
               {item.projectName}
             </Text>
@@ -301,6 +302,16 @@ const styles = StyleSheet.create({
   loading: { marginTop: 24, gap: 12, alignItems: 'flex-start' },
   empty: { color: '#586c7a', paddingVertical: 28, fontSize: 16 },
   status: { color: '#266b8c', fontWeight: '700', fontSize: 13, lineHeight: 21 },
+  uploadingChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#e1f1f8',
+    borderColor: '#a8cfdf',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    overflow: 'hidden',
+  },
   detail: { color: '#627786', fontSize: 13, lineHeight: 21 },
   retry: { color: '#76541d', fontSize: 14, lineHeight: 22, fontWeight: '600' },
   checked: { color: '#627786', fontSize: 12, lineHeight: 20, marginBottom: 12 },

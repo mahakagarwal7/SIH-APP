@@ -15,7 +15,11 @@ import { Alert } from 'react-native';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { useCaptureProject } from '@/features/projects/useCaptureProject';
 
-import { choosePhoto, recoverPendingPhoto } from './nativePhotoPicker';
+import {
+  choosePhoto,
+  preparePickedPhoto,
+  recoverPendingPhoto,
+} from './nativePhotoPicker';
 import { getReportDraftStore } from './nativeReportDraftStore';
 import { TextPhotoReportScreen } from './TextPhotoReportScreen.native';
 
@@ -35,6 +39,7 @@ jest.mock('./nativeOutbox', () => ({
 jest.mock('./nativePhotoPicker', () => ({
   takePhoto: jest.fn(),
   choosePhoto: jest.fn(),
+  preparePickedPhoto: jest.fn(),
   recoverPendingPhoto: jest.fn(),
 }));
 jest.mock('./ReportMethodLinks', () => ({ ReportMethodLinks: () => null }));
@@ -92,6 +97,15 @@ beforeEach(() => {
   } as unknown as ReportDraftStore);
   jest.mocked(recoverPendingPhoto).mockResolvedValue(null);
   jest.mocked(choosePhoto).mockResolvedValue(null);
+  jest.mocked(preparePickedPhoto).mockResolvedValue({
+    uri: 'cache/normalized.jpg',
+    width: 1200,
+    height: 800,
+    byteLength: 4,
+    sourceByteLength: 40,
+    mimeType: 'image/jpeg',
+    bytes: new Uint8Array([1, 2, 3, 4]),
+  });
 });
 
 it('does not claim a text draft is saved until durable persistence completes', async () => {
@@ -133,12 +147,10 @@ it('does not claim a text draft is saved until durable persistence completes', a
 
 it('normalizes a chosen photo, keeps its caption, and saves the actual bytes', async () => {
   jest.mocked(choosePhoto).mockResolvedValue({
-    uri: 'cache/normalized.jpg',
+    uri: 'cache/source.jpg',
     width: 1200,
     height: 800,
-    byteLength: 4,
-    mimeType: 'image/jpeg',
-    bytes: new Uint8Array([1, 2, 3, 4]),
+    fileSize: 40,
   });
   await render(<App mode="photo" />);
   await screen.findByText('No text or photo drafts saved yet.');
@@ -165,6 +177,64 @@ it('normalizes a chosen photo, keeps its caption, and saves the actual bytes', a
     }),
     [expect.objectContaining({ bytes: new Uint8Array([1, 2, 3, 4]) })],
   );
+});
+
+it('shows a picked photo immediately while compression continues in the background', async () => {
+  let finish!: (photo: Awaited<ReturnType<typeof preparePickedPhoto>>) => void;
+  jest.mocked(choosePhoto).mockResolvedValue({
+    uri: 'cache/full-resolution.jpg',
+    width: 4000,
+    height: 3000,
+    fileSize: 4_000_000,
+  });
+  jest.mocked(preparePickedPhoto).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await render(<App mode="photo" />);
+  await screen.findByText('No text or photo drafts saved yet.');
+  await fireEvent.press(screen.getByRole('button', { name: 'Choose photo' }));
+  expect(await screen.findByLabelText('Selected photo 1')).toBeVisible();
+  expect(screen.getByText('Photo 1 · Compressing…')).toBeVisible();
+  expect(screen.getByLabelText('Report details')).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Save on device' })).toBeDisabled();
+  await act(async () =>
+    finish({
+      uri: 'cache/compressed.jpg',
+      width: 1600,
+      height: 1200,
+      byteLength: 400_000,
+      sourceByteLength: 4_000_000,
+      mimeType: 'image/jpeg',
+      bytes: new Uint8Array(400_000),
+    }),
+  );
+  expect(
+    await screen.findByText(/3.8 MB → 391 KB · 90% smaller/),
+  ).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Save on device' })).toBeEnabled();
+});
+
+it('keeps a failed background compression removable without locking the form', async () => {
+  jest.mocked(choosePhoto).mockResolvedValue({
+    uri: 'cache/unreadable.jpg',
+    width: 4000,
+    height: 3000,
+    fileSize: 4_000_000,
+  });
+  jest
+    .mocked(preparePickedPhoto)
+    .mockRejectedValue(new Error('Photo codec unavailable.'));
+  await render(<App mode="photo" />);
+  await screen.findByText('No text or photo drafts saved yet.');
+  await fireEvent.press(screen.getByRole('button', { name: 'Choose photo' }));
+  expect(await screen.findByText('Photo codec unavailable.')).toBeVisible();
+  expect(screen.getByLabelText('Report details')).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Save on device' })).toBeDisabled();
+  await fireEvent.press(screen.getByRole('button', { name: 'Remove photo' }));
+  expect(screen.getByRole('button', { name: 'Save on device' })).toBeEnabled();
 });
 
 it('retains a failed save for same-identity retry', async () => {
@@ -305,12 +375,10 @@ it('waits for photo recovery before allowing save and persists the recovered byt
   const bytes = new Uint8Array([1, 2, 3, 4]);
   await act(async () => {
     recover({
-      uri: 'cache/recovered.jpg',
+      uri: 'cache/recovered-source.jpg',
       width: 100,
       height: 100,
-      byteLength: 4,
-      mimeType: 'image/jpeg',
-      bytes,
+      fileSize: 40,
     });
   });
   await screen.findByLabelText('Selected photo 1');

@@ -26,6 +26,11 @@ it('defers native disposal until a pending start finishes, then releases it', as
       () => native as unknown as InstanceType<typeof AudioModule.AudioStream>,
     );
   const microphone = androidMicrophone(jest.fn());
+  expect(AudioStream).toHaveBeenCalledWith({
+    sampleRate: 16000,
+    channels: 1,
+    encoding: 'int16',
+  });
   const pending = microphone.start();
   microphone.stop();
   microphone.release();
