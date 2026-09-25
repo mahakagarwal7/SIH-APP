@@ -21,6 +21,7 @@ export type WorkActivity = {
   acceptedQuantity: number;
   actualStart: string | null;
   actualFinish: string | null;
+  plannedFinish?: string | null;
   reportedProgress: boolean;
   acceptedPercent?: number | null;
   percentBasis?: string | null;
@@ -31,6 +32,43 @@ export type WorkActivity = {
 
 export type WorkItem = { activity: WorkActivity; assignment: Assignment };
 export type WorkGroup = { title: string; items: WorkItem[] };
+
+export type FieldHomeSummary = {
+  completed: number;
+  total: number;
+  percent: number | null;
+  timing: 'ON TIME' | 'DELAYED' | 'TIMING NOT RECORDED';
+};
+
+export function fieldHomeSummary(
+  activities: WorkActivity[],
+  today: string,
+): FieldHomeSummary {
+  const completed = activities.filter(
+    (activity) => activity.actualFinish,
+  ).length;
+  const delayed = activities.some(
+    (activity) =>
+      activity.plannedFinish &&
+      (activity.actualFinish
+        ? activity.actualFinish > activity.plannedFinish
+        : activity.plannedFinish < today),
+  );
+  const timing = delayed
+    ? 'DELAYED'
+    : activities.length > 0 &&
+        activities.every((activity) => activity.plannedFinish)
+      ? 'ON TIME'
+      : 'TIMING NOT RECORDED';
+  return {
+    completed,
+    total: activities.length,
+    percent: activities.length
+      ? Math.round((completed / activities.length) * 100)
+      : null,
+    timing,
+  };
+}
 
 export function groupMyWork(
   activities: WorkActivity[],

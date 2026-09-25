@@ -2,15 +2,8 @@ import { act, render, screen } from '@testing-library/react-native';
 
 import { FieldHomeScreen } from './FieldHomeScreen';
 import { useMyWork } from './useMyWork';
-import { useProjectRecentReports } from './useProjectRecentReports';
 
 jest.mock('./useMyWork', () => ({ useMyWork: jest.fn() }));
-jest.mock('./useProjectRecentReports', () => ({
-  useProjectRecentReports: jest.fn(),
-}));
-jest.mock('./useProjectRecentReports.native', () => ({
-  useProjectRecentReports: jest.fn(),
-}));
 jest.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) =>
     jest.requireActual('react').useEffect(callback, [callback]),
@@ -46,6 +39,7 @@ const work = {
         targetQuantity: 8,
         unit: 'spools',
         acceptedQuantity: 2,
+        plannedFinish: '2099-01-01',
         actualStart: null,
         actualFinish: null,
         reportedProgress: false,
@@ -71,74 +65,47 @@ beforeEach(() => {
     refresh: jest.fn(),
     offline: false,
   } as unknown as ReturnType<typeof useMyWork>);
-  jest.mocked(useProjectRecentReports).mockReturnValue({
-    items: [
-      {
-        captureId: 'capture',
-        reportId: 'report',
-        projectId: 'project',
-        projectName: 'Site project',
-        createdAt: '2026-09-24T01:00:00Z',
-        kind: 'remote',
-        evidenceLabel: 'Production evidence',
-        summary: 'Installed two spools',
-        mediaCount: 0,
-        status: 'Awaiting review',
-        detail: 'Submitted',
-        canSync: false,
-        canConfirm: false,
-        canOpenConfirmation: false,
-        canOpen: true,
-      },
-    ],
-    error: null,
-    isPending: false,
-    isFetching: false,
-    refetch: jest.fn(),
-  });
 });
 
-it('shows current assignments and recent report context for the selected project', async () => {
+it('matches the field home summary and action layout', async () => {
   await render(<FieldHomeScreen />);
+  expect(screen.getByText('Nirmaan')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Open settings' })).toBeVisible();
+  expect(screen.getByText('0%')).toBeVisible();
+  expect(screen.getByText('ACTIVITIES DONE')).toBeVisible();
   expect(screen.getByText('Site project')).toBeVisible();
+  expect(screen.getByText('Unit 2')).toBeVisible();
   expect(screen.getByText('Line erection')).toBeVisible();
-  expect(screen.getByText('Installed two spools')).toBeVisible();
-  expect(screen.getByText('Awaiting review')).toBeVisible();
+  expect(screen.getByText('ON TIME')).toBeVisible();
+  for (const label of [
+    'Speak Report',
+    'Take Photo',
+    'My Tasks',
+    'View Progress',
+  ])
+    expect(screen.getByRole('button', { name: label })).toBeVisible();
 });
 
-it('warns when recent report data may be stale even if cached items exist', async () => {
-  jest.mocked(useProjectRecentReports).mockReturnValue({
-    items: [
-      {
-        captureId: 'capture',
-        reportId: 'report',
-        projectId: 'project',
-        projectName: 'Site project',
-        createdAt: '2026-09-24T01:00:00Z',
-        kind: 'remote',
-        evidenceLabel: 'Production evidence',
-        summary: 'Installed two spools',
-        mediaCount: 0,
-        status: 'Awaiting review',
-        detail: 'Submitted',
-        canSync: false,
-        canConfirm: false,
-        canOpenConfirmation: false,
-        canOpen: false,
+it('marks the project delayed only from a supported planned finish', async () => {
+  jest.mocked(useMyWork).mockReturnValue({
+    project: { data: context, error: null, isPending: false },
+    work: {
+      data: {
+        ...work,
+        snapshot: {
+          ...work.snapshot,
+          activities: [
+            { ...work.snapshot.activities[0], plannedFinish: '2020-01-01' },
+          ],
+        },
       },
-    ],
-    error: new Error('Network unavailable'),
-    isPending: false,
-    isFetching: false,
-    refetch: jest.fn(),
-  });
-
+      error: null,
+    },
+    refresh: jest.fn(),
+    offline: false,
+  } as unknown as ReturnType<typeof useMyWork>);
   await render(<FieldHomeScreen />);
-
-  expect(
-    screen.getByText(/recent report data may be incomplete or stale/i),
-  ).toBeVisible();
-  expect(screen.getByText('Installed two spools')).toBeVisible();
+  expect(screen.getByText('DELAYED')).toBeVisible();
 });
 
 it('shows empty and offline states without inventing assignment counts', async () => {
@@ -155,16 +122,11 @@ it('shows empty and offline states without inventing assignment counts', async (
     refresh: jest.fn(),
     offline: true,
   } as unknown as ReturnType<typeof useMyWork>);
-  jest.mocked(useProjectRecentReports).mockReturnValue({
-    items: [],
-    error: null,
-    isPending: false,
-    isFetching: false,
-    refetch: jest.fn(),
-  });
   await render(<FieldHomeScreen />);
   expect(screen.getByText('No assignment today.')).toBeVisible();
-  expect(screen.getByText('No reports for this project yet.')).toBeVisible();
+  expect(screen.getByText('—')).toBeVisible();
+  expect(screen.getByText('TIMING NOT RECORDED')).toBeVisible();
+  expect(screen.queryByText('0%')).toBeNull();
   expect(screen.getByText(/Offline · Showing project context/)).toBeVisible();
 });
 

@@ -44,12 +44,12 @@ export function WorkspaceTabs({ workspace }: { workspace: keyof typeof tabs }) {
       safeAreaInsets={{ bottom: 0 }}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#17354c',
-        tabBarInactiveTintColor: '#627786',
-        tabBarActiveBackgroundColor: '#e8eff3',
+        tabBarActiveTintColor: '#7655d9',
+        tabBarInactiveTintColor: '#7c8992',
+        tabBarActiveBackgroundColor: '#ffffff',
         tabBarStyle: {
           backgroundColor: '#ffffff',
-          borderTopColor: '#d7e0e5',
+          borderTopColor: '#e3e8eb',
           height: 56 + 24 * Math.max(1, fontScale),
           paddingVertical: 6,
         },

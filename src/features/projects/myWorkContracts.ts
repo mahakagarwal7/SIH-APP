@@ -49,6 +49,7 @@ const activitySchema = z.object({
   acceptedQuantity: z.number().nonnegative(),
   actualStart: date.nullable(),
   actualFinish: date.nullable(),
+  plannedFinish: date.nullable().optional(),
   reportedProgress: z.boolean().default(false),
   acceptedPercent: z.number().min(0).max(100).nullable().default(null),
   percentBasis: z.string().nullable().default(null),
