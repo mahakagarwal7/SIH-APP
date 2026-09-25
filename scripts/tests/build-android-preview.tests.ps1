@@ -32,6 +32,7 @@ foreach ($functionName in @(
   'Save-ProcessEnvironment'
   'Restore-ProcessEnvironment'
   'Get-PreviewArtifactName'
+  'Get-PreviewFileSha256'
   'Remove-StalePreviewArtifacts'
 )) {
   $functionAst = $ast.Find(
@@ -68,6 +69,15 @@ $buildEnvironmentNames = @(
 $previousEnvironment = Save-ProcessEnvironment -Names $buildEnvironmentNames
 
 try {
+  $hashFile = Join-Path $temporaryDirectory 'sha256-test.bin'
+  [System.IO.File]::WriteAllBytes($hashFile, [System.Text.Encoding]::UTF8.GetBytes('abc'))
+  if (
+    (Get-PreviewFileSha256 -Path $hashFile) -ne
+      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+  ) {
+    throw 'The preview file SHA-256 helper returned an incorrect hash.'
+  }
+
   $env:NEXT_PUBLIC_SUPABASE_URL = 'https://stale.example.invalid'
   $env:NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'stale-public-key'
   $rejectedMissingConfig = $false
