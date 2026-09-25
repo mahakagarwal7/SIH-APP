@@ -346,7 +346,10 @@ export function ManagerOverviewScreen() {
             <View style={styles.updatesCard}>
               {recent.length ? (
                 recent.map((entry, index) => {
-                  const reporter = verifiedReporterLabel(entry);
+                  const reporter = verifiedReporterLabel(
+                    entry,
+                    data?.reporterNamesByReportId,
+                  );
                   return (
                     <View
                       key={entry.eventId}

@@ -186,6 +186,19 @@ it('labels verified updates with recorded reporters and stable relative time', (
   ).toBe('3 days ago');
 });
 
+it('uses a native report author when imported provenance has no reporter label', () => {
+  const nativeReport = {
+    ...event,
+    provenance: null,
+  } as ExecutionHistoryEntry;
+  expect(
+    verifiedReporterLabel(nativeReport, {
+      [nativeReport.reportId]: ' Arun Saikia ',
+    }),
+  ).toBe('Arun Saikia');
+  expect(verifiedReporterLabel(nativeReport, {})).toBe('Reporter not recorded');
+});
+
 it('uses the existing review state and flags as the attention reason', () => {
   expect(
     attentionReason({

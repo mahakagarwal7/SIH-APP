@@ -13,6 +13,7 @@ const projectId = '10000000-0000-4000-8000-000000000002';
 const revisionId = '10000000-0000-4000-8000-000000000003';
 const activityId = '10000000-0000-4000-8000-000000000004';
 const claimId = '10000000-0000-4000-8000-000000000005';
+const reporterId = '10000000-0000-4000-8000-000000000010';
 const context: ProjectContext = {
   member: {
     project_id: projectId,
@@ -144,8 +145,11 @@ function harness(
     history?: unknown;
     claims?: unknown[];
     claimCount?: number;
+    reports?: unknown[];
+    reporterRows?: unknown[];
     access?: unknown[];
-    errorPath?: 'schedule' | 'history' | 'claims' | 'access';
+    errorPath?:
+      'schedule' | 'history' | 'claims' | 'reports' | 'reporters' | 'access';
     errorCode?: string;
     errorMessage?: string;
   } = {},
@@ -160,9 +164,13 @@ function harness(
           ? 'history'
           : url.pathname.endsWith('/claims')
             ? 'claims'
-            : url.pathname.endsWith('/project_members')
-              ? 'access'
-              : '';
+            : url.pathname.endsWith('/reports')
+              ? 'reports'
+              : url.pathname.endsWith('/project_members')
+                ? url.searchParams.get('user_id')?.startsWith('in.')
+                  ? 'reporters'
+                  : 'access'
+                : '';
       if (!target) throw new Error(`Unexpected URL ${url.pathname}`);
       calls.push({ target, url, init });
       if (options.errorPath === target)
@@ -180,7 +188,20 @@ function harness(
             ? (options.history ?? history)
             : target === 'claims'
               ? (options.claims ?? [claim])
-              : (options.access ?? [context.member]);
+              : target === 'reports'
+                ? (options.reports ?? [
+                    {
+                      id: claim.report_id,
+                      project_id: projectId,
+                      author_id: reporterId,
+                      source_kind: 'text',
+                    },
+                  ])
+                : target === 'reporters'
+                  ? (options.reporterRows ?? [
+                      { user_id: reporterId, display_name: 'Arun Saikia' },
+                    ])
+                  : (options.access ?? [context.member]);
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
@@ -232,6 +253,39 @@ it.each(['planner', 'manager'] as const)(
     expect(calls.at(-1)?.target).toBe('access');
   },
 );
+
+it('loads the named author of a recent native accepted report in the selected project', async () => {
+  const { client, calls } = harness();
+  const result = await loadManagerOverview(client, context, signal());
+  expect(result.reporterNamesByReportId).toEqual({
+    [claim.report_id]: 'Arun Saikia',
+  });
+  expect(
+    calls
+      .find((call) => call.target === 'reports')
+      ?.url.searchParams.get('project_id'),
+  ).toBe(`eq.${projectId}`);
+  expect(
+    calls
+      .find((call) => call.target === 'reporters')
+      ?.url.searchParams.get('project_id'),
+  ).toBe(`eq.${projectId}`);
+});
+
+it('does not present a spreadsheet uploader as the field reporter', async () => {
+  const { client } = harness({
+    reports: [
+      {
+        id: claim.report_id,
+        project_id: projectId,
+        author_id: reporterId,
+        source_kind: 'spreadsheet',
+      },
+    ],
+  });
+  const result = await loadManagerOverview(client, context, signal());
+  expect(result.reporterNamesByReportId).toEqual({});
+});
 
 it('rejects field roles without reading overview data', async () => {
   const { client, calls } = harness();

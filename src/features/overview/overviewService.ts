@@ -9,12 +9,24 @@ import { executionHistorySchema } from '@/features/history/historyContracts';
 import { membershipSchema } from '@/features/projects/myWorkContracts';
 import { managerScheduleSchema } from '@/features/schedule/scheduleContracts';
 
+import { recentAcceptedEvents } from './overviewModel';
+
 import type { ProjectContext } from '@/features/projects/myWorkService';
 import type { Database } from '@/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 type Client = SupabaseClient<Database>;
 const memberColumns = 'project_id,user_id,display_name,role,active,version';
+const reportAuthorSchema = z.object({
+  id: z.uuid(),
+  project_id: z.uuid(),
+  author_id: z.uuid(),
+  source_kind: z.enum(['text', 'voice', 'spreadsheet']),
+});
+const reporterNameSchema = z.object({
+  user_id: z.uuid(),
+  display_name: z.string(),
+});
 export const OVERVIEW_ATTENTION_LIMIT = 5;
 
 export class OverviewReadError extends Error {
@@ -102,6 +114,53 @@ export async function loadManagerOverview(
   )
     throw new OverviewReadError('changed');
 
+  const nativeReportIds = [
+    ...new Set(
+      recentAcceptedEvents(history)
+        .filter((entry) => !entry.provenance?.reportedByLabel?.trim())
+        .map((entry) => entry.reportId),
+    ),
+  ];
+  const reporterNamesByReportId: Record<string, string> = {};
+  if (nativeReportIds.length) {
+    const reportResult = await client
+      .from('reports')
+      .select('id,project_id,author_id,source_kind')
+      .eq('project_id', project.id)
+      .in('id', nativeReportIds)
+      .abortSignal(signal);
+    readError(reportResult.error);
+    const reports = parse(z.array(reportAuthorSchema), reportResult.data);
+    if (reports.some((report) => report.project_id !== project.id))
+      throw new OverviewReadError('changed');
+    const nativeReports = reports.filter(
+      (report) => report.source_kind !== 'spreadsheet',
+    );
+    const authorIds = [
+      ...new Set(nativeReports.map((report) => report.author_id)),
+    ];
+    if (authorIds.length) {
+      const reporterResult = await client
+        .from('project_members')
+        .select('user_id,display_name')
+        .eq('project_id', project.id)
+        .in('user_id', authorIds)
+        .abortSignal(signal);
+      readError(reporterResult.error);
+      const reporters = parse(z.array(reporterNameSchema), reporterResult.data);
+      const namesByUserId = new Map(
+        reporters.map((reporter) => [
+          reporter.user_id,
+          reporter.display_name.trim(),
+        ]),
+      );
+      nativeReports.forEach((report) => {
+        const name = namesByUserId.get(report.author_id);
+        if (name) reporterNamesByReportId[report.id] = name;
+      });
+    }
+  }
+
   const accessResult = await client
     .from('project_members')
     .select(memberColumns)
@@ -126,6 +185,7 @@ export async function loadManagerOverview(
   return {
     snapshot,
     history,
+    reporterNamesByReportId,
     attention,
     actionableCount: claimsResult.count,
   };
