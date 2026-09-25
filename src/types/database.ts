@@ -77,6 +77,7 @@ export type ReportJobRow = {
   status: 'queued' | 'running' | 'retry_wait' | 'succeeded' | 'failed';
   attempts: number;
   error_code: string | null;
+  claim_count: number | null;
   created_at: string;
 };
 export type ClaimRow = {

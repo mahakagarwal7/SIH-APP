@@ -160,6 +160,35 @@ it('keeps polling until current-version claims are visible after extraction', ()
   ).toMatchObject({ status: 'Processing report', terminal: false });
 });
 
+it('finishes a verified zero-claim report without mistaking a pending claim read for it', () => {
+  const succeeded = {
+    report_id: 'report',
+    report_version: 1,
+    status: 'succeeded',
+    error_code: null,
+  };
+  expect(
+    reportDeliveryStatus({
+      ...base,
+      jobs: [{ ...succeeded, claim_count: 0 }],
+    }),
+  ).toEqual({
+    status: 'No construction claims identified',
+    detail:
+      'Your report is saved. No construction event was identified, and the accepted schedule is unchanged.',
+    terminal: true,
+  });
+  expect(
+    reportDeliveryStatus({
+      ...base,
+      jobs: [{ ...succeeded, claim_count: 1 }],
+    }),
+  ).toMatchObject({ status: 'Processing report', terminal: false });
+  expect(
+    needsReportPolling([{ ...base, jobs: [{ ...succeeded, claim_count: 0 }] }]),
+  ).toBe(false);
+});
+
 it('does not label mixed final claim outcomes as still needing review', () => {
   expect(
     reportDeliveryStatus({

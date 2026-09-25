@@ -620,6 +620,7 @@ it('rejects job rows outside the selected author reports', async () => {
                     status: 'succeeded',
                     attempts: 1,
                     error_code: null,
+                    claim_count: 1,
                     created_at: '2026-09-24T00:01:00Z',
                   },
                 ];
